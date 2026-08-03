@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       weekMap.get(week)![plant] = Number(row.KPI_VALUE ?? 0);
     }
 
-    const plants      = [...plantsSet].sort();
+    const plants      = Array.from(plantsSet).sort();
     const trendSeries = Array.from(weekMap.entries())
       .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
       .map(([date, vals]) => ({ date, ...vals }));

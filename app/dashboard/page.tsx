@@ -136,7 +136,7 @@ export default function DashboardPage() {
 
   // Tambah ID alert yang di-dismiss ke set agar tidak muncul lagi
   const handleDismissAlert = (id: string) => {
-    setDismissedIds((prev) => new Set([...prev, id]));
+    setDismissedIds((prev) => new Set(Array.from(prev).concat(id)));
   };
 
   // Filter alert aktif yang belum di-dismiss oleh user
