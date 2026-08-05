@@ -69,6 +69,7 @@ export default function DashboardPage() {
   const [alertPanelOpen, setAlertPanelOpen] = useState(false);
   const [leadTimeUnit, setLeadTimeUnit] = useState<"days" | "hours">("days");
   const [leadTimeType, setLeadTimeType] = useState<"gross" | "nett">("gross");
+  const [kpiType, setKpiType] = useState("leadtime");
   const [filters, setFilters] = useState<Filters>({
     plant: "All Plant",
     startDate: `${new Date().getFullYear()}-01-01`,
@@ -479,8 +480,8 @@ export default function DashboardPage() {
               </>
             ) : (
               <>
-                <TrendChart filters={filters} />
-                <StackedBarChart filters={filters} />
+                <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} />
+                <StackedBarChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} />
               </>
             )}
           </div>

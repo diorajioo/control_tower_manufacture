@@ -57,11 +57,11 @@ interface Filters {
 
 interface StackedBarChartProps {
   filters: Filters;
+  kpiType: string;
+  onKpiChange: (kpi: string) => void;
 }
 
-export function StackedBarChart({ filters }: StackedBarChartProps) {
-  // State lokal untuk KPI aktif, data mentah mingguan, daftar plant, dan status loading
-  const [kpiType, setKpiType] = useState<KpiType>("leadtime");
+export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarChartProps) {
   const [rawData,  setRawData]  = useState<Record<string, unknown>[]>([]);
   const [plants,   setPlants]   = useState<string[]>([]);
   const [loading,  setLoading]  = useState(false);
@@ -154,7 +154,7 @@ export function StackedBarChart({ filters }: StackedBarChartProps) {
         {KPI_OPTIONS.map((opt) => (
           <button
             key={opt.value}
-            onClick={() => setKpiType(opt.value)}
+            onClick={() => onKpiChange(opt.value)}
             className={`text-xs px-2 py-0.5 rounded-full transition-colors ${
               kpiType === opt.value
                 ? "bg-brand-600 text-white"

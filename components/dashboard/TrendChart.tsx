@@ -61,11 +61,11 @@ interface Filters {
 
 interface TrendChartProps {
   filters: Filters;
+  kpiType: string;
+  onKpiChange: (kpi: string) => void;
 }
 
-export function TrendChart({ filters }: TrendChartProps) {
-  // State lokal untuk KPI aktif, data seri, daftar plant, dan status loading
-  const [kpiType, setKpiType]   = useState<KpiType>("leadtime");
+export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
   const [data,    setData]      = useState<Record<string, unknown>[]>([]);
   const [plants,  setPlants]    = useState<string[]>([]);
   const [loading, setLoading]   = useState(false);
@@ -154,7 +154,7 @@ export function TrendChart({ filters }: TrendChartProps) {
           {KPI_OPTIONS.map((opt) => (
             <button
               key={opt.value}
-              onClick={() => setKpiType(opt.value)}
+              onClick={() => onKpiChange(opt.value)}
               className={`text-xs px-2 py-0.5 rounded-full transition-colors ${
                 kpiType === opt.value
                   ? "bg-brand-600 text-white"
