@@ -6,15 +6,15 @@ import { cn } from "@/lib/utils";
 
 export function Sidebar() {
   return (
-    <aside className="w-56 min-h-screen bg-[#f0eeff] flex flex-col shrink-0 border-r border-purple-100">
+    <aside className="w-56 min-h-screen bg-brand-900 flex flex-col shrink-0 border-r border-brand-800">
       <div className="px-4 py-5">
         <div className="flex items-center gap-2.5">
-          <div className="bg-brand-600 p-1.5 rounded-lg shadow-sm">
+          <div className="bg-white/10 p-1.5 rounded-lg">
             <LayoutGrid size={18} className="text-white" />
           </div>
           <div>
-            <p className="text-sm font-bold text-gray-900 leading-tight">Control Tower</p>
-            <p className="text-xs text-gray-400 leading-tight">Manufacture</p>
+            <p className="text-sm font-bold text-white leading-tight">Control Tower</p>
+            <p className="text-xs text-brand-300 leading-tight">Manufacture</p>
           </div>
         </div>
       </div>
@@ -27,11 +27,11 @@ export function Sidebar() {
         <NavItem icon={FileText} label="Reports" />
       </nav>
 
-      <div className="px-3 py-4 border-t border-purple-100 flex flex-col gap-0.5">
+      <div className="px-3 py-4 border-t border-brand-700/50 flex flex-col gap-0.5">
         <NavItem icon={Settings} label="Settings" />
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-rose-400 hover:text-red-600 hover:bg-red-50 transition-colors w-full text-left"
+          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-brand-300/60 hover:text-red-300 hover:bg-red-900/30 transition-colors w-full text-left"
         >
           <LogOut size={16} />
           <span className="text-sm font-medium">Sign Out</span>
@@ -55,8 +55,8 @@ function NavItem({
       className={cn(
         "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors w-full text-left",
         active
-          ? "bg-brand-600 text-white shadow-sm"
-          : "text-indigo-400 hover:text-purple-900 hover:bg-purple-100"
+          ? "bg-white/10 text-white ring-1 ring-white/10"
+          : "text-brand-200/60 hover:text-white hover:bg-white/10"
       )}
     >
       <Icon size={16} />

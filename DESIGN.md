@@ -6,7 +6,8 @@ colors:
   brand-deep: "#3730a3"
   brand-light: "#6366f1"
   brand-surface: "#f8f7ff"
-  brand-sidebar: "#f0eeff"
+  brand-sidebar: "#312e81"
+  brand-sidebar-border: "#3730a3"
   status-good: "#22c55e"
   status-warn: "#f59e0b"
   status-bad: "#ef4444"
@@ -24,17 +25,17 @@ colors:
   neutral-card: "#ffffff"
 typography:
   display:
-    fontFamily: "Space Grotesk, sans-serif"
-    fontWeight: 600
-    lineHeight: 1.1
+    fontFamily: "Barlow Semi Condensed, sans-serif"
+    fontWeight: 700
+    lineHeight: 1.05
     letterSpacing: "-0.01em"
   body:
-    fontFamily: "Plus Jakarta Sans, sans-serif"
+    fontFamily: "DM Sans, sans-serif"
     fontWeight: 400
     fontSize: "0.875rem"
     lineHeight: 1.5
   label:
-    fontFamily: "Plus Jakarta Sans, sans-serif"
+    fontFamily: "DM Sans, sans-serif"
     fontWeight: 500
     fontSize: "0.75rem"
     letterSpacing: "0.01em"
@@ -126,10 +127,10 @@ Six consistent plant colors for multi-plant chart legends:
 
 ## Typography
 
-**Display Font:** Space Grotesk (500–700 weight, sans-serif)
-**Body Font:** Plus Jakarta Sans (400–600 weight, sans-serif)
+**Display Font:** Barlow Semi Condensed (500–800 weight, sans-serif)
+**Body Font:** DM Sans (400–600 weight, sans-serif)
 
-**Character:** Space Grotesk's geometric confidence makes large KPI numbers feel authoritative rather than clinical. Plus Jakarta Sans grounds labels and prose in readable warmth. Together they read as "precise but human" — appropriate for a tool that carries operational weight.
+**Character:** Barlow Semi Condensed's industrial condensed letterform makes KPI numbers read as authoritative measurements — tight, precise, space-efficient. DM Sans brings clean geometric warmth to labels and prose without feeling generic. Together they read as "precision instrument built for humans."
 
 ### Hierarchy
 - **Display** (Space Grotesk, 700, text-3xl/30px, leading-none): KPI values (OEE %, Lead Time days, Output pcs). Purpose: immediate status read at a glance.
@@ -139,7 +140,7 @@ Six consistent plant colors for multi-plant chart legends:
 - **Label** (Plus Jakarta Sans, 500, text-xs/12px, tracking-wide): Filter pills, badges, table headers, legends. Max-width 65ch for reading comfort.
 
 ### Named Rules
-**The Number-as-Hero Rule.** KPI values use Space Grotesk display weight. Labels and context use Plus Jakarta Sans. Never swap: a prose label in Space Grotesk adds visual noise; a KPI in Plus Jakarta Sans loses authority.
+**The Number-as-Hero Rule.** KPI values use Barlow Semi Condensed display weight. Labels and context use DM Sans. Never swap: a prose label in Barlow Semi Condensed adds visual noise; a KPI in DM Sans loses authority.
 
 ## Layout
 
@@ -195,10 +196,10 @@ The central unit of the dashboard. High-density with strict internal hierarchy.
 - No border on pills — background is the differentiator.
 
 ### Sidebar Navigation
-- **Background:** `bg-brand-sidebar` (#f0eeff)
-- **Active item:** `bg-brand-surface text-brand-600 rounded-md font-semibold`
-- **Inactive item:** `text-gray-600 hover:bg-white/50 rounded-md`
-- **Brand header:** gradient `from-brand-800 via-brand-700 to-brand-600` on white text
+- **Background:** `bg-brand-sidebar` (#312e81 — brand-900, dark indigo)
+- **Active item:** `bg-white/10 text-white ring-1 ring-white/10 rounded-lg`
+- **Inactive item:** `text-brand-200/60 hover:text-white hover:bg-white/10 rounded-lg`
+- **Brand header:** white logo icon on `bg-white/10`, white product name, `text-brand-300` subtitle
 
 ### Charts (Recharts)
 - **Line chart:** `strokeWidth: 2.5`, plant color per series, no area fill by default
@@ -228,5 +229,5 @@ The central unit of the dashboard. High-density with strict internal hierarchy.
 - **Don't** reorder or rename the 6 core KPIs (Lead Time, Yield, RFT, Output, OEE, Productivity).
 - **Don't** use Plus Jakarta Sans for large KPI numeric displays — Space Grotesk owns numbers.
 - **Don't** add shadows to cards at rest — flat surfaces with border-gray-100 is the default.
-- **Don't** introduce new font families — the two-font system (Space Grotesk + Plus Jakarta Sans) is fixed.
+- **Don't** introduce new font families — the two-font system (Barlow Semi Condensed + DM Sans) is fixed.
 - **Don't** use `animate-bounce` for UI feedback — it reads as dated and unprofessional. Use smooth ease-out transitions instead.
