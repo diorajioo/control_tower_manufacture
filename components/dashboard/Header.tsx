@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Bell, LayoutGrid, Calendar, ChevronDown, Check } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
+import { PLANT_COLORS } from "@/lib/chartConfig";
 
 // Interval auto-refresh data: setiap 1 jam sekali
 const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
@@ -16,9 +17,7 @@ const PERIOD_PRESETS = [
   { label: "Last 6 Months", short: "6M",  getValue: () => ({ start: daysAgo(180), end: today() }) },
 ];
 
-// Pilihan granularitas data (harian/mingguan/bulanan) dan warna titik per plant di dropdown
 const DATA_LEVELS = ["Daily", "Weekly", "Monthly"];
-const PLANT_DOT   = ["#6366f1","#3b82f6","#f59e0b","#ef4444","#10b981","#8b5cf6"];
 
 // Helper: kembalikan tanggal hari ini dan N hari lalu dalam format YYYY-MM-DD
 function today() { return new Date().toISOString().split("T")[0]; }
@@ -141,7 +140,7 @@ export function Header({
                 className={cn("w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors",
                   plant === p ? "bg-brand-50 text-brand-700" : "text-gray-600 hover:bg-gray-50")}>
                 <span className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: PLANT_DOT[i % PLANT_DOT.length] }} />
+                  style={{ backgroundColor: PLANT_COLORS[i % PLANT_COLORS.length] }} />
                 <span className="font-medium flex-1">{p}</span>
                 {plant === p && <Check size={10} className="text-brand-500 shrink-0" />}
               </button>

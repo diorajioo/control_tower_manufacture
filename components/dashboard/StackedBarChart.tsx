@@ -13,40 +13,12 @@ import {
   ReferenceArea,
   Cell,
 } from "recharts";
-
-// Daftar KPI sama persis dengan TrendChart supaya pilihan konsisten antar chart
-const KPI_OPTIONS = [
-  { value: "leadtime",   label: "Lead Time",          unit: "days"   },
-  { value: "upstream",   label: "Upstream Prod.",      unit: "kg/mh"  },
-  { value: "downstream", label: "Downstream Prod.",    unit: "pcs/mh" },
-  { value: "e2e",        label: "E2E Prod.",           unit: "pcs/mh" },
-  { value: "output",     label: "Accepted Output",     unit: "pcs"    },
-  { value: "batch",      label: "Besar Batch",         unit: "kg"     },
-] as const;
-type KpiType = (typeof KPI_OPTIONS)[number]["value"];
-
-// Warna plant disamakan dengan TrendChart agar konsisten secara visual
-const PLANT_COLORS = ["#3b82f6", "#f59e0b", "#ef4444", "#10b981", "#8b5cf6", "#f97316"];
-
-// Hitung UCL/LCL dari semua titik data pakai logika WINDOW_AVG/WINDOW_STDEV yang sama dengan TrendChart
-function computeControlLimits(data: Record<string, unknown>[], plants: string[]) {
-  const values: number[] = [];
-  for (const pt of data) {
-    for (const p of plants) {
-      const v = pt[p];
-      if (typeof v === "number" && !isNaN(v)) values.push(v);
-    }
-  }
-  if (values.length < 2) return { mean: 0, stdev: 0, ucl: 0, lcl: 0 };
-  const mean  = values.reduce((s, v) => s + v, 0) / values.length;
-  const stdev = Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / (values.length - 1));
-  return {
-    mean:  Number(mean.toFixed(2)),
-    stdev: Number(stdev.toFixed(2)),
-    ucl:   Number((mean + 3 * stdev).toFixed(2)),
-    lcl:   Number(Math.max(0, mean - 3 * stdev).toFixed(2)),
-  };
-}
+import {
+  PLANT_COLORS,
+  KPI_OPTIONS,
+  computeControlLimits,
+  computePerPlantLimits,
+} from "@/lib/chartConfig";
 
 // Tipe props untuk filter tanggal dan plant dari parent
 interface Filters {
@@ -93,32 +65,30 @@ export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarCha
     [rawData, plants]
   );
 
-  // Agregasi rata-rata KPI per plant dari seluruh data mingguan beserta UCL/LCL masing-masing
+  const perPlantLimits = useMemo(
+    () => computePerPlantLimits(rawData, plants),
+    [rawData, plants]
+  );
+
   const plantData = useMemo(
     () =>
       plants.map((plant, i) => {
         const vals = rawData
           .map((pt) => pt[plant])
           .filter((v): v is number => typeof v === "number" && !isNaN(v));
-        const avg = vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
-        let plantStdev = 0, plantUcl = 0, plantLcl = 0;
-        if (vals.length >= 2) {
-          plantStdev = Math.sqrt(vals.reduce((s, v) => s + (v - avg) ** 2, 0) / (vals.length - 1));
-          plantUcl   = avg + 3 * plantStdev;
-          plantLcl   = Math.max(0, avg - 3 * plantStdev);
-        }
+        const lim = perPlantLimits[plant] ?? { mean: 0, stdev: 0, ucl: 0, lcl: 0 };
         return {
           plant,
-          value: Number(avg.toFixed(2)),
-          color: PLANT_COLORS[i % PLANT_COLORS.length],
-          weeks: vals.length,
-          plantMean:  Number(avg.toFixed(2)),
-          plantStdev: Number(plantStdev.toFixed(2)),
-          plantUcl:   Number(plantUcl.toFixed(2)),
-          plantLcl:   Number(plantLcl.toFixed(2)),
+          value:      lim.mean,
+          color:      PLANT_COLORS[i % PLANT_COLORS.length],
+          weeks:      vals.length,
+          plantMean:  lim.mean,
+          plantStdev: lim.stdev,
+          plantUcl:   lim.ucl,
+          plantLcl:   lim.lcl,
         };
       }),
-    [rawData, plants]
+    [rawData, plants, perPlantLimits]
   );
 
   // Tentukan status kontrol tiap plant berdasarkan posisi nilai terhadap UCL/LCL global

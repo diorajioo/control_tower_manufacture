@@ -14,43 +14,12 @@ import {
   ReferenceArea,
 } from "recharts";
 import { format, parseISO } from "date-fns";
-
-// Daftar pilihan KPI yang tersedia di chart, sama seperti parameter [Trends] di Tableau
-const KPI_OPTIONS = [
-  { value: "leadtime",   label: "Lead Time",              unit: "days"   },
-  { value: "upstream",   label: "Upstream Prod.",         unit: "kg/mh"  },
-  { value: "downstream", label: "Downstream Prod.",       unit: "pcs/mh" },
-  { value: "e2e",        label: "E2E Prod.",              unit: "pcs/mh" },
-  { value: "output",     label: "Accepted Output",        unit: "pcs"    },
-  { value: "batch",      label: "Besar Batch",            unit: "kg"     },
-] as const;
-type KpiType = (typeof KPI_OPTIONS)[number]["value"];
-
-// Warna tiap plant konsisten dengan Tableau (J1=biru, J2=amber, J4=merah, J6=hijau)
-const PLANT_COLORS = ["#3b82f6", "#f59e0b", "#ef4444", "#10b981", "#8b5cf6", "#f97316"];
-
-// Hitung UCL/LCL dari semua titik data lintas plant pakai rumus WINDOW_AVG dan WINDOW_STDEV
-function computeControlLimits(data: Record<string, unknown>[], plants: string[]) {
-  const values: number[] = [];
-  for (const pt of data) {
-    for (const p of plants) {
-      const v = pt[p];
-      if (typeof v === "number" && !isNaN(v)) values.push(v);
-    }
-  }
-  if (values.length < 2) return { mean: 0, stdev: 0, ucl: 0, lcl: 0 };
-
-  const mean  = values.reduce((s, v) => s + v, 0) / values.length;
-  // sample stdev (n-1) matching Tableau WINDOW_STDEV
-  const stdev = Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / (values.length - 1));
-
-  return {
-    mean:  Number(mean.toFixed(2)),
-    stdev: Number(stdev.toFixed(2)),
-    ucl:   Number((mean + 3 * stdev).toFixed(2)),
-    lcl:   Number(Math.max(0, mean - 3 * stdev).toFixed(2)),
-  };
-}
+import {
+  PLANT_COLORS,
+  KPI_OPTIONS,
+  computeControlLimits,
+  computePerPlantLimits,
+} from "@/lib/chartConfig";
 
 // Tipe props untuk filter yang diterima dari parent
 interface Filters {
@@ -97,25 +66,10 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
     [data, plants]
   );
 
-  // Hitung UCL/LCL per plant untuk ditampilkan di tooltip saat hover
-  const perPlantLimits = useMemo(() => {
-    const map: Record<string, { mean: number; stdev: number; ucl: number; lcl: number }> = {};
-    for (const plant of plants) {
-      const vals = data
-        .map((pt) => pt[plant])
-        .filter((v): v is number => typeof v === "number" && !isNaN(v));
-      if (vals.length < 2) { map[plant] = { mean: 0, stdev: 0, ucl: 0, lcl: 0 }; continue; }
-      const m = vals.reduce((s, v) => s + v, 0) / vals.length;
-      const sd = Math.sqrt(vals.reduce((s, v) => s + (v - m) ** 2, 0) / (vals.length - 1));
-      map[plant] = {
-        mean:  Number(m.toFixed(2)),
-        stdev: Number(sd.toFixed(2)),
-        ucl:   Number((m + 3 * sd).toFixed(2)),
-        lcl:   Number(Math.max(0, m - 3 * sd).toFixed(2)),
-      };
-    }
-    return map;
-  }, [data, plants]);
+  const perPlantLimits = useMemo(
+    () => computePerPlantLimits(data, plants),
+    [data, plants]
+  );
 
   // Parse string tanggal ke objek Date, coba format ISO dulu lalu fallback ke native
   const parseAnyDate = (s: string): Date => {
