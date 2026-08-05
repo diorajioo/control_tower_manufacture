@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Clock, Droplets, ShieldCheck, Package, Gauge, Activity, Users } from "lucide-react";
@@ -70,12 +70,20 @@ export default function DashboardPage() {
   const [leadTimeUnit, setLeadTimeUnit] = useState<"days" | "hours">("days");
   const [leadTimeType, setLeadTimeType] = useState<"gross" | "nett">("gross");
   const [kpiType, setKpiType] = useState("leadtime");
-  const [filters, setFilters] = useState<Filters>({
-    plant: "All Plant",
-    startDate: `${new Date().getFullYear()}-01-01`,
-    endDate: new Date().toISOString().split("T")[0],
-    dataLevel: "Daily",
+  const [filters, setFilters] = useState<Filters>(() => {
+    const defaults: Filters = {
+      plant: "All Plant",
+      startDate: `${new Date().getFullYear()}-01-01`,
+      endDate: new Date().toISOString().split("T")[0],
+      dataLevel: "Daily",
+    };
+    try {
+      const stored = localStorage.getItem("ct-filters");
+      return stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
+    } catch { return defaults; }
   });
+  const [undoId, setUndoId] = useState<string | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Redirect ke halaman login jika session belum terautentikasi
   useEffect(() => {
@@ -129,15 +137,26 @@ export default function DashboardPage() {
     if (status === "authenticated") fetchData(filters);
   }, [status, fetchData, filters]);
 
-  // Simpan filter baru ke state lalu trigger fetch ulang dengan filter terbaru
+  // Simpan filter baru ke state, localStorage, lalu trigger fetch ulang
   const handleFilterChange = (newFilters: Filters) => {
     setFilters(newFilters);
+    try { localStorage.setItem("ct-filters", JSON.stringify(newFilters)); } catch { /* ignore */ }
     fetchData(newFilters);
   };
 
-  // Tambah ID alert yang di-dismiss ke set agar tidak muncul lagi
+  // Tambah ID alert yang di-dismiss ke set, tampilkan opsi undo selama 5 detik
   const handleDismissAlert = (id: string) => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setDismissedIds((prev) => new Set(Array.from(prev).concat(id)));
+    setUndoId(id);
+    undoTimerRef.current = setTimeout(() => setUndoId(null), 5000);
+  };
+
+  const handleUndoDismiss = () => {
+    if (!undoId) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setDismissedIds((prev) => { const next = new Set(Array.from(prev)); next.delete(undoId); return next; });
+    setUndoId(null);
   };
 
   // Filter alert aktif yang belum di-dismiss oleh user
@@ -209,6 +228,7 @@ export default function DashboardPage() {
                 {/* Lead Time — CT_MANUF_LEADTIME */}
                 <KPICard
                   title="Lead Time"
+                  tooltip="Waktu dari PO dibuat hingga produk diterima NDC. Gross = total proses; Nett = waktu aktual produksi. Target: serendah mungkin."
                   icon={<Clock size={17} />}
                   iconColor="#3b82f6"
                   value={
@@ -295,6 +315,7 @@ export default function DashboardPage() {
                 {/* Yield — CT_MANUF_KEMAS (pack) + DATAMART_PRODUCTION_OUTPUT_OLAH (bulk) */}
                 <KPICard
                   title="Yield / Loss"
+                  tooltip="Persentase bahan baku yang hilang dalam proses produksi. Bulk Loss = kehilangan di proses olah; Pack Loss = proses kemas. Target: serendah mungkin."
                   icon={<Droplets size={17} />}
                   iconColor="#f59e0b"
                   alert={visibleAlerts.some((a) => a.id.startsWith("bulkloss") || a.id.startsWith("packloss"))}
@@ -340,6 +361,7 @@ export default function DashboardPage() {
                 {/* Right First Time — CT_MANUF_LEADTIME: RELEASE_QTY / TARGET_QTY */}
                 <KPICard
                   title="Right First Time"
+                  tooltip="Persentase batch yang lulus QC tanpa rework atau rejection pada percobaan pertama. Target: ≥95%."
                   icon={<ShieldCheck size={17} />}
                   iconColor="#22c55e"
                   trend={kpi?.rightFirstTime?.trend ?? undefined}
@@ -350,6 +372,7 @@ export default function DashboardPage() {
                     <CircularGauge
                       value={rftValue}
                       color={rftValue >= 95 ? "#22c55e" : rftValue >= 90 ? "#f59e0b" : "#ef4444"}
+                      ariaLabel={`Right First Time: ${rftValue.toFixed(1)}% dari target 95%`}
                     />
                     <div>
                       <p className="text-xs text-gray-500 leading-snug">First Time Passed Rate</p>
@@ -365,6 +388,7 @@ export default function DashboardPage() {
                 {/* Output — DATAMART_PRODUCTION_OUTPUT_OLAH + DATAMART_PRODUCTION_OUTPUT_FG */}
                 <KPICard
                   title="Output"
+                  tooltip="Jumlah produk yang berhasil diproduksi dalam periode ini. Finished Goods (FG) = produk jadi dalam pcs; Bulk = produk setengah jadi."
                   icon={<Package size={17} />}
                   iconColor="#6366f1"
                 >
@@ -409,6 +433,7 @@ export default function DashboardPage() {
                 {/* OEE — CT_MANUF_KEMAS: Quality × Performance per plant */}
                 <KPICard
                   title="OEE"
+                  tooltip="Overall Equipment Effectiveness: efisiensi penggunaan mesin (Availability × Performance × Quality). Target: ≥65%."
                   icon={<Gauge size={17} />}
                   iconColor="#8b5cf6"
                   value={kpi?.oee?.value?.toFixed(1) ?? "—"}
@@ -424,6 +449,7 @@ export default function DashboardPage() {
                 {/* OPE — derived: OEE × 0.8 (no direct Snowflake column yet) */}
                 <KPICard
                   title="OPE"
+                  tooltip="Overall Plant Effectiveness: estimasi performa seluruh pabrik, dihitung sebagai OEE × 0.8. Belum ada kolom langsung di Snowflake."
                   icon={<Activity size={17} />}
                   iconColor="#06b6d4"
                   value={opeValue !== null ? opeValue.toFixed(1) : "—"}
@@ -436,6 +462,7 @@ export default function DashboardPage() {
                 {/* Productivity — CT_MANUF_E2E (e2e), CT_MANUF_OLAH (upstream), CT_MANUF_KEMAS (downstream) */}
                 <KPICard
                   title="Productivity"
+                  tooltip="Efisiensi tenaga kerja. E2E = pcs/manhour keseluruhan; Upstream = kg/manhour proses olah; Downstream = pcs/manhour proses kemas."
                   icon={<Users size={17} />}
                   iconColor="#10b981"
                   value={kpi?.productivity?.e2e?.toFixed(1) ?? "—"}
@@ -489,6 +516,16 @@ export default function DashboardPage() {
       </div>
 
       <FloatingChat filters={filters} />
+
+      {/* Undo toast setelah dismiss alert */}
+      {undoId && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-200">
+          <span>Alert dihapus</span>
+          <button onClick={handleUndoDismiss} className="text-brand-300 font-semibold hover:text-brand-200 transition-colors">
+            Batalkan
+          </button>
+        </div>
+      )}
     </div>
   );
 }

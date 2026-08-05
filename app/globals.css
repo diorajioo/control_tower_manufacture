@@ -26,3 +26,8 @@ body {
   background: #cbd5e1;
   border-radius: 99px;
 }
+
+@keyframes dot-fade {
+  0%, 60%, 100% { opacity: 0.3; transform: scale(0.85); }
+  30% { opacity: 1; transform: scale(1); }
+}

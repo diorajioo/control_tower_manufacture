@@ -1,7 +1,18 @@
 "use client";
 
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative group inline-flex items-center">
+      <Info size={12} className="text-gray-300 group-hover:text-gray-500 cursor-help transition-colors" />
+      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 hidden group-hover:block text-xs text-white bg-gray-900 px-2.5 py-2 rounded-lg shadow-xl z-50 leading-relaxed font-normal normal-case tracking-normal">
+        {text}
+      </span>
+    </span>
+  );
+}
 
 // Tipe props untuk komponen KPICard yang bisa menerima nilai, tren, badge, dan konten kustom
 interface KPICardProps {
@@ -19,6 +30,7 @@ interface KPICardProps {
   badgeColor?: "green" | "red" | "amber" | "blue" | "purple";
   alert?: boolean;
   compact?: boolean;
+  tooltip?: string;
 }
 
 // Peta warna badge sesuai status yang diberikan dari parent
@@ -59,6 +71,7 @@ export function KPICard({
   badgeColor = "blue",
   alert,
   compact,
+  tooltip,
 }: KPICardProps) {
   return (
     <div
@@ -80,6 +93,7 @@ export function KPICard({
             </div>
           )}
           <span className="text-sm font-bold text-slate-700 leading-tight">{title}</span>
+          {tooltip && <InfoTooltip text={tooltip} />}
         </div>
         <div className="flex items-center gap-1">
           {trend !== undefined && <TrendBadge trend={trend} />}
@@ -116,10 +130,11 @@ interface CircularGaugeProps {
   max?: number;
   color?: string;
   size?: number;
+  ariaLabel?: string;
 }
 
 // Gambar gauge berbentuk lingkaran SVG yang menunjukkan persentase terhadap nilai maksimum
-export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72 }: CircularGaugeProps) {
+export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72, ariaLabel }: CircularGaugeProps) {
   // Hitung offset stroke berdasarkan persentase untuk animasi lingkaran
   const radius = (size - 12) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -127,8 +142,13 @@ export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72 }
   const offset = circumference * (1 - pct);
 
   return (
-    <div className="relative flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
+    <div
+      className="relative flex items-center justify-center shrink-0"
+      style={{ width: size, height: size }}
+      role="img"
+      aria-label={ariaLabel ?? `${value.toFixed(1)}% dari ${max}%`}
+    >
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
         {/* Lingkaran latar belakang */}
         <circle
           cx={size / 2}
@@ -155,7 +175,7 @@ export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72 }
       {/* Label nilai di tengah gauge */}
       <div className="absolute text-center">
         <span className="text-sm font-bold text-slate-800 leading-none font-display">{value.toFixed(1)}</span>
-        <span className="text-[10px] text-gray-400 block">%</span>
+        <span className="text-xs text-gray-400 block leading-none">%</span>
       </div>
     </div>
   );
@@ -228,7 +248,7 @@ export function MiniStat({ label, value, unit, positive, negative, trend }: Mini
         </span>
         {/* Panah tren kecil naik/turun dengan persentase perubahan */}
         {trend !== undefined && (
-          <span className={cn("text-[10px] font-semibold", trend > 0 ? "text-green-500" : "text-red-500")}>
+          <span className={cn("text-xs font-semibold", trend > 0 ? "text-green-500" : "text-red-500")}>
             {trend > 0 ? "↑" : "↓"}{Math.abs(trend).toFixed(1)}%
           </span>
         )}

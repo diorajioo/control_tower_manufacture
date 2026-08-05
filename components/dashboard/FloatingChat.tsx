@@ -113,7 +113,7 @@ export function FloatingChat({ filters }: FloatingChatProps) {
                 <Sparkles size={13} className="text-blue-200" />
               </div>
               <span className="text-sm font-semibold">AI Analyst</span>
-              <span className="text-[10px] bg-white/15 px-2 py-0.5 rounded-full text-blue-200 font-medium">
+              <span className="text-xs bg-white/15 px-2 py-0.5 rounded-full text-blue-200 font-medium">
                 Groq · llama-3.3-70b
               </span>
             </div>
@@ -125,7 +125,7 @@ export function FloatingChat({ filters }: FloatingChatProps) {
           {/* Context pill */}
           {filters?.plant && (
             <div className="px-4 py-1.5 bg-gray-50 border-b border-gray-100 shrink-0">
-              <span className="text-[11px] text-gray-500">
+              <span className="text-xs text-gray-500">
                 Konteks: <span className="font-medium text-gray-700">{filters.plant}</span>
                 {" · "}{filters.startDate} s/d {filters.endDate}
               </span>
@@ -180,9 +180,9 @@ export function FloatingChat({ filters }: FloatingChatProps) {
             {loading && (
               <div className="flex justify-start">
                 <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full [animation:dot-fade_1.4s_ease-in-out_infinite] [animation-delay:0ms]" />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full [animation:dot-fade_1.4s_ease-in-out_infinite] [animation-delay:200ms]" />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full [animation:dot-fade_1.4s_ease-in-out_infinite] [animation-delay:400ms]" />
                 </div>
               </div>
             )}

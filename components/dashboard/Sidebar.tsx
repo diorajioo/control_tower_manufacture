@@ -31,7 +31,7 @@ export function Sidebar() {
         <NavItem icon={Settings} label="Settings" />
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors w-full text-left"
+          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-rose-400 hover:text-red-600 hover:bg-red-50 transition-colors w-full text-left"
         >
           <LogOut size={16} />
           <span className="text-sm font-medium">Sign Out</span>
@@ -56,7 +56,7 @@ function NavItem({
         "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors w-full text-left",
         active
           ? "bg-brand-600 text-white shadow-sm"
-          : "text-gray-400 hover:text-gray-800 hover:bg-purple-100"
+          : "text-indigo-400 hover:text-purple-900 hover:bg-purple-100"
       )}
     >
       <Icon size={16} />

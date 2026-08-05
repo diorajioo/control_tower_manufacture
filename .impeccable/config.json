@@ -1,0 +1,20 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "#f0f4f8",
+        "createdAt": "2026-08-05T07:08:37.473Z",
+        "reason": "Body fallback background, overridden by dashboard layout inline bg"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#cbd5e1",
+        "createdAt": "2026-08-05T07:08:37.773Z",
+        "reason": "Scrollbar thumb chrome color, not a design token"
+      }
+    ]
+  }
+}
