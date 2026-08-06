@@ -2,7 +2,11 @@ import { Resend } from "resend";
 
 export const resend = new Resend(process.env.RESEND_API_KEY);
 
-export const FROM_EMAIL = `Control Tower <${process.env.FROM_EMAIL ?? "noreply@paracorpgroup.com"}>`;
+export const FROM_EMAIL = `Control Tower <${process.env.FROM_EMAIL ?? "onboarding@resend.dev"}>`;
+
+// Optional: set REPLY_TO to your email so replies land in your inbox
+// even when FROM_EMAIL is the Resend sandbox address.
+export const REPLY_TO = process.env.REPLY_TO ?? undefined;
 
 export function testEmailHtml(userName: string): string {
   return `<!DOCTYPE html>
