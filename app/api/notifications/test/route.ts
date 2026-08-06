@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { resend, FROM_EMAIL, REPLY_TO, testEmailHtml } from "@/lib/email";
+import { getResend, FROM_EMAIL, REPLY_TO, testEmailHtml } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   const userName = session.user?.name ?? "Pengguna";
 
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await getResend().emails.send({
     from: FROM_EMAIL,
     to: recipients,
     replyTo: REPLY_TO,
