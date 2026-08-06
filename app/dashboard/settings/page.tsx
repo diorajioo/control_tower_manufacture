@@ -7,7 +7,7 @@ import type { Session } from "next-auth";
 import {
   User, Monitor, Bell, SlidersHorizontal, Database,
   Plus, X, RotateCcw, Send, Check, Loader2, Mail,
-  Clock, AlertCircle,
+  Clock, AlertCircle, Lock, Shield,
 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { cn } from "@/lib/utils";
@@ -40,17 +40,10 @@ interface DisplaySettings {
   timezone: "WIB" | "WITA" | "WIT";
   defaultPlant: string;
   defaultDataLevel: "Daily" | "Hourly";
+  language: "id" | "en";
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
-
-const KPI_LABELS: Record<KpiKey, string> = {
-  leadTime: "Lead Time",
-  bulkLoss: "Bulk Loss",
-  packLoss: "Pack Loss",
-  rft: "Right First Time",
-  oee: "OEE",
-};
 
 const KPI_CHIPS: Record<KpiKey, string> = {
   leadTime: "Lead Time",
@@ -83,6 +76,7 @@ const DEFAULT_DISPLAY: DisplaySettings = {
   timezone: "WIB",
   defaultPlant: "All Plant",
   defaultDataLevel: "Daily",
+  language: "id",
 };
 
 // ── Storage ───────────────────────────────────────────────────────────────────
@@ -115,6 +109,17 @@ function loadThresholds(): ThresholdSettings {
       oee: { ...DEFAULT_THRESHOLDS.oee, ...p.oee },
     };
   } catch { return DEFAULT_THRESHOLDS; }
+}
+
+function loadAdmins(currentEmail: string): string[] {
+  try {
+    const raw = localStorage.getItem("ct-admins");
+    const list = raw ? (JSON.parse(raw) as string[]) : [];
+    if (Array.isArray(list) && list.length > 0) return list;
+  } catch { /* ignore */ }
+  const initial = [currentEmail];
+  localStorage.setItem("ct-admins", JSON.stringify(initial));
+  return initial;
 }
 
 function loadDisplay(): DisplaySettings {
@@ -150,11 +155,12 @@ export default function SettingsPage() {
 // ── Section nav config ────────────────────────────────────────────────────────
 
 const SECTIONS = [
-  { id: "profil" as const,     label: "Profil",           icon: User             },
-  { id: "tampilan" as const,   label: "Tampilan",         icon: Monitor          },
-  { id: "notifikasi" as const, label: "Notifikasi",       icon: Bell             },
-  { id: "threshold" as const,  label: "Alert & Threshold", icon: SlidersHorizontal },
-  { id: "integrasi" as const,  label: "Integrasi",        icon: Database         },
+  { id: "profil" as const,     label: "Profil",            icon: User,             adminOnly: false },
+  { id: "tampilan" as const,   label: "Tampilan",          icon: Monitor,          adminOnly: false },
+  { id: "notifikasi" as const, label: "Notifikasi",        icon: Bell,             adminOnly: true  },
+  { id: "threshold" as const,  label: "Alert & Threshold", icon: SlidersHorizontal, adminOnly: true  },
+  { id: "integrasi" as const,  label: "Integrasi",         icon: Database,         adminOnly: false },
+  { id: "admin" as const,      label: "Admin",             icon: Shield,           adminOnly: true  },
 ];
 
 type SectionId = typeof SECTIONS[number]["id"];
@@ -171,6 +177,7 @@ function SettingsShell() {
   const [thresholds, setThresholds] = useState<ThresholdSettings>(DEFAULT_THRESHOLDS);
   const [display, setDisplay] = useState<DisplaySettings>(DEFAULT_DISPLAY);
   const [jabatan, setJabatan] = useState("");
+  const [admins, setAdmins] = useState<string[]>([]);
 
   useEffect(() => {
     setNotif(loadNotif());
@@ -178,6 +185,18 @@ function SettingsShell() {
     setDisplay(loadDisplay());
     setJabatan(localStorage.getItem("ct-user-jabatan") ?? "");
   }, []);
+
+  useEffect(() => {
+    const email = session?.user?.email;
+    if (!email) return;
+    setAdmins(loadAdmins(email));
+  }, [session?.user?.email]);
+
+  const isAdmin = !!session?.user?.email && admins.includes(session.user.email);
+  const saveAdmins = (list: string[]) => {
+    setAdmins(list);
+    localStorage.setItem("ct-admins", JSON.stringify(list));
+  };
 
   const go = (s: SectionId) =>
     router.push(`/dashboard/settings?s=${s}`, { scroll: false });
@@ -189,21 +208,27 @@ function SettingsShell() {
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">
           Pengaturan
         </p>
-        {SECTIONS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => go(id)}
-            className={cn(
-              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full text-left",
-              active === id
-                ? "bg-brand-50 text-brand-700"
-                : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-            )}
-          >
-            <Icon size={15} />
-            <span>{label}</span>
-          </button>
-        ))}
+        {SECTIONS
+          .filter(({ id }) => id !== "admin" || isAdmin)
+          .map(({ id, label, icon: Icon, adminOnly }) => {
+            const locked = adminOnly && !isAdmin;
+            return (
+              <button
+                key={id}
+                onClick={() => go(id)}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full text-left",
+                  active === id
+                    ? "bg-brand-50 text-brand-700"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                )}
+              >
+                <Icon size={15} />
+                <span className="flex-1">{label}</span>
+                {locked && <Lock size={11} className="text-gray-300 shrink-0" />}
+              </button>
+            );
+          })}
       </nav>
 
       {/* Content */}
@@ -225,20 +250,35 @@ function SettingsShell() {
             />
           )}
           {active === "notifikasi" && (
-            <NotifikasiSection
-              notif={notif}
-              setNotif={setNotif}
-              onSave={() => localStorage.setItem("ct-notification-settings", JSON.stringify(notif))}
-            />
+            isAdmin ? (
+              <NotifikasiSection
+                notif={notif}
+                setNotif={setNotif}
+                onSave={() => localStorage.setItem("ct-notification-settings", JSON.stringify(notif))}
+              />
+            ) : (
+              <AdminOnly title="Notifikasi" />
+            )
           )}
           {active === "threshold" && (
-            <ThresholdSection
-              thresholds={thresholds}
-              setThresholds={setThresholds}
-              onSave={() => localStorage.setItem("ct-alert-thresholds", JSON.stringify(thresholds))}
-            />
+            isAdmin ? (
+              <ThresholdSection
+                thresholds={thresholds}
+                setThresholds={setThresholds}
+                onSave={() => localStorage.setItem("ct-alert-thresholds", JSON.stringify(thresholds))}
+              />
+            ) : (
+              <AdminOnly title="Alert & Threshold" />
+            )
           )}
           {active === "integrasi" && <IntegrasiSection />}
+          {active === "admin" && isAdmin && (
+            <AdminSection
+              admins={admins}
+              currentEmail={session?.user?.email ?? ""}
+              onSave={saveAdmins}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -483,6 +523,34 @@ function TampilanSection({
         </div>
       </Card>
 
+      <Card title="Bahasa / Language">
+        <div className="grid grid-cols-2 gap-3">
+          {([
+            { value: "id" as const, label: "Bahasa Indonesia", flag: "🇮🇩", sub: "Indonesia" },
+            { value: "en" as const, label: "English",           flag: "🇬🇧", sub: "United Kingdom" },
+          ] as const).map(({ value, label, flag, sub }) => (
+            <button
+              key={value}
+              onClick={() => set({ language: value })}
+              className={cn(
+                "flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-colors",
+                display.language === value
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-gray-200 hover:border-gray-300"
+              )}
+            >
+              <span className="text-2xl leading-none">{flag}</span>
+              <div>
+                <p className={cn("text-sm font-semibold", display.language === value ? "text-brand-700" : "text-gray-700")}>
+                  {label}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </Card>
+
       <Card title="Filter Default">
         <div className="space-y-4">
           <Field label="Plant Default">
@@ -524,6 +592,128 @@ function TampilanSection({
 
       <div className="flex justify-end">
         <SaveButton onSave={onSave} />
+      </div>
+    </div>
+  );
+}
+
+// ── AdminOnly ─────────────────────────────────────────────────────────────────
+
+function AdminOnly({ title }: { title: string }) {
+  return (
+    <div className="space-y-5">
+      <SectionTitle title={title} />
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+          <Lock size={22} className="text-gray-400" />
+        </div>
+        <p className="text-sm font-semibold text-gray-800 mb-1">Akses Dibatasi</p>
+        <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
+          Hanya admin yang dapat mengubah pengaturan ini. Hubungi admin untuk meminta akses.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── AdminSection ──────────────────────────────────────────────────────────────
+
+function AdminSection({
+  admins,
+  currentEmail,
+  onSave,
+}: {
+  admins: string[];
+  currentEmail: string;
+  onSave: (list: string[]) => void;
+}) {
+  const [emailInput, setEmailInput] = useState("");
+  const [emailError, setEmailError] = useState("");
+
+  const add = () => {
+    const t = emailInput.trim().toLowerCase();
+    if (!t) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) {
+      setEmailError("Format email tidak valid");
+      return;
+    }
+    if (admins.includes(t)) {
+      setEmailError("Email sudah terdaftar sebagai admin");
+      return;
+    }
+    onSave([...admins, t]);
+    setEmailInput("");
+    setEmailError("");
+  };
+
+  const remove = (email: string) => {
+    if (admins.length <= 1) return;
+    onSave(admins.filter((e) => e !== email));
+  };
+
+  return (
+    <div className="space-y-5">
+      <SectionTitle title="Admin" description="Kelola siapa saja yang memiliki akses admin" />
+
+      <Card title="Daftar Admin">
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="email"
+                placeholder="nama@paracorpgroup.com"
+                value={emailInput}
+                onChange={(e) => { setEmailInput(e.target.value); setEmailError(""); }}
+                onKeyDown={(e) => e.key === "Enter" && add()}
+                className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+              />
+            </div>
+            <button
+              onClick={add}
+              className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors"
+            >
+              <Plus size={14} />
+              Tambah
+            </button>
+          </div>
+          {emailError && <p className="text-xs text-red-500">{emailError}</p>}
+
+          <ul className="space-y-2 mt-1">
+            {admins.map((email) => (
+              <li key={email} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
+                    <span className="text-xs font-bold text-brand-600">{email[0].toUpperCase()}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">{email}</p>
+                    {email === currentEmail && (
+                      <p className="text-xs text-brand-500 leading-none mt-0.5">Anda</p>
+                    )}
+                  </div>
+                </div>
+                {email !== currentEmail && (
+                  <button
+                    onClick={() => remove(email)}
+                    disabled={admins.length <= 1}
+                    className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30"
+                    aria-label={`Hapus admin ${email}`}
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Card>
+
+      <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+        <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-amber-700 leading-relaxed">
+          Data admin disimpan secara lokal di perangkat ini. Perubahan hanya berlaku pada browser dan perangkat yang sama.
+        </p>
       </div>
     </div>
   );
