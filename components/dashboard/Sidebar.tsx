@@ -1,10 +1,22 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { LayoutGrid, Factory, CheckCircle2, Zap, FileText, Settings, LogOut, BarChart3 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 
+const NAV_ITEMS = [
+  { icon: BarChart3, label: "Overview", href: "/dashboard" },
+  { icon: Factory, label: "Production", href: "/dashboard/production" },
+  { icon: CheckCircle2, label: "Quality", href: "/dashboard/quality" },
+  { icon: Zap, label: "Energy", href: "/dashboard/energy" },
+  { icon: FileText, label: "Reports", href: "/dashboard/reports" },
+];
+
 export function Sidebar() {
+  const pathname = usePathname();
+
   return (
     <aside className="w-56 min-h-screen bg-brand-900 flex flex-col shrink-0 border-r border-brand-800">
       <div className="px-4 py-5">
@@ -20,15 +32,24 @@ export function Sidebar() {
       </div>
 
       <nav className="px-3 py-2 flex flex-col gap-0.5 flex-1">
-        <NavItem icon={BarChart3} label="Overview" active />
-        <NavItem icon={Factory} label="Production" />
-        <NavItem icon={CheckCircle2} label="Quality" />
-        <NavItem icon={Zap} label="Energy" />
-        <NavItem icon={FileText} label="Reports" />
+        {NAV_ITEMS.map(({ icon, label, href }) => (
+          <NavItem
+            key={href}
+            icon={icon}
+            label={label}
+            href={href}
+            active={pathname === href}
+          />
+        ))}
       </nav>
 
       <div className="px-3 py-4 border-t border-brand-700/50 flex flex-col gap-0.5">
-        <NavItem icon={Settings} label="Settings" />
+        <NavItem
+          icon={Settings}
+          label="Settings"
+          href="/dashboard/settings"
+          active={pathname === "/dashboard/settings"}
+        />
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
           className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-brand-300/60 hover:text-red-300 hover:bg-red-900/30 transition-colors w-full text-left"
@@ -44,16 +65,19 @@ export function Sidebar() {
 function NavItem({
   icon: Icon,
   label,
+  href,
   active,
 }: {
   icon: React.ElementType;
   label: string;
+  href: string;
   active?: boolean;
 }) {
   return (
-    <button
+    <Link
+      href={href}
       className={cn(
-        "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors w-full text-left",
+        "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors w-full",
         active
           ? "bg-white/10 text-white ring-1 ring-white/10"
           : "text-brand-200/60 hover:text-white hover:bg-white/10"
@@ -61,6 +85,6 @@ function NavItem({
     >
       <Icon size={16} />
       <span className="text-sm font-medium">{label}</span>
-    </button>
+    </Link>
   );
 }
