@@ -7,8 +7,16 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const ALLOWED_TABLES = new Set([
+    "CT_MANUF_LEADTIME", "CT_MANUF_KEMAS", "CT_MANUF_OLAH",
+    "CT_MANUF_E2E", "CT_MANUF_TRENDS",
+  ]);
+
   const table = new URL(req.url).searchParams.get("table") ?? "CT_MANUF_LEADTIME";
   const upper = table.toUpperCase();
+  if (!ALLOWED_TABLES.has(upper)) {
+    return NextResponse.json({ error: "Unknown table" }, { status: 400 });
+  }
 
   const [cols, sample, distincts] = await Promise.all([
     executeQuery<{ COLUMN_NAME: string; DATA_TYPE: string }>(`

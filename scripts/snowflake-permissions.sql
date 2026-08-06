@@ -1,0 +1,44 @@
+-- ============================================================
+-- Control Tower Manufacture — Snowflake Least-Privilege Setup
+-- Run this as ACCOUNTADMIN (or SYSADMIN + SECURITYADMIN).
+-- Replace <SERVICE_ACCOUNT_USERNAME> with the actual username
+-- from SNOWFLAKE_USERNAME in your .env.local.
+-- ============================================================
+
+-- Step 1: Create a dedicated role for the app
+CREATE ROLE IF NOT EXISTS CONTROL_TOWER_APP;
+
+-- ── Warehouse ──────────────────────────────────────────────
+GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE CONTROL_TOWER_APP;
+
+-- ── MIGRATION database ─────────────────────────────────────
+GRANT USAGE ON DATABASE MIGRATION TO ROLE CONTROL_TOWER_APP;
+GRANT USAGE ON SCHEMA MIGRATION.CONTROL_TOWER TO ROLE CONTROL_TOWER_APP;
+
+-- Explicitly grant SELECT only on the 5 tables the app uses.
+-- All other tables in MIGRATION remain inaccessible.
+GRANT SELECT ON TABLE MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME TO ROLE CONTROL_TOWER_APP;
+GRANT SELECT ON TABLE MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS    TO ROLE CONTROL_TOWER_APP;
+GRANT SELECT ON TABLE MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH     TO ROLE CONTROL_TOWER_APP;
+GRANT SELECT ON TABLE MIGRATION.CONTROL_TOWER.CT_MANUF_E2E      TO ROLE CONTROL_TOWER_APP;
+GRANT SELECT ON TABLE MIGRATION.CONTROL_TOWER.CT_MANUF_TRENDS   TO ROLE CONTROL_TOWER_APP;
+
+-- ── DATAMART database ──────────────────────────────────────
+GRANT USAGE ON DATABASE DATAMART TO ROLE CONTROL_TOWER_APP;
+GRANT USAGE ON SCHEMA DATAMART.MANUFACTURE TO ROLE CONTROL_TOWER_APP;
+
+GRANT SELECT ON TABLE DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH TO ROLE CONTROL_TOWER_APP;
+GRANT SELECT ON TABLE DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_FG   TO ROLE CONTROL_TOWER_APP;
+
+-- ── Assign role to the service account ────────────────────
+GRANT ROLE CONTROL_TOWER_APP TO USER <SERVICE_ACCOUNT_USERNAME>;
+ALTER USER <SERVICE_ACCOUNT_USERNAME> SET DEFAULT_ROLE = CONTROL_TOWER_APP;
+
+-- ── Verify (run these to confirm) ─────────────────────────
+-- SHOW GRANTS TO ROLE CONTROL_TOWER_APP;
+-- SHOW GRANTS TO USER <SERVICE_ACCOUNT_USERNAME>;
+
+-- ── Optional: revoke any broader legacy grants ─────────────
+-- If the service account was previously using SYSADMIN or a
+-- broad custom role, revoke it after confirming the app works:
+-- REVOKE ROLE <OLD_BROAD_ROLE> FROM USER <SERVICE_ACCOUNT_USERNAME>;
