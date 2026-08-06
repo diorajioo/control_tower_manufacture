@@ -1,12 +1,30 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { Bell, Mail, Plus, X, RotateCcw, Send, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { Session } from "next-auth";
+import {
+  User, Monitor, Bell, SlidersHorizontal, Database,
+  Plus, X, RotateCcw, Send, Check, Loader2, Mail,
+  Clock, AlertCircle,
+} from "lucide-react";
+import { Sidebar } from "@/components/dashboard/Sidebar";
 import { cn } from "@/lib/utils";
 
-interface ThresholdSet {
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+type KpiKey = "leadTime" | "bulkLoss" | "packLoss" | "rft" | "oee";
+
+interface NotifSettings {
+  enabled: boolean;
+  recipients: string[];
+  mode: "immediate" | "daily_digest";
+  digestTime: string;
+  kpis: Record<KpiKey, boolean>;
+}
+
+interface ThresholdSettings {
   leadTime: { warning: number; critical: number };
   bulkLoss: { absWarning: number; absCritical: number };
   packLoss: { absWarning: number; absCritical: number };
@@ -14,21 +32,31 @@ interface ThresholdSet {
   oee: { warning: number; critical: number };
 }
 
-interface NotificationSettings {
-  enabled: boolean;
-  recipients: string[];
-  mode: "immediate" | "daily_digest";
-  kpis: {
-    leadTime: boolean;
-    bulkLoss: boolean;
-    packLoss: boolean;
-    rft: boolean;
-    oee: boolean;
-  };
-  thresholds: ThresholdSet;
+interface DisplaySettings {
+  timezone: "WIB" | "WITA" | "WIT";
+  defaultPlant: string;
+  defaultDataLevel: "Daily" | "Hourly";
 }
 
-const DEFAULT_THRESHOLDS: ThresholdSet = {
+// ── Defaults ──────────────────────────────────────────────────────────────────
+
+const KPI_LABELS: Record<KpiKey, string> = {
+  leadTime: "Lead Time",
+  bulkLoss: "Bulk Loss",
+  packLoss: "Pack Loss",
+  rft: "Right First Time",
+  oee: "OEE",
+};
+
+const DEFAULT_NOTIF: NotifSettings = {
+  enabled: false,
+  recipients: [],
+  mode: "immediate",
+  digestTime: "07:00",
+  kpis: { leadTime: true, bulkLoss: true, packLoss: true, rft: true, oee: true },
+};
+
+const DEFAULT_THRESHOLDS: ThresholdSettings = {
   leadTime: { warning: 5, critical: 15 },
   bulkLoss: { absWarning: 3, absCritical: 5 },
   packLoss: { absWarning: 1, absCritical: 2 },
@@ -36,15 +64,217 @@ const DEFAULT_THRESHOLDS: ThresholdSet = {
   oee: { warning: 65, critical: 55 },
 };
 
-const DEFAULT_SETTINGS: NotificationSettings = {
-  enabled: false,
-  recipients: [],
-  mode: "immediate",
-  kpis: { leadTime: true, bulkLoss: true, packLoss: true, rft: true, oee: true },
-  thresholds: DEFAULT_THRESHOLDS,
+const DEFAULT_DISPLAY: DisplaySettings = {
+  timezone: "WIB",
+  defaultPlant: "All Plant",
+  defaultDataLevel: "Daily",
 };
 
-const STORAGE_KEY = "ct-notification-settings";
+// ── Storage ───────────────────────────────────────────────────────────────────
+
+function loadNotif(): NotifSettings {
+  try {
+    const raw = localStorage.getItem("ct-notification-settings");
+    if (!raw) return DEFAULT_NOTIF;
+    const p = JSON.parse(raw) as Partial<NotifSettings>;
+    return { ...DEFAULT_NOTIF, ...p, kpis: { ...DEFAULT_NOTIF.kpis, ...p.kpis } };
+  } catch { return DEFAULT_NOTIF; }
+}
+
+function loadThresholds(): ThresholdSettings {
+  try {
+    const raw = localStorage.getItem("ct-alert-thresholds");
+    if (!raw) return DEFAULT_THRESHOLDS;
+    const p = JSON.parse(raw) as Partial<ThresholdSettings>;
+    return {
+      leadTime: { ...DEFAULT_THRESHOLDS.leadTime, ...p.leadTime },
+      bulkLoss: { ...DEFAULT_THRESHOLDS.bulkLoss, ...p.bulkLoss },
+      packLoss: { ...DEFAULT_THRESHOLDS.packLoss, ...p.packLoss },
+      rft: { ...DEFAULT_THRESHOLDS.rft, ...p.rft },
+      oee: { ...DEFAULT_THRESHOLDS.oee, ...p.oee },
+    };
+  } catch { return DEFAULT_THRESHOLDS; }
+}
+
+function loadDisplay(): DisplaySettings {
+  try {
+    const raw = localStorage.getItem("ct-display-settings");
+    if (!raw) return DEFAULT_DISPLAY;
+    return { ...DEFAULT_DISPLAY, ...JSON.parse(raw) };
+  } catch { return DEFAULT_DISPLAY; }
+}
+
+// ── Page entry ────────────────────────────────────────────────────────────────
+
+export default function SettingsPage() {
+  const { status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.replace("/login");
+  }, [status, router]);
+
+  if (status === "loading") return null;
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-[#f8f7ff]">
+      <Sidebar />
+      <Suspense fallback={null}>
+        <SettingsShell />
+      </Suspense>
+    </div>
+  );
+}
+
+// ── Section nav config ────────────────────────────────────────────────────────
+
+const SECTIONS = [
+  { id: "profil" as const,     label: "Profil",           icon: User             },
+  { id: "tampilan" as const,   label: "Tampilan",         icon: Monitor          },
+  { id: "notifikasi" as const, label: "Notifikasi",       icon: Bell             },
+  { id: "threshold" as const,  label: "Alert & Threshold", icon: SlidersHorizontal },
+  { id: "integrasi" as const,  label: "Integrasi",        icon: Database         },
+];
+
+type SectionId = typeof SECTIONS[number]["id"];
+
+// ── Shell ─────────────────────────────────────────────────────────────────────
+
+function SettingsShell() {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const active = (searchParams.get("s") as SectionId) || "profil";
+
+  const [notif, setNotif] = useState<NotifSettings>(DEFAULT_NOTIF);
+  const [thresholds, setThresholds] = useState<ThresholdSettings>(DEFAULT_THRESHOLDS);
+  const [display, setDisplay] = useState<DisplaySettings>(DEFAULT_DISPLAY);
+  const [jabatan, setJabatan] = useState("");
+
+  useEffect(() => {
+    setNotif(loadNotif());
+    setThresholds(loadThresholds());
+    setDisplay(loadDisplay());
+    setJabatan(localStorage.getItem("ct-user-jabatan") ?? "");
+  }, []);
+
+  const go = (s: SectionId) =>
+    router.push(`/dashboard/settings?s=${s}`, { scroll: false });
+
+  return (
+    <div className="flex flex-1 overflow-hidden">
+      {/* Inner left nav */}
+      <nav className="w-48 shrink-0 bg-white border-r border-gray-100 flex flex-col py-6 px-2 gap-0.5">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">
+          Pengaturan
+        </p>
+        {SECTIONS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => go(id)}
+            className={cn(
+              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full text-left",
+              active === id
+                ? "bg-brand-50 text-brand-700"
+                : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+            )}
+          >
+            <Icon size={15} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-xl mx-auto px-8 py-8">
+          {active === "profil" && (
+            <ProfilSection
+              session={session}
+              jabatan={jabatan}
+              setJabatan={setJabatan}
+              onSave={() => localStorage.setItem("ct-user-jabatan", jabatan)}
+            />
+          )}
+          {active === "tampilan" && (
+            <TampilanSection
+              display={display}
+              setDisplay={setDisplay}
+              onSave={() => localStorage.setItem("ct-display-settings", JSON.stringify(display))}
+            />
+          )}
+          {active === "notifikasi" && (
+            <NotifikasiSection
+              notif={notif}
+              setNotif={setNotif}
+              onSave={() => localStorage.setItem("ct-notification-settings", JSON.stringify(notif))}
+            />
+          )}
+          {active === "threshold" && (
+            <ThresholdSection
+              thresholds={thresholds}
+              setThresholds={setThresholds}
+              onSave={() => localStorage.setItem("ct-alert-thresholds", JSON.stringify(thresholds))}
+            />
+          )}
+          {active === "integrasi" && <IntegrasiSection />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Shared primitives ─────────────────────────────────────────────────────────
+
+function SectionTitle({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="mb-6">
+      <h1 className="font-display text-2xl font-bold text-gray-800">{title}</h1>
+      {description && <p className="text-sm text-gray-500 mt-0.5">{description}</p>}
+    </div>
+  );
+}
+
+function Card({
+  title,
+  children,
+  className,
+}: {
+  title?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("bg-white rounded-xl border border-gray-100 overflow-hidden", className)}>
+      {title && (
+        <div className="px-5 py-3 border-b border-gray-100">
+          <p className="text-sm font-semibold text-gray-700">{title}</p>
+        </div>
+      )}
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function SaveButton({ onSave }: { onSave: () => void }) {
+  const [saved, setSaved] = useState(false);
+  const handle = () => {
+    onSave();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+  return (
+    <button
+      onClick={handle}
+      className={cn(
+        "flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg transition-all",
+        saved ? "bg-green-500 text-white" : "bg-brand-600 text-white hover:bg-brand-700"
+      )}
+    >
+      {saved ? <><Check size={14} />Tersimpan</> : "Simpan Perubahan"}
+    </button>
+  );
+}
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -53,31 +283,18 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={cn(
-        "relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2",
+        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
+        "focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2",
         checked ? "bg-brand-600" : "bg-gray-200"
       )}
     >
       <span
         className={cn(
-          "inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform",
-          checked ? "translate-x-4.5" : "translate-x-0.5"
+          "inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform",
+          checked ? "translate-x-[18px]" : "translate-x-0.5"
         )}
       />
     </button>
-  );
-}
-
-function SectionHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{children}</h2>
-  );
-}
-
-function Card({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={cn("bg-white rounded-xl border border-gray-100 p-5", className)}>
-      {children}
-    </div>
   );
 }
 
@@ -95,7 +312,7 @@ function NumericInput({
   max?: number;
 }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1 shrink-0">
       <input
         type="number"
         value={value}
@@ -105,144 +322,282 @@ function NumericInput({
           const n = parseFloat(e.target.value);
           if (!isNaN(n)) onChange(n);
         }}
-        className="w-16 text-sm text-center border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+        className="w-16 text-sm text-center border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
       />
       {unit && <span className="text-xs text-gray-400">{unit}</span>}
     </div>
   );
 }
 
-const KPI_LABELS: Record<keyof NotificationSettings["kpis"], string> = {
-  leadTime: "Lead Time",
-  bulkLoss: "Bulk Loss",
-  packLoss: "Pack Loss",
-  rft: "Right First Time",
-  oee: "OEE",
-};
+// ── Profil ────────────────────────────────────────────────────────────────────
 
-export default function SettingsPage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
+function ProfilSection({
+  session,
+  jabatan,
+  setJabatan,
+  onSave,
+}: {
+  session: Session | null;
+  jabatan: string;
+  setJabatan: (v: string) => void;
+  onSave: () => void;
+}) {
+  const name = session?.user?.name ?? "—";
+  const email = session?.user?.email ?? "—";
+  const initials = name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 
-  const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
+  return (
+    <div className="space-y-5">
+      <SectionTitle title="Profil" description="Informasi akun Anda" />
+
+      <Card>
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-14 h-14 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
+            <span className="font-display text-xl font-bold text-brand-600">{initials}</span>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-800">{name}</p>
+            <p className="text-sm text-gray-500">{email}</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <Field label="Nama">
+            <ReadOnly value={name} />
+          </Field>
+          <Field label="Email">
+            <ReadOnly value={email} />
+          </Field>
+          <Field label="Jabatan">
+            <input
+              type="text"
+              value={jabatan}
+              onChange={(e) => setJabatan(e.target.value)}
+              placeholder="cth. Plant Manager"
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+            />
+          </Field>
+        </div>
+
+        <div className="mt-5 flex items-center gap-1.5 text-xs text-gray-400">
+          <AlertCircle size={12} />
+          <span>Nama dan email dikelola melalui Microsoft Azure AD</span>
+        </div>
+      </Card>
+
+      <div className="flex justify-end">
+        <SaveButton onSave={onSave} />
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function ReadOnly({ value }: { value: string }) {
+  return (
+    <p className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+      {value}
+    </p>
+  );
+}
+
+// ── Tampilan ──────────────────────────────────────────────────────────────────
+
+function TampilanSection({
+  display,
+  setDisplay,
+  onSave,
+}: {
+  display: DisplaySettings;
+  setDisplay: (d: DisplaySettings) => void;
+  onSave: () => void;
+}) {
+  const set = (patch: Partial<DisplaySettings>) => setDisplay({ ...display, ...patch });
+
+  return (
+    <div className="space-y-5">
+      <SectionTitle title="Tampilan" description="Preferensi tampilan dan filter default" />
+
+      <Card title="Zona Waktu">
+        <div className="grid grid-cols-3 gap-2">
+          {(["WIB", "WITA", "WIT"] as const).map((tz) => (
+            <button
+              key={tz}
+              onClick={() => set({ timezone: tz })}
+              className={cn(
+                "text-center py-3 rounded-xl border-2 transition-colors",
+                display.timezone === tz
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-gray-200 hover:border-gray-300"
+              )}
+            >
+              <p
+                className={cn(
+                  "text-sm font-bold",
+                  display.timezone === tz ? "text-brand-700" : "text-gray-700"
+                )}
+              >
+                {tz}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {tz === "WIB" ? "UTC+7" : tz === "WITA" ? "UTC+8" : "UTC+9"}
+              </p>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card title="Filter Default">
+        <div className="space-y-4">
+          <Field label="Plant Default">
+            <select
+              value={display.defaultPlant}
+              onChange={(e) => set({ defaultPlant: e.target.value })}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-400"
+            >
+              {["All Plant", "Plant 1", "Plant 2", "Plant 3", "Plant 4", "Plant 5", "Plant 6"].map(
+                (p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                )
+              )}
+            </select>
+          </Field>
+
+          <Field label="Tampilan Data Default">
+            <div className="flex gap-2">
+              {(["Daily", "Hourly"] as const).map((level) => (
+                <button
+                  key={level}
+                  onClick={() => set({ defaultDataLevel: level })}
+                  className={cn(
+                    "flex-1 py-2 rounded-xl border-2 text-sm font-medium transition-colors",
+                    display.defaultDataLevel === level
+                      ? "border-brand-500 bg-brand-50 text-brand-700"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  )}
+                >
+                  {level === "Daily" ? "Harian" : "Per Jam"}
+                </button>
+              ))}
+            </div>
+          </Field>
+        </div>
+      </Card>
+
+      <div className="flex justify-end">
+        <SaveButton onSave={onSave} />
+      </div>
+    </div>
+  );
+}
+
+// ── Notifikasi ────────────────────────────────────────────────────────────────
+
+function NotifikasiSection({
+  notif,
+  setNotif,
+  onSave,
+}: {
+  notif: NotifSettings;
+  setNotif: (n: NotifSettings) => void;
+  onSave: () => void;
+}) {
+  const set = (patch: Partial<NotifSettings>) => setNotif({ ...notif, ...patch });
   const [emailInput, setEmailInput] = useState("");
   const [emailError, setEmailError] = useState("");
-  const [saved, setSaved] = useState(false);
-  const [expandedKpi, setExpandedKpi] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (status === "unauthenticated") router.replace("/login");
-  }, [status, router]);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<NotificationSettings>;
-        setSettings((prev) => ({
-          ...prev,
-          ...parsed,
-          thresholds: { ...DEFAULT_THRESHOLDS, ...parsed.thresholds },
-          kpis: { ...prev.kpis, ...parsed.kpis },
-        }));
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const save = useCallback(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }, [settings]);
-
-  const update = (patch: Partial<NotificationSettings>) =>
-    setSettings((prev) => ({ ...prev, ...patch }));
+  const [testState, setTestState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [testMsg, setTestMsg] = useState("");
 
   const addEmail = () => {
-    const trimmed = emailInput.trim().toLowerCase();
-    if (!trimmed) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    const t = emailInput.trim().toLowerCase();
+    if (!t) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) {
       setEmailError("Format email tidak valid");
       return;
     }
-    if (settings.recipients.includes(trimmed)) {
+    if (notif.recipients.includes(t)) {
       setEmailError("Email sudah ditambahkan");
       return;
     }
-    update({ recipients: [...settings.recipients, trimmed] });
+    set({ recipients: [...notif.recipients, t] });
     setEmailInput("");
     setEmailError("");
   };
 
-  const removeEmail = (email: string) =>
-    update({ recipients: settings.recipients.filter((r) => r !== email) });
+  const removeEmail = (e: string) =>
+    set({ recipients: notif.recipients.filter((r) => r !== e) });
 
-  const updateThreshold = (
-    kpi: keyof ThresholdSet,
-    field: string,
-    value: number
-  ) => {
-    setSettings((prev) => ({
-      ...prev,
-      thresholds: {
-        ...prev.thresholds,
-        [kpi]: { ...(prev.thresholds[kpi] as Record<string, number>), [field]: value },
-      },
-    }));
+  const handleTest = async () => {
+    if (!notif.recipients.length || testState === "loading") return;
+    setTestState("loading");
+    setTestMsg("");
+    try {
+      const res = await fetch("/api/notifications/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipients: notif.recipients }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Gagal mengirim");
+      setTestState("success");
+      setTestMsg(`Email terkirim ke ${notif.recipients.length} penerima`);
+      setTimeout(() => setTestState("idle"), 3500);
+    } catch (err) {
+      setTestMsg(err instanceof Error ? err.message : "Gagal mengirim");
+      setTestState("error");
+      setTimeout(() => setTestState("idle"), 6000);
+    }
   };
-
-  const resetThreshold = (kpi: keyof ThresholdSet) => {
-    setSettings((prev) => ({
-      ...prev,
-      thresholds: { ...prev.thresholds, [kpi]: DEFAULT_THRESHOLDS[kpi] },
-    }));
-  };
-
-  if (status === "loading") return null;
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8 space-y-8">
-      {/* Page header */}
-      <div>
-        <h1 className="font-display text-2xl font-bold text-gray-800">Pengaturan</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Konfigurasi notifikasi dan ambang batas alert</p>
-      </div>
+    <div className="space-y-5">
+      <SectionTitle title="Notifikasi" description="Konfigurasi pengiriman email saat alert terjadi" />
 
-      {/* Notification master toggle */}
-      <section>
-        <SectionHeader>Notifikasi Email</SectionHeader>
-        <Card>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-brand-50 rounded-lg">
-                <Bell size={16} className="text-brand-600" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-800">Aktifkan Notifikasi</p>
-                <p className="text-xs text-gray-500 mt-0.5">Kirim email saat ada alert atau metrik bermasalah</p>
-              </div>
-            </div>
-            <Toggle checked={settings.enabled} onChange={(v) => update({ enabled: v })} />
-          </div>
-        </Card>
-      </section>
-
-      {/* Recipients */}
-      <section className={cn(!settings.enabled && "opacity-40 pointer-events-none")}>
-        <SectionHeader>Penerima Email</SectionHeader>
-        <Card className="space-y-4">
-          {/* Add email input */}
+      {/* Master toggle */}
+      <Card>
+        <div className="flex items-center justify-between">
           <div>
+            <p className="text-sm font-semibold text-gray-800">Aktifkan Notifikasi Email</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Kirim email saat ada alert atau metrik bermasalah
+            </p>
+          </div>
+          <Toggle checked={notif.enabled} onChange={(v) => set({ enabled: v })} />
+        </div>
+      </Card>
+
+      <div className={cn("space-y-4", !notif.enabled && "opacity-40 pointer-events-none")}>
+        {/* Recipients */}
+        <Card title="Penerima Email">
+          <div className="space-y-3">
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="email"
-                  placeholder="nama@perusahaan.com"
+                  placeholder="nama@paracorpgroup.com"
                   value={emailInput}
-                  onChange={(e) => { setEmailInput(e.target.value); setEmailError(""); }}
+                  onChange={(e) => {
+                    setEmailInput(e.target.value);
+                    setEmailError("");
+                  }}
                   onKeyDown={(e) => e.key === "Enter" && addEmail()}
                   className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
                 />
@@ -255,306 +610,342 @@ export default function SettingsPage() {
                 Tambah
               </button>
             </div>
-            {emailError && <p className="text-xs text-red-500 mt-1.5">{emailError}</p>}
-          </div>
+            {emailError && <p className="text-xs text-red-500">{emailError}</p>}
 
-          {/* Recipient list */}
-          {settings.recipients.length > 0 ? (
-            <ul className="space-y-2">
-              {settings.recipients.map((email) => (
-                <li key={email} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                  <span className="text-sm text-gray-700">{email}</span>
-                  <button
-                    onClick={() => removeEmail(email)}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                    aria-label={`Hapus ${email}`}
+            {notif.recipients.length > 0 ? (
+              <ul className="space-y-1.5">
+                {notif.recipients.map((email) => (
+                  <li
+                    key={email}
+                    className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"
                   >
-                    <X size={14} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-gray-400 text-center py-2">Belum ada penerima ditambahkan</p>
-          )}
+                    <span className="text-sm text-gray-700">{email}</span>
+                    <button
+                      onClick={() => removeEmail(email)}
+                      className="text-gray-400 hover:text-red-500 transition-colors"
+                      aria-label={`Hapus ${email}`}
+                    >
+                      <X size={13} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-1">Belum ada penerima</p>
+            )}
+          </div>
         </Card>
-      </section>
 
-      {/* Delivery mode */}
-      <section className={cn(!settings.enabled && "opacity-40 pointer-events-none")}>
-        <SectionHeader>Mode Pengiriman</SectionHeader>
-        <Card>
+        {/* Mode */}
+        <Card title="Mode Pengiriman">
           <div className="grid grid-cols-2 gap-3">
             {[
-              { value: "immediate" as const, label: "Langsung", desc: "Kirim segera saat alert muncul" },
-              { value: "daily_digest" as const, label: "Ringkasan Harian", desc: "Kirim sekali per hari pukul 07.00" },
+              {
+                value: "immediate" as const,
+                label: "Langsung",
+                desc: "Kirim segera saat alert muncul",
+              },
+              {
+                value: "daily_digest" as const,
+                label: "Ringkasan Harian",
+                desc: "Kirim satu kali per hari",
+              },
             ].map(({ value, label, desc }) => (
               <button
                 key={value}
-                onClick={() => update({ mode: value })}
+                onClick={() => set({ mode: value })}
                 className={cn(
-                  "text-left p-3.5 rounded-xl border-2 transition-colors",
-                  settings.mode === value
+                  "text-left p-4 rounded-xl border-2 transition-colors",
+                  notif.mode === value
                     ? "border-brand-500 bg-brand-50"
-                    : "border-gray-200 hover:border-gray-300 bg-white"
+                    : "border-gray-200 hover:border-gray-300"
                 )}
               >
-                <p className={cn("text-sm font-semibold", settings.mode === value ? "text-brand-700" : "text-gray-700")}>
+                <p
+                  className={cn(
+                    "text-sm font-semibold",
+                    notif.mode === value ? "text-brand-700" : "text-gray-700"
+                  )}
+                >
                   {label}
                 </p>
-                <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+                <p className="text-xs text-gray-500 mt-1">{desc}</p>
               </button>
             ))}
           </div>
+
+          {notif.mode === "daily_digest" && (
+            <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-100">
+              <Clock size={14} className="text-gray-400 shrink-0" />
+              <span className="text-sm text-gray-600">Kirim setiap hari pukul</span>
+              <input
+                type="time"
+                value={notif.digestTime}
+                onChange={(e) => set({ digestTime: e.target.value })}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-400"
+              />
+            </div>
+          )}
         </Card>
-      </section>
 
-      {/* KPI toggles + thresholds */}
-      <section className={cn(!settings.enabled && "opacity-40 pointer-events-none")}>
-        <SectionHeader>KPI & Ambang Batas</SectionHeader>
-        <div className="space-y-2">
-          {(Object.keys(KPI_LABELS) as Array<keyof NotificationSettings["kpis"]>).map((kpi) => {
-            const isOn = settings.kpis[kpi];
-            const isExpanded = expandedKpi === kpi;
+        {/* KPI toggles */}
+        <Card title="KPI yang Dimonitor">
+          <div className="space-y-3.5">
+            {(Object.keys(KPI_LABELS) as KpiKey[]).map((kpi) => (
+              <div key={kpi} className="flex items-center justify-between">
+                <span className="text-sm text-gray-700">{KPI_LABELS[kpi]}</span>
+                <Toggle
+                  checked={notif.kpis[kpi]}
+                  onChange={(v) => set({ kpis: { ...notif.kpis, [kpi]: v } })}
+                />
+              </div>
+            ))}
+          </div>
+        </Card>
 
-            return (
-              <Card key={kpi} className="p-0 overflow-hidden">
-                {/* KPI row */}
-                <div className="flex items-center gap-3 px-5 py-3.5">
-                  <Toggle
-                    checked={isOn}
-                    onChange={(v) => update({ kpis: { ...settings.kpis, [kpi]: v } })}
-                  />
-                  <span className={cn("text-sm font-medium flex-1", isOn ? "text-gray-800" : "text-gray-400")}>
-                    {KPI_LABELS[kpi]}
-                  </span>
-                  <button
-                    onClick={() => setExpandedKpi(isExpanded ? null : kpi)}
-                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <span>Ambang batas</span>
-                    {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  </button>
-                </div>
-
-                {/* Threshold editor */}
-                {isExpanded && (
-                  <div className="border-t border-gray-100 px-5 py-4 bg-gray-50/60 space-y-3">
-                    <ThresholdEditor
-                      kpi={kpi}
-                      thresholds={settings.thresholds}
-                      onUpdate={updateThreshold}
-                    />
-                    <button
-                      onClick={() => resetThreshold(kpi)}
-                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      <RotateCcw size={11} />
-                      Reset ke default
-                    </button>
-                  </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      </section>
+        {/* Test status messages */}
+        {testState === "error" && (
+          <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+            <AlertCircle size={15} className="shrink-0 mt-0.5" />
+            <span>{testMsg || "Gagal mengirim. Pastikan RESEND_API_KEY sudah dikonfigurasi."}</span>
+          </div>
+        )}
+        {testState === "success" && (
+          <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+            <Check size={15} className="shrink-0" />
+            <span>{testMsg}</span>
+          </div>
+        )}
+      </div>
 
       {/* Action bar */}
-      <div className="flex items-center justify-between pt-2 pb-8">
+      <div className="flex items-center justify-between pt-5 border-t border-gray-100">
         <button
-          disabled
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-400 bg-gray-100 rounded-lg cursor-not-allowed"
-          title="Backend belum tersedia"
-        >
-          <Send size={14} />
-          Kirim Test Email
-        </button>
-        <button
-          onClick={save}
+          onClick={handleTest}
+          disabled={!notif.enabled || !notif.recipients.length || testState === "loading"}
           className={cn(
-            "flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg transition-all",
-            saved
-              ? "bg-green-500 text-white"
-              : "bg-brand-600 text-white hover:bg-brand-700"
+            "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-all",
+            !notif.enabled || !notif.recipients.length
+              ? "border-gray-200 text-gray-400 cursor-not-allowed"
+              : testState === "loading"
+              ? "border-gray-200 text-gray-500 cursor-wait"
+              : "border-gray-300 text-gray-700 hover:bg-gray-50"
           )}
         >
-          {saved ? (
-            <>
-              <Check size={14} />
-              Tersimpan
-            </>
+          {testState === "loading" ? (
+            <><Loader2 size={14} className="animate-spin" />Mengirim...</>
           ) : (
-            "Simpan Pengaturan"
+            <><Send size={14} />Kirim Test Email</>
           )}
         </button>
+        <SaveButton onSave={onSave} />
       </div>
     </div>
   );
 }
 
-function ThresholdEditor({
-  kpi,
+// ── Alert & Threshold ─────────────────────────────────────────────────────────
+
+function ThresholdSection({
   thresholds,
-  onUpdate,
+  setThresholds,
+  onSave,
 }: {
-  kpi: keyof NotificationSettings["kpis"];
-  thresholds: ThresholdSet;
-  onUpdate: (kpi: keyof ThresholdSet, field: string, value: number) => void;
+  thresholds: ThresholdSettings;
+  setThresholds: (t: ThresholdSettings) => void;
+  onSave: () => void;
 }) {
-  if (kpi === "leadTime") {
-    return (
-      <div className="space-y-2">
-        <ThresholdRow
-          label="Peringatan"
-          color="amber"
-          description="Lead time naik >"
+  const upd = (kpi: keyof ThresholdSettings, field: string, value: number) =>
+    setThresholds({
+      ...thresholds,
+      [kpi]: { ...(thresholds[kpi] as Record<string, number>), [field]: value },
+    });
+
+  const resetKpi = (kpi: keyof ThresholdSettings) =>
+    setThresholds({ ...thresholds, [kpi]: DEFAULT_THRESHOLDS[kpi] });
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between mb-6">
+        <SectionTitle
+          title="Alert & Threshold"
+          description="Ambang batas yang memicu alert di dashboard dan email notifikasi"
+        />
+        <button
+          onClick={() => setThresholds(DEFAULT_THRESHOLDS)}
+          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors shrink-0 mt-1"
         >
-          <NumericInput
-            value={thresholds.leadTime.warning}
-            onChange={(v) => onUpdate("leadTime", "warning", v)}
-            unit="%"
-            min={0}
-          />
-        </ThresholdRow>
-        <ThresholdRow
-          label="Kritis"
-          color="red"
-          description="Lead time naik >"
+          <RotateCcw size={11} />
+          Reset semua
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        <ThresholdCard
+          label="Lead Time"
+          description="Lead time naik lebih dari X% vs periode sebelumnya"
+          onReset={() => resetKpi("leadTime")}
         >
-          <NumericInput
-            value={thresholds.leadTime.critical}
-            onChange={(v) => onUpdate("leadTime", "critical", v)}
-            unit="%"
-            min={0}
-          />
-        </ThresholdRow>
-      </div>
-    );
-  }
+          <ThreshRow label="Peringatan" color="amber" desc="Naik lebih dari">
+            <NumericInput value={thresholds.leadTime.warning} onChange={(v) => upd("leadTime", "warning", v)} unit="%" min={0} />
+          </ThreshRow>
+          <ThreshRow label="Kritis" color="red" desc="Naik lebih dari">
+            <NumericInput value={thresholds.leadTime.critical} onChange={(v) => upd("leadTime", "critical", v)} unit="%" min={0} />
+          </ThreshRow>
+        </ThresholdCard>
 
-  if (kpi === "bulkLoss") {
-    return (
-      <div className="space-y-2">
-        <ThresholdRow label="Peringatan" color="amber" description="Bulk loss >">
-          <NumericInput
-            value={thresholds.bulkLoss.absWarning}
-            onChange={(v) => onUpdate("bulkLoss", "absWarning", v)}
-            unit="%"
-            min={0}
-          />
-        </ThresholdRow>
-        <ThresholdRow label="Kritis" color="red" description="Bulk loss >">
-          <NumericInput
-            value={thresholds.bulkLoss.absCritical}
-            onChange={(v) => onUpdate("bulkLoss", "absCritical", v)}
-            unit="%"
-            min={0}
-          />
-        </ThresholdRow>
-      </div>
-    );
-  }
+        <ThresholdCard
+          label="Bulk Loss"
+          description="Bulk loss absolut melampaui X%"
+          onReset={() => resetKpi("bulkLoss")}
+        >
+          <ThreshRow label="Peringatan" color="amber" desc="Di atas">
+            <NumericInput value={thresholds.bulkLoss.absWarning} onChange={(v) => upd("bulkLoss", "absWarning", v)} unit="%" min={0} />
+          </ThreshRow>
+          <ThreshRow label="Kritis" color="red" desc="Di atas">
+            <NumericInput value={thresholds.bulkLoss.absCritical} onChange={(v) => upd("bulkLoss", "absCritical", v)} unit="%" min={0} />
+          </ThreshRow>
+        </ThresholdCard>
 
-  if (kpi === "packLoss") {
-    return (
-      <div className="space-y-2">
-        <ThresholdRow label="Peringatan" color="amber" description="Pack loss >">
-          <NumericInput
-            value={thresholds.packLoss.absWarning}
-            onChange={(v) => onUpdate("packLoss", "absWarning", v)}
-            unit="%"
-            min={0}
-          />
-        </ThresholdRow>
-        <ThresholdRow label="Kritis" color="red" description="Pack loss >">
-          <NumericInput
-            value={thresholds.packLoss.absCritical}
-            onChange={(v) => onUpdate("packLoss", "absCritical", v)}
-            unit="%"
-            min={0}
-          />
-        </ThresholdRow>
-      </div>
-    );
-  }
+        <ThresholdCard
+          label="Pack Loss"
+          description="Pack loss absolut melampaui X%"
+          onReset={() => resetKpi("packLoss")}
+        >
+          <ThreshRow label="Peringatan" color="amber" desc="Di atas">
+            <NumericInput value={thresholds.packLoss.absWarning} onChange={(v) => upd("packLoss", "absWarning", v)} unit="%" min={0} />
+          </ThreshRow>
+          <ThreshRow label="Kritis" color="red" desc="Di atas">
+            <NumericInput value={thresholds.packLoss.absCritical} onChange={(v) => upd("packLoss", "absCritical", v)} unit="%" min={0} />
+          </ThreshRow>
+        </ThresholdCard>
 
-  if (kpi === "rft") {
-    return (
-      <div className="space-y-2">
-        <ThresholdRow label="Peringatan" color="amber" description="RFT di bawah">
-          <NumericInput
-            value={thresholds.rft.warning}
-            onChange={(v) => onUpdate("rft", "warning", v)}
-            unit="%"
-            min={0}
-            max={100}
-          />
-        </ThresholdRow>
-        <ThresholdRow label="Kritis" color="red" description="RFT di bawah">
-          <NumericInput
-            value={thresholds.rft.critical}
-            onChange={(v) => onUpdate("rft", "critical", v)}
-            unit="%"
-            min={0}
-            max={100}
-          />
-        </ThresholdRow>
-      </div>
-    );
-  }
+        <ThresholdCard
+          label="Right First Time"
+          description="RFT % jatuh di bawah X%"
+          onReset={() => resetKpi("rft")}
+        >
+          <ThreshRow label="Peringatan" color="amber" desc="Di bawah">
+            <NumericInput value={thresholds.rft.warning} onChange={(v) => upd("rft", "warning", v)} unit="%" min={0} max={100} />
+          </ThreshRow>
+          <ThreshRow label="Kritis" color="red" desc="Di bawah">
+            <NumericInput value={thresholds.rft.critical} onChange={(v) => upd("rft", "critical", v)} unit="%" min={0} max={100} />
+          </ThreshRow>
+        </ThresholdCard>
 
-  if (kpi === "oee") {
-    return (
-      <div className="space-y-2">
-        <ThresholdRow label="Peringatan" color="amber" description="OEE di bawah">
-          <NumericInput
-            value={thresholds.oee.warning}
-            onChange={(v) => onUpdate("oee", "warning", v)}
-            unit="%"
-            min={0}
-            max={100}
-          />
-        </ThresholdRow>
-        <ThresholdRow label="Kritis" color="red" description="OEE di bawah">
-          <NumericInput
-            value={thresholds.oee.critical}
-            onChange={(v) => onUpdate("oee", "critical", v)}
-            unit="%"
-            min={0}
-            max={100}
-          />
-        </ThresholdRow>
+        <ThresholdCard
+          label="OEE"
+          description="OEE % jatuh di bawah X%"
+          onReset={() => resetKpi("oee")}
+        >
+          <ThreshRow label="Peringatan" color="amber" desc="Di bawah">
+            <NumericInput value={thresholds.oee.warning} onChange={(v) => upd("oee", "warning", v)} unit="%" min={0} max={100} />
+          </ThreshRow>
+          <ThreshRow label="Kritis" color="red" desc="Di bawah">
+            <NumericInput value={thresholds.oee.critical} onChange={(v) => upd("oee", "critical", v)} unit="%" min={0} max={100} />
+          </ThreshRow>
+        </ThresholdCard>
       </div>
-    );
-  }
 
-  return null;
+      <div className="flex justify-end pt-2">
+        <SaveButton onSave={onSave} />
+      </div>
+    </div>
+  );
 }
 
-function ThresholdRow({
+function ThresholdCard({
+  label,
+  description,
+  onReset,
+  children,
+}: {
+  label: string;
+  description: string;
+  onReset: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      <div className="flex items-start justify-between px-5 py-3 border-b border-gray-100">
+        <div>
+          <p className="text-sm font-semibold text-gray-800">{label}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+        </div>
+        <button
+          onClick={onReset}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors mt-0.5"
+        >
+          <RotateCcw size={10} />
+          Reset
+        </button>
+      </div>
+      <div className="px-5 py-4 space-y-2.5">{children}</div>
+    </div>
+  );
+}
+
+function ThreshRow({
   label,
   color,
-  description,
+  desc,
   children,
 }: {
   label: string;
   color: "amber" | "red";
-  description: string;
+  desc: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex items-center gap-3">
       <span
         className={cn(
-          "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium w-20 justify-center",
+          "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium w-20 shrink-0",
           color === "amber" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
         )}
       >
         {label}
       </span>
-      <span className="text-xs text-gray-500 flex-1">{description}</span>
+      <span className="text-xs text-gray-500 flex-1">{desc}</span>
       {children}
+    </div>
+  );
+}
+
+// ── Integrasi ─────────────────────────────────────────────────────────────────
+
+function IntegrasiSection() {
+  return (
+    <div className="space-y-5">
+      <SectionTitle title="Integrasi" description="Status koneksi ke sumber data eksternal" />
+
+      <Card title="Snowflake Data Warehouse">
+        <div className="mb-4">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            Terhubung
+          </span>
+        </div>
+        <div className="space-y-0">
+          {[
+            { label: "Account",   value: "yb58945.ap-southeast-3.aws" },
+            { label: "Region",    value: "AP Southeast 3 (Jakarta)"    },
+            { label: "Database",  value: "MIGRATION"                   },
+            { label: "Schema",    value: "CONTROL_TOWER"               },
+            { label: "Warehouse", value: "COMPUTE_WH"                  },
+          ].map(({ label, value }) => (
+            <div
+              key={label}
+              className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0"
+            >
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {label}
+              </span>
+              <span className="text-sm text-gray-700 font-mono">{value}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }
