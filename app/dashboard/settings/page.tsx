@@ -16,12 +16,16 @@ import { cn } from "@/lib/utils";
 
 type KpiKey = "leadTime" | "bulkLoss" | "packLoss" | "rft" | "oee";
 
+interface RecipientConfig {
+  email: string;
+  kpis: Record<KpiKey, boolean>;
+}
+
 interface NotifSettings {
   enabled: boolean;
-  recipients: string[];
+  recipients: RecipientConfig[];
   mode: "immediate" | "daily_digest";
   digestTime: string;
-  kpis: Record<KpiKey, boolean>;
 }
 
 interface ThresholdSettings {
@@ -48,12 +52,23 @@ const KPI_LABELS: Record<KpiKey, string> = {
   oee: "OEE",
 };
 
+const KPI_CHIPS: Record<KpiKey, string> = {
+  leadTime: "Lead Time",
+  bulkLoss: "Bulk Loss",
+  packLoss: "Pack Loss",
+  rft: "RFT",
+  oee: "OEE",
+};
+
+const ALL_KPIS_ON: Record<KpiKey, boolean> = {
+  leadTime: true, bulkLoss: true, packLoss: true, rft: true, oee: true,
+};
+
 const DEFAULT_NOTIF: NotifSettings = {
   enabled: false,
   recipients: [],
   mode: "immediate",
   digestTime: "07:00",
-  kpis: { leadTime: true, bulkLoss: true, packLoss: true, rft: true, oee: true },
 };
 
 const DEFAULT_THRESHOLDS: ThresholdSettings = {
@@ -76,8 +91,14 @@ function loadNotif(): NotifSettings {
   try {
     const raw = localStorage.getItem("ct-notification-settings");
     if (!raw) return DEFAULT_NOTIF;
-    const p = JSON.parse(raw) as Partial<NotifSettings>;
-    return { ...DEFAULT_NOTIF, ...p, kpis: { ...DEFAULT_NOTIF.kpis, ...p.kpis } };
+    const p = JSON.parse(raw) as Partial<NotifSettings & { recipients: (string | RecipientConfig)[]; kpis: Record<KpiKey, boolean> }>;
+    // Migrate old string[] recipients → RecipientConfig[]
+    const recipients: RecipientConfig[] = (p.recipients ?? []).map((r) =>
+      typeof r === "string" ? { email: r, kpis: { ...ALL_KPIS_ON } } : r
+    );
+    // Strip legacy fields (kpis, recipients) before spreading so TS doesn't complain
+    const { kpis: _kpis, recipients: _r, ...rest } = p;
+    return { ...DEFAULT_NOTIF, ...rest, recipients };
   } catch { return DEFAULT_NOTIF; }
 }
 
@@ -532,17 +553,24 @@ function NotifikasiSection({
       setEmailError("Format email tidak valid");
       return;
     }
-    if (notif.recipients.includes(t)) {
+    if (notif.recipients.some((r) => r.email === t)) {
       setEmailError("Email sudah ditambahkan");
       return;
     }
-    set({ recipients: [...notif.recipients, t] });
+    set({ recipients: [...notif.recipients, { email: t, kpis: { ...ALL_KPIS_ON } }] });
     setEmailInput("");
     setEmailError("");
   };
 
-  const removeEmail = (e: string) =>
-    set({ recipients: notif.recipients.filter((r) => r !== e) });
+  const removeRecipient = (email: string) =>
+    set({ recipients: notif.recipients.filter((r) => r.email !== email) });
+
+  const toggleKpi = (email: string, kpi: KpiKey) =>
+    set({
+      recipients: notif.recipients.map((r) =>
+        r.email === email ? { ...r, kpis: { ...r.kpis, [kpi]: !r.kpis[kpi] } } : r
+      ),
+    });
 
   const handleTest = async () => {
     if (!notif.recipients.length || testState === "loading") return;
@@ -552,7 +580,7 @@ function NotifikasiSection({
       const res = await fetch("/api/notifications/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipients: notif.recipients }),
+        body: JSON.stringify({ recipients: notif.recipients.map((r) => r.email) }),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Gagal mengirim");
@@ -584,7 +612,7 @@ function NotifikasiSection({
       </Card>
 
       <div className={cn("space-y-4", !notif.enabled && "opacity-40 pointer-events-none")}>
-        {/* Recipients */}
+        {/* Recipients with per-recipient KPI chips */}
         <Card title="Penerima Email">
           <div className="space-y-3">
             <div className="flex gap-2">
@@ -594,10 +622,7 @@ function NotifikasiSection({
                   type="email"
                   placeholder="nama@paracorpgroup.com"
                   value={emailInput}
-                  onChange={(e) => {
-                    setEmailInput(e.target.value);
-                    setEmailError("");
-                  }}
+                  onChange={(e) => { setEmailInput(e.target.value); setEmailError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && addEmail()}
                   className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
                 />
@@ -613,20 +638,35 @@ function NotifikasiSection({
             {emailError && <p className="text-xs text-red-500">{emailError}</p>}
 
             {notif.recipients.length > 0 ? (
-              <ul className="space-y-1.5">
-                {notif.recipients.map((email) => (
-                  <li
-                    key={email}
-                    className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"
-                  >
-                    <span className="text-sm text-gray-700">{email}</span>
-                    <button
-                      onClick={() => removeEmail(email)}
-                      className="text-gray-400 hover:text-red-500 transition-colors"
-                      aria-label={`Hapus ${email}`}
-                    >
-                      <X size={13} />
-                    </button>
+              <ul className="space-y-2">
+                {notif.recipients.map((recipient) => (
+                  <li key={recipient.email} className="bg-gray-50 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-sm font-medium text-gray-700">{recipient.email}</span>
+                      <button
+                        onClick={() => removeRecipient(recipient.email)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                        aria-label={`Hapus ${recipient.email}`}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(Object.keys(KPI_CHIPS) as KpiKey[]).map((kpi) => (
+                        <button
+                          key={kpi}
+                          onClick={() => toggleKpi(recipient.email, kpi)}
+                          className={cn(
+                            "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                            recipient.kpis[kpi]
+                              ? "bg-brand-50 text-brand-700 border-brand-200"
+                              : "bg-white text-gray-400 border-gray-200 line-through"
+                          )}
+                        >
+                          {KPI_CHIPS[kpi]}
+                        </button>
+                      ))}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -640,33 +680,18 @@ function NotifikasiSection({
         <Card title="Mode Pengiriman">
           <div className="grid grid-cols-2 gap-3">
             {[
-              {
-                value: "immediate" as const,
-                label: "Langsung",
-                desc: "Kirim segera saat alert muncul",
-              },
-              {
-                value: "daily_digest" as const,
-                label: "Ringkasan Harian",
-                desc: "Kirim satu kali per hari",
-              },
+              { value: "immediate" as const, label: "Langsung", desc: "Kirim segera saat alert muncul" },
+              { value: "daily_digest" as const, label: "Ringkasan Harian", desc: "Kirim satu kali per hari" },
             ].map(({ value, label, desc }) => (
               <button
                 key={value}
                 onClick={() => set({ mode: value })}
                 className={cn(
                   "text-left p-4 rounded-xl border-2 transition-colors",
-                  notif.mode === value
-                    ? "border-brand-500 bg-brand-50"
-                    : "border-gray-200 hover:border-gray-300"
+                  notif.mode === value ? "border-brand-500 bg-brand-50" : "border-gray-200 hover:border-gray-300"
                 )}
               >
-                <p
-                  className={cn(
-                    "text-sm font-semibold",
-                    notif.mode === value ? "text-brand-700" : "text-gray-700"
-                  )}
-                >
+                <p className={cn("text-sm font-semibold", notif.mode === value ? "text-brand-700" : "text-gray-700")}>
                   {label}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">{desc}</p>
@@ -686,21 +711,6 @@ function NotifikasiSection({
               />
             </div>
           )}
-        </Card>
-
-        {/* KPI toggles */}
-        <Card title="KPI yang Dimonitor">
-          <div className="space-y-3.5">
-            {(Object.keys(KPI_LABELS) as KpiKey[]).map((kpi) => (
-              <div key={kpi} className="flex items-center justify-between">
-                <span className="text-sm text-gray-700">{KPI_LABELS[kpi]}</span>
-                <Toggle
-                  checked={notif.kpis[kpi]}
-                  onChange={(v) => set({ kpis: { ...notif.kpis, [kpi]: v } })}
-                />
-              </div>
-            ))}
-          </div>
         </Card>
 
         {/* Test status messages */}
