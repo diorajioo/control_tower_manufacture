@@ -45,7 +45,7 @@ const badgeColors = {
 };
 
 // Badge tren kecil yang tampilkan ikon naik/turun dan persentase perubahan
-function TrendBadge({ trend }: { trend: number }) {
+export function TrendBadge({ trend }: { trend: number }) {
   const up = trend > 0;
   const cls = up ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500";
   const Icon = up ? TrendingUp : TrendingDown;

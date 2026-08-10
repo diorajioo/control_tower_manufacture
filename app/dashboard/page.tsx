@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Clock, Droplets, ShieldCheck, Package, Gauge, Activity, Users } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
-import { KPICard, MiniStat, CircularGauge } from "@/components/dashboard/KPICard";
+import { KPICard, MiniStat, CircularGauge, TrendBadge } from "@/components/dashboard/KPICard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { StackedBarChart } from "@/components/dashboard/StackedBarChart";
 import { SkeletonCard } from "@/components/dashboard/SkeletonCard";
@@ -35,16 +35,20 @@ interface KPIResponse {
   };
   rightFirstTime: { value: number; trend: number | null };
   output: {
-    bulkQty: number;   // DATAMART_PRODUCTION_OUTPUT_OLAH.REALIZATION_QUANTITY
-    fgQty: number;     // DATAMART_PRODUCTION_OUTPUT_FG.QUANTITY
+    bulkQty: number;
+    fgQty: number;
+    fgTrend: number | null;
+    bulkTrend: number | null;
   };
-  oee: { value: number; byPlant: { PLANT: string; OEE: number }[]; trend: number | null; sparkline: number[] };
+  oee: { value: number; quality: number; performance: number; byPlant: { PLANT: string; OEE: number }[]; trend: number | null; sparkline: number[] };
   productivity: {
-    e2e: number;        // AVG_E2E_PROD — pcs/manhour
-    upstream: number;   // AVG_UPSTREAM_PROD — kg/manhour
-    downstream: number; // AVG_DOWNSTREAM_PROD — pcs/manhour
+    e2e: number;
+    upstream: number;
+    downstream: number;
     byPlant: { PLANT: string }[];
     e2eTrend?: number | null;
+    manhours: number;
+    avgOperators: number;
     sparkline: number[];
   };
 }
@@ -395,25 +399,31 @@ export default function DashboardPage() {
                   icon={<Package size={17} />}
                   iconColor="#6366f1"
                 >
-                  <div className="flex-1 flex flex-col justify-evenly">
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-gray-500 mb-1">Finished Goods</p>
-                      <div className="flex items-baseline justify-center gap-1">
-                        <span className="text-3xl font-bold text-slate-800 font-display tracking-tight">
-                          {kpi ? formatThousands(kpi.output?.fgQty ?? 0) : "—"}
-                        </span>
-                        <span className="text-sm text-gray-500 font-semibold">pcs</span>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-bold text-slate-800 font-display tracking-tight">
+                            {kpi ? formatThousands(kpi.output?.fgQty ?? 0) : "—"}
+                          </span>
+                          <span className="text-xs text-gray-400 font-medium">pcs</span>
+                        </div>
+                        {kpi?.output?.fgTrend != null && <TrendBadge trend={kpi.output.fgTrend} />}
                       </div>
+                      <p className="text-xs text-gray-400 mt-0.5">Finished Goods released</p>
                     </div>
-                    <div className="w-full h-px bg-gray-100" />
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-gray-500 mb-1">Bulk Output</p>
-                      <div className="flex items-baseline justify-center gap-1">
-                        <span className="text-3xl font-bold text-slate-800 font-display tracking-tight">
-                          {kpi ? formatThousands(kpi.output?.bulkQty ?? 0) : "—"}
-                        </span>
-                        <span className="text-sm text-gray-500 font-semibold">pcs</span>
+                    <div className="h-px bg-gray-100" />
+                    <div>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-bold text-slate-800 font-display tracking-tight">
+                            {kpi ? formatThousands(kpi.output?.bulkQty ?? 0) : "—"}
+                          </span>
+                          <span className="text-xs text-gray-400 font-medium">kg</span>
+                        </div>
+                        {kpi?.output?.bulkTrend != null && <TrendBadge trend={kpi.output.bulkTrend} />}
                       </div>
+                      <p className="text-xs text-gray-400 mt-0.5">Accepted Bulk</p>
                     </div>
                   </div>
                 </KPICard>
@@ -437,24 +447,40 @@ export default function DashboardPage() {
                 {/* OEE — CT_MANUF_KEMAS: Quality × Performance per plant */}
                 <KPICard
                   title="OEE"
-                  tooltip="Overall Equipment Effectiveness: efisiensi penggunaan mesin (Availability × Performance × Quality). Target: ≥65%."
+                  tooltip="Overall Equipment Effectiveness: efisiensi penggunaan mesin (Performance × Quality). Target: ≥65%."
                   icon={<Gauge size={17} />}
                   iconColor="#8b5cf6"
                   value={kpi?.oee?.value?.toFixed(1) ?? "—"}
                   unit="%"
                   trend={kpi?.oee?.trend ?? undefined}
                   trendLabel="vs periode sebelumnya"
-                  subtitle={
-                    kpi && (kpi.oee?.value ?? 100) < 65
-                      ? `vs target 65% · gap ${(65 - kpi.oee.value).toFixed(1)} pts`
-                      : "Overall Equipment Effectiveness"
-                  }
+                  subtitle="Overall Equipment Effectiveness"
                   badge={(kpi?.oee?.value ?? 100) < 65 ? "Critical" : "On Track"}
                   badgeColor={(kpi?.oee?.value ?? 100) < 65 ? "red" : "green"}
                   alert={visibleAlerts.some((a) => a.id.startsWith("oee"))}
                   sparkline={kpi?.oee?.sparkline}
                   sparklineColor={(kpi?.oee?.value ?? 100) < 65 ? "#ef4444" : "#22c55e"}
-                />
+                >
+                  {kpi && (
+                    <>
+                      {(kpi.oee?.value ?? 100) < 65 && (
+                        <p className="text-xs text-red-500 font-medium -mt-1">
+                          vs target 65.0% &nbsp;·&nbsp; gap {(65 - kpi.oee.value).toFixed(1)} pts
+                        </p>
+                      )}
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-2 border-t border-gray-100">
+                        <div>
+                          <p className="text-xs text-gray-400">Performance</p>
+                          <p className="text-sm font-bold text-slate-700">{kpi.oee.performance.toFixed(1)}<span className="text-xs font-normal text-gray-400 ml-0.5">%</span></p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Quality</p>
+                          <p className="text-sm font-bold text-slate-700">{kpi.oee.quality.toFixed(1)}<span className="text-xs font-normal text-gray-400 ml-0.5">%</span></p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </KPICard>
 
                 {/* OPE — derived: OEE × 0.8 (no direct Snowflake column yet) */}
                 <KPICard
@@ -464,16 +490,18 @@ export default function DashboardPage() {
                   iconColor="#06b6d4"
                   value={opeValue !== null ? opeValue.toFixed(1) : "—"}
                   unit="%"
-                  subtitle={
-                    opeValue !== null && opeValue < 60
-                      ? `vs target 60% · gap ${(60 - opeValue).toFixed(1)} pts`
-                      : "Overall Plant Effectiveness"
-                  }
+                  subtitle="Overall Plant Effectiveness"
                   badge={(opeValue ?? 100) < 60 ? "Below Target" : "On Track"}
                   badgeColor={(opeValue ?? 100) < 60 ? "amber" : "green"}
                   sparkline={kpi?.oee?.sparkline?.map((v) => Number((v * 0.8).toFixed(1)))}
                   sparklineColor={(opeValue ?? 100) < 60 ? "#f59e0b" : "#22c55e"}
-                />
+                >
+                  {kpi && opeValue !== null && opeValue < 60 && (
+                    <p className="text-xs text-amber-500 font-medium -mt-1">
+                      vs target 60.0% &nbsp;·&nbsp; gap {(60 - opeValue).toFixed(1)} pts
+                    </p>
+                  )}
+                </KPICard>
 
                 {/* Productivity — CT_MANUF_E2E (e2e), CT_MANUF_OLAH (upstream), CT_MANUF_KEMAS (downstream) */}
                 <KPICard
@@ -483,13 +511,13 @@ export default function DashboardPage() {
                   iconColor="#10b981"
                   value={kpi?.productivity?.e2e?.toFixed(1) ?? "—"}
                   unit="pcs/manhour"
-                  subtitle="E2E · Downstream"
+                  subtitle="Downstream · E2E productivity"
                   trend={kpi?.productivity?.e2eTrend ?? undefined}
                   trendLabel="vs periode sebelumnya"
                   sparkline={kpi?.productivity?.sparkline}
                   sparklineColor="#10b981"
                 >
-                  <div className="flex gap-4 pt-2 border-t border-gray-100">
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-2 border-t border-gray-100">
                     <MiniStat
                       label="Upstream"
                       value={kpi ? formatThousands(kpi.productivity?.upstream ?? 0) : "—"}
@@ -499,6 +527,16 @@ export default function DashboardPage() {
                       label="Downstream"
                       value={kpi?.productivity?.downstream?.toFixed(1) ?? "—"}
                       unit=" pcs/mh"
+                    />
+                    <MiniStat
+                      label="Manhours logged"
+                      value={kpi ? formatThousands(Math.round(kpi.productivity?.manhours ?? 0)) : "—"}
+                      unit=" mh"
+                    />
+                    <MiniStat
+                      label="Avg operator/batch"
+                      value={kpi?.productivity?.avgOperators ?? "—"}
+                      unit=" opr"
                     />
                   </div>
                 </KPICard>

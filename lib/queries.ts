@@ -239,11 +239,15 @@ export async function getDownstreamProductivity(filters: QueryFilters) {
   return { avgDownstreamProd: Number((rows[0]?.AVG_DOWNSTREAM_PROD ?? 0).toFixed(1)) };
 }
 
-// OEE → CT_MANUF_KEMAS: Quality × Performance per plant
+// OEE → CT_MANUF_KEMAS: Quality × Performance per plant + component breakdown
 export async function getOEEByPlant(filters: QueryFilters) {
-  return executeQuery<{ PLANT: string; OEE: number }>(`
+  return executeQuery<{ PLANT: string; OEE: number; QUALITY: number; PERFORMANCE: number }>(`
     SELECT
       PLANT,
+      AVG(CASE WHEN QTY_TOTAL > 0 THEN QTY_FG_GOOD::FLOAT / QTY_TOTAL ELSE 0 END) * 100 AS QUALITY,
+      AVG(CASE WHEN ACTIVITY_PRODUCTIVITY_STD > 0
+              THEN LEAST(PRODUCTIVITY::FLOAT / ACTIVITY_PRODUCTIVITY_STD, 1.0)
+              ELSE 0 END) * 100 AS PERFORMANCE,
       AVG(
         (CASE WHEN QTY_TOTAL > 0 THEN QTY_FG_GOOD::FLOAT / QTY_TOTAL ELSE 0 END) *
         (CASE WHEN ACTIVITY_PRODUCTIVITY_STD > 0
@@ -255,6 +259,23 @@ export async function getOEEByPlant(filters: QueryFilters) {
     ${plantWhere(filters.plant)}
     GROUP BY PLANT
   `);
+}
+
+// Productivity details → CT_MANUF_KEMAS: total manhours and avg operator count
+export async function getProductivityDetails(filters: QueryFilters) {
+  const rows = await executeQuery<{ TOTAL_MANHOURS: number; AVG_OPERATORS: number }>(`
+    SELECT
+      ROUND(SUM(LEADTIME_IN_MINUTE / 60.0 * OPERATOR_COUNT)) AS TOTAL_MANHOURS,
+      ROUND(AVG(OPERATOR_COUNT))                              AS AVG_OPERATORS
+    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
+    WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+      AND LEADTIME_IN_MINUTE > 0 AND OPERATOR_COUNT > 0
+    ${plantWhere(filters.plant)}
+  `);
+  return {
+    totalManhours: Math.round(rows[0]?.TOTAL_MANHOURS ?? 0),
+    avgOperators:  Math.round(rows[0]?.AVG_OPERATORS  ?? 0),
+  };
 }
 
 // OEE weekly series → used for sparklines in dashboard cards

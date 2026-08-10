@@ -13,6 +13,7 @@ import {
   getOEEByPlant,
   getOEEWeekly,
   getE2EWeekly,
+  getProductivityDetails,
 } from "@/lib/queries";
 
 function delta(current: number, prev: number) {
@@ -54,6 +55,7 @@ export async function GET(req: NextRequest) {
     e2eRes, upstreamRes, downstreamRes, oeeRes,
     prevLeadTimeRes, prevYieldRes, prevRftRes, prevE2ERes, prevOeeRes,
     ltByPosRes, oeeWeeklyRes, e2eWeeklyRes,
+    prevOutputRes, productivityDetailsRes,
   ] = await Promise.allSettled([
     getLeadTimeKPI(filters),
     getYieldKPI(filters),
@@ -71,6 +73,8 @@ export async function GET(req: NextRequest) {
     getLeadTimeByPosition(filters),
     getOEEWeekly(filters),
     getE2EWeekly(filters),
+    getOutputKPI(prev),
+    getProductivityDetails(filters),
   ]);
 
   // Log any individual failures for debugging
@@ -94,8 +98,10 @@ export async function GET(req: NextRequest) {
   const downstream = val(downstreamRes, { avgDownstreamProd: 0 });
   const oeeByPlant = val(oeeRes, [] as { PLANT: string; OEE: number }[]);
   const ltByPos = val(ltByPosRes, { nett: [] as { POSITION: string; AVG_HOURS: number }[], gross: [] as { POSITION: string; AVG_HOURS: number }[] });
-  const oeeWeekly = val(oeeWeeklyRes, [] as { WEEK: string; OEE: number }[]);
-  const e2eWeekly = val(e2eWeeklyRes, [] as { WEEK: string; AVG_PROD: number }[]);
+  const oeeWeekly        = val(oeeWeeklyRes,          [] as { WEEK: string; OEE: number }[]);
+  const e2eWeekly        = val(e2eWeeklyRes,          [] as { WEEK: string; AVG_PROD: number }[]);
+  const prevOutput       = val(prevOutputRes,          { acceptedBulkKg: 0, releasedFgPcs: 0 });
+  const productivityDets = val(productivityDetailsRes, { totalManhours: 0, avgOperators: 0 });
 
   const prevLeadTime = val(prevLeadTimeRes, { AVG_LEADTIME: 0, AVG_GROSS_LEADTIME: 0, AVG_NETT_LEADTIME: 0 });
   const prevYield = val(prevYieldRes, { bulkLossPct: 0, packLossPct: 0, bulkLossKg: 0 });
@@ -103,12 +109,13 @@ export async function GET(req: NextRequest) {
   const prevE2E = val(prevE2ERes, { avgE2EProd: 0 });
   const prevOee = val(prevOeeRes, [] as { PLANT: string; OEE: number }[]);
 
-  const avgOEE = oeeByPlant.length > 0
-    ? oeeByPlant.reduce((sum, r) => sum + r.OEE, 0) / oeeByPlant.length
-    : 0;
-  const prevAvgOEE = prevOee.length > 0
-    ? prevOee.reduce((sum, r) => sum + r.OEE, 0) / prevOee.length
-    : 0;
+  const avg = (arr: { OEE: number; QUALITY?: number; PERFORMANCE?: number }[], key: "OEE" | "QUALITY" | "PERFORMANCE") =>
+    arr.length > 0 ? arr.reduce((s, r) => s + (r[key] ?? 0), 0) / arr.length : 0;
+
+  const avgOEE         = avg(oeeByPlant, "OEE");
+  const avgQuality     = avg(oeeByPlant, "QUALITY");
+  const avgPerformance = avg(oeeByPlant, "PERFORMANCE");
+  const prevAvgOEE     = avg(prevOee,    "OEE");
 
   return NextResponse.json({
     leadTime: {
@@ -131,21 +138,27 @@ export async function GET(req: NextRequest) {
       trend: delta(rft.rftPct, prevRft.rftPct),
     },
     output: {
-      bulkQty: output.acceptedBulkKg,
-      fgQty: output.releasedFgPcs,
+      bulkQty:   output.acceptedBulkKg,
+      fgQty:     output.releasedFgPcs,
+      fgTrend:   delta(output.releasedFgPcs,  prevOutput.releasedFgPcs),
+      bulkTrend: delta(output.acceptedBulkKg, prevOutput.acceptedBulkKg),
     },
     oee: {
-      value: Number(avgOEE.toFixed(1)),
-      byPlant: oeeByPlant,
-      trend: delta(avgOEE, prevAvgOEE),
-      sparkline: oeeWeekly.map((r) => Number(r.OEE.toFixed(1))),
+      value:       Number(avgOEE.toFixed(1)),
+      quality:     Number(avgQuality.toFixed(1)),
+      performance: Number(avgPerformance.toFixed(1)),
+      byPlant:     oeeByPlant,
+      trend:       delta(avgOEE, prevAvgOEE),
+      sparkline:   oeeWeekly.map((r) => Number(r.OEE.toFixed(1))),
     },
     productivity: {
-      e2e: e2e.avgE2EProd,
-      upstream: upstream.avgUpstreamProd,
-      downstream: downstream.avgDownstreamProd,
-      e2eTrend: delta(e2e.avgE2EProd, prevE2E.avgE2EProd),
-      byPlant: oeeByPlant.map((p) => ({ PLANT: p.PLANT })),
+      e2e:          e2e.avgE2EProd,
+      upstream:     upstream.avgUpstreamProd,
+      downstream:   downstream.avgDownstreamProd,
+      e2eTrend:     delta(e2e.avgE2EProd, prevE2E.avgE2EProd),
+      manhours:     productivityDets.totalManhours,
+      avgOperators: productivityDets.avgOperators,
+      byPlant:      oeeByPlant.map((p) => ({ PLANT: p.PLANT })),
       sparkline: e2eWeekly.map((r) => Number(r.AVG_PROD.toFixed(1))),
     },
     _errors: failures.length > 0 ? failures.map(([name]) => name) : undefined,
