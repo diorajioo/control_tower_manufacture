@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Factory, CheckCircle2, Zap, FileText, Settings, LogOut, BarChart3 } from "lucide-react";
+import { Factory, CheckCircle2, Zap, FileText, Settings, LogOut, BarChart3 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
@@ -41,8 +41,8 @@ export function Sidebar() {
     <aside className="w-56 min-h-screen bg-brand-900 flex flex-col shrink-0 border-r border-brand-800">
       <div className="px-4 py-5">
         <div className="flex items-center gap-2.5">
-          <div className="bg-white/10 p-1.5 rounded-lg">
-            <LayoutGrid size={18} className="text-white" />
+          <div className="bg-brand-600 p-2 rounded-xl shadow-sm">
+            <Factory size={18} className="text-white" />
           </div>
           <div>
             <p className="text-sm font-bold text-white leading-tight">Control Tower</p>
