@@ -330,7 +330,7 @@ export default function DashboardPage() {
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <div className="flex items-baseline gap-1 mb-0.5">
-                        <span className="text-2xl font-bold text-slate-800 font-display tracking-tight">
+                        <span className="text-2xl font-bold text-slate-800 tracking-tight">
                           {kpi?.yield?.bulkLossPct?.toFixed(1) ?? "—"}
                         </span>
                         <span className="text-xs text-gray-400">%</span>
@@ -345,7 +345,7 @@ export default function DashboardPage() {
                     <div className="w-px bg-gray-100 self-stretch" />
                     <div className="flex-1">
                       <div className="flex items-baseline gap-1 mb-0.5">
-                        <span className="text-2xl font-bold text-slate-800 font-display tracking-tight">
+                        <span className="text-2xl font-bold text-slate-800 tracking-tight">
                           {kpi?.yield?.packLossPct?.toFixed(1) ?? "—"}
                         </span>
                         <span className="text-xs text-gray-400">%</span>
@@ -403,7 +403,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="flex items-baseline justify-between gap-2">
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-bold text-slate-800 font-display tracking-tight">
+                          <span className="text-2xl font-bold text-slate-800 tracking-tight">
                             {kpi ? formatThousands(kpi.output?.fgQty ?? 0) : "—"}
                           </span>
                           <span className="text-xs text-gray-400 font-medium">pcs</span>
@@ -416,7 +416,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="flex items-baseline justify-between gap-2">
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-bold text-slate-800 font-display tracking-tight">
+                          <span className="text-2xl font-bold text-slate-800 tracking-tight">
                             {kpi ? formatThousands(kpi.output?.bulkQty ?? 0) : "—"}
                           </span>
                           <span className="text-xs text-gray-400 font-medium">kg</span>
@@ -463,11 +463,20 @@ export default function DashboardPage() {
                 >
                   {kpi && (
                     <>
-                      {(kpi.oee?.value ?? 100) < 65 && (
-                        <p className="text-xs text-red-500 font-medium -mt-1">
-                          vs target 65.0% &nbsp;·&nbsp; gap {(65 - kpi.oee.value).toFixed(1)} pts
-                        </p>
-                      )}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-400">vs target 65.0%</span>
+                          {(kpi.oee?.value ?? 100) < 65 && (
+                            <span className="text-red-500 font-semibold">gap {(65 - kpi.oee.value).toFixed(1)} pts</span>
+                          )}
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className={(kpi.oee?.value ?? 0) >= 65 ? "h-full bg-green-400 rounded-full transition-all" : "h-full bg-red-400 rounded-full transition-all"}
+                            style={{ width: `${Math.min(((kpi.oee?.value ?? 0) / 65) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-2 border-t border-gray-100">
                         <div>
                           <p className="text-xs text-gray-400">Performance</p>
@@ -496,10 +505,21 @@ export default function DashboardPage() {
                   sparkline={kpi?.oee?.sparkline?.map((v) => Number((v * 0.8).toFixed(1)))}
                   sparklineColor={(opeValue ?? 100) < 60 ? "#f59e0b" : "#22c55e"}
                 >
-                  {kpi && opeValue !== null && opeValue < 60 && (
-                    <p className="text-xs text-amber-500 font-medium -mt-1">
-                      vs target 60.0% &nbsp;·&nbsp; gap {(60 - opeValue).toFixed(1)} pts
-                    </p>
+                  {kpi && opeValue !== null && (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-400">vs target 60.0%</span>
+                        {opeValue < 60 && (
+                          <span className="text-amber-500 font-semibold">gap {(60 - opeValue).toFixed(1)} pts</span>
+                        )}
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={opeValue >= 60 ? "h-full bg-green-400 rounded-full transition-all" : "h-full bg-amber-400 rounded-full transition-all"}
+                          style={{ width: `${Math.min((opeValue / 60) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
                   )}
                 </KPICard>
 

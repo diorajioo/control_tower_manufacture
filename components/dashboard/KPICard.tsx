@@ -85,7 +85,7 @@ export function KPICard({
         className
       )}
     >
-      {/* Header card berisi ikon, judul, badge tren, dan badge status */}
+      {/* Header card berisi ikon, judul, badge status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {icon && (
@@ -100,14 +100,6 @@ export function KPICard({
           {tooltip && <InfoTooltip text={tooltip} />}
         </div>
         <div className="flex items-center gap-1.5">
-          {sparkline && sparkline.length >= 2 && (
-            <Sparkline
-              data={sparkline}
-              color={sparklineColor ?? iconColor}
-              width={64}
-              height={24}
-            />
-          )}
           {trend !== undefined && <TrendBadge trend={trend} />}
           {badge && (
             <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium", badgeColors[badgeColor])}>
@@ -117,11 +109,21 @@ export function KPICard({
         </div>
       </div>
 
-      {/* Nilai utama KPI dalam ukuran besar dengan satuan di sampingnya */}
+      {/* Nilai utama KPI dengan sparkline di sisi kanan */}
       {value !== undefined && value !== "" && (
-        <div className="flex items-baseline gap-1">
-          <span className={cn("font-bold text-slate-800 font-display tracking-tight", compact ? "text-2xl" : "text-3xl")}>{value}</span>
-          {unit && <span className="text-sm text-gray-500 font-semibold">{unit}</span>}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-baseline gap-1">
+            <span className={cn("font-bold text-slate-800 tracking-tight", compact ? "text-2xl" : "text-3xl")}>{value}</span>
+            {unit && <span className="text-sm text-gray-400 font-medium">{unit}</span>}
+          </div>
+          {sparkline && sparkline.length >= 2 && (
+            <Sparkline
+              data={sparkline}
+              color={sparklineColor ?? iconColor}
+              width={88}
+              height={36}
+            />
+          )}
         </div>
       )}
 
@@ -186,7 +188,7 @@ export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72, 
       </svg>
       {/* Label nilai di tengah gauge */}
       <div className="absolute text-center">
-        <span className="text-sm font-bold text-slate-800 leading-none font-display">{value.toFixed(1)}</span>
+        <span className="text-sm font-bold text-slate-800 leading-none">{value.toFixed(1)}</span>
         <span className="text-xs text-gray-400 block leading-none">%</span>
       </div>
     </div>
