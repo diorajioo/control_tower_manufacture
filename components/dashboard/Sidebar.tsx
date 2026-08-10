@@ -1,10 +1,13 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutGrid, Factory, CheckCircle2, Zap, FileText, Settings, LogOut, BarChart3 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
+
+const INACTIVITY_MS = 15 * 60 * 1000;
 
 const NAV_ITEMS = [
   { icon: BarChart3, label: "Overview", href: "/dashboard" },
@@ -16,6 +19,21 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const reset = () => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => signOut({ callbackUrl: "/login" }), INACTIVITY_MS);
+    };
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"] as const;
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, []);
 
   return (
     <aside className="w-56 min-h-screen bg-brand-900 flex flex-col shrink-0 border-r border-brand-800">
