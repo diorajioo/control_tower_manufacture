@@ -38,12 +38,14 @@ interface KPIResponse {
     bulkQty: number;   // DATAMART_PRODUCTION_OUTPUT_OLAH.REALIZATION_QUANTITY
     fgQty: number;     // DATAMART_PRODUCTION_OUTPUT_FG.QUANTITY
   };
-  oee: { value: number; byPlant: { PLANT: string; OEE: number }[]; trend: number | null };
+  oee: { value: number; byPlant: { PLANT: string; OEE: number }[]; trend: number | null; sparkline: number[] };
   productivity: {
     e2e: number;        // AVG_E2E_PROD — pcs/manhour
     upstream: number;   // AVG_UPSTREAM_PROD — kg/manhour
     downstream: number; // AVG_DOWNSTREAM_PROD — pcs/manhour
     byPlant: { PLANT: string }[];
+    e2eTrend?: number | null;
+    sparkline: number[];
   };
 }
 
@@ -214,9 +216,10 @@ export default function DashboardPage() {
           )}
 
           {/* ── Section: Operation KPIs ─────────────────────────────────── */}
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="w-1 h-4 bg-brand-500 rounded-full" />
-            <h2 className="text-sm font-bold text-gray-600 tracking-wide uppercase">Operation KPIs</h2>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-0.5 h-3 bg-brand-400 rounded-full shrink-0" />
+            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Operation KPIs</h2>
+            <div className="flex-1 h-px bg-gray-100" />
           </div>
 
           {/* ── Row 1: 4 main KPI cards ─────────────────────────────────── */}
@@ -419,9 +422,10 @@ export default function DashboardPage() {
           </div>
 
           {/* ── Section: Equipment & People ──────────────────────────── */}
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="w-1 h-4 bg-purple-500 rounded-full" />
-            <h2 className="text-sm font-bold text-gray-600 tracking-wide uppercase">Equipment &amp; People</h2>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-0.5 h-3 bg-purple-400 rounded-full shrink-0" />
+            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Equipment &amp; People</h2>
+            <div className="flex-1 h-px bg-gray-100" />
           </div>
 
           {/* ── Row 2: 3 operational KPI cards ──────────────────────────── */}
@@ -440,10 +444,16 @@ export default function DashboardPage() {
                   unit="%"
                   trend={kpi?.oee?.trend ?? undefined}
                   trendLabel="vs periode sebelumnya"
-                  subtitle="Overall Equipment Effectiveness"
-                  badge={(kpi?.oee?.value ?? 100) < 65 ? "! Below Target" : "On Track"}
-                  badgeColor={(kpi?.oee?.value ?? 100) < 65 ? "amber" : "green"}
+                  subtitle={
+                    kpi && (kpi.oee?.value ?? 100) < 65
+                      ? `vs target 65% · gap ${(65 - kpi.oee.value).toFixed(1)} pts`
+                      : "Overall Equipment Effectiveness"
+                  }
+                  badge={(kpi?.oee?.value ?? 100) < 65 ? "Critical" : "On Track"}
+                  badgeColor={(kpi?.oee?.value ?? 100) < 65 ? "red" : "green"}
                   alert={visibleAlerts.some((a) => a.id.startsWith("oee"))}
+                  sparkline={kpi?.oee?.sparkline}
+                  sparklineColor={(kpi?.oee?.value ?? 100) < 65 ? "#ef4444" : "#22c55e"}
                 />
 
                 {/* OPE — derived: OEE × 0.8 (no direct Snowflake column yet) */}
@@ -454,9 +464,15 @@ export default function DashboardPage() {
                   iconColor="#06b6d4"
                   value={opeValue !== null ? opeValue.toFixed(1) : "—"}
                   unit="%"
-                  subtitle="Overall Plant Effectiveness · est. OEE × 0.8"
-                  badge={(opeValue ?? 100) < 60 ? "! Below Target" : "On Track"}
+                  subtitle={
+                    opeValue !== null && opeValue < 60
+                      ? `vs target 60% · gap ${(60 - opeValue).toFixed(1)} pts`
+                      : "Overall Plant Effectiveness"
+                  }
+                  badge={(opeValue ?? 100) < 60 ? "Below Target" : "On Track"}
                   badgeColor={(opeValue ?? 100) < 60 ? "amber" : "green"}
+                  sparkline={kpi?.oee?.sparkline?.map((v) => Number((v * 0.8).toFixed(1)))}
+                  sparklineColor={(opeValue ?? 100) < 60 ? "#f59e0b" : "#22c55e"}
                 />
 
                 {/* Productivity — CT_MANUF_E2E (e2e), CT_MANUF_OLAH (upstream), CT_MANUF_KEMAS (downstream) */}
@@ -467,7 +483,11 @@ export default function DashboardPage() {
                   iconColor="#10b981"
                   value={kpi?.productivity?.e2e?.toFixed(1) ?? "—"}
                   unit="pcs/manhour"
-                  subtitle="E2E Productivity"
+                  subtitle="E2E · Downstream"
+                  trend={kpi?.productivity?.e2eTrend ?? undefined}
+                  trendLabel="vs periode sebelumnya"
+                  sparkline={kpi?.productivity?.sparkline}
+                  sparklineColor="#10b981"
                 >
                   <div className="flex gap-4 pt-2 border-t border-gray-100">
                     <MiniStat
@@ -487,9 +507,10 @@ export default function DashboardPage() {
           </div>
 
           {/* ── Section: Trend & Benchmark ──────────────────────────────── */}
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="w-1 h-4 bg-blue-500 rounded-full" />
-            <h2 className="text-sm font-bold text-gray-600 tracking-wide uppercase">Trend &amp; Benchmark</h2>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-0.5 h-3 bg-blue-400 rounded-full shrink-0" />
+            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Trend &amp; Benchmark</h2>
+            <div className="flex-1 h-px bg-gray-100" />
           </div>
 
           {/* ── Charts ─────────────────────────────────────────────────── */}

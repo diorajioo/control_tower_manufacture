@@ -11,6 +11,8 @@ import {
   getUpstreamProductivity,
   getDownstreamProductivity,
   getOEEByPlant,
+  getOEEWeekly,
+  getE2EWeekly,
 } from "@/lib/queries";
 
 function delta(current: number, prev: number) {
@@ -51,7 +53,7 @@ export async function GET(req: NextRequest) {
     leadTimeRes, yieldRes, rftRes, outputRes,
     e2eRes, upstreamRes, downstreamRes, oeeRes,
     prevLeadTimeRes, prevYieldRes, prevRftRes, prevE2ERes, prevOeeRes,
-    ltByPosRes,
+    ltByPosRes, oeeWeeklyRes, e2eWeeklyRes,
   ] = await Promise.allSettled([
     getLeadTimeKPI(filters),
     getYieldKPI(filters),
@@ -67,6 +69,8 @@ export async function GET(req: NextRequest) {
     getE2EProductivity(prev),
     getOEEByPlant(prev),
     getLeadTimeByPosition(filters),
+    getOEEWeekly(filters),
+    getE2EWeekly(filters),
   ]);
 
   // Log any individual failures for debugging
@@ -90,6 +94,8 @@ export async function GET(req: NextRequest) {
   const downstream = val(downstreamRes, { avgDownstreamProd: 0 });
   const oeeByPlant = val(oeeRes, [] as { PLANT: string; OEE: number }[]);
   const ltByPos = val(ltByPosRes, { nett: [] as { POSITION: string; AVG_HOURS: number }[], gross: [] as { POSITION: string; AVG_HOURS: number }[] });
+  const oeeWeekly = val(oeeWeeklyRes, [] as { WEEK: string; OEE: number }[]);
+  const e2eWeekly = val(e2eWeeklyRes, [] as { WEEK: string; AVG_PROD: number }[]);
 
   const prevLeadTime = val(prevLeadTimeRes, { AVG_LEADTIME: 0, AVG_GROSS_LEADTIME: 0, AVG_NETT_LEADTIME: 0 });
   const prevYield = val(prevYieldRes, { bulkLossPct: 0, packLossPct: 0, bulkLossKg: 0 });
@@ -132,6 +138,7 @@ export async function GET(req: NextRequest) {
       value: Number(avgOEE.toFixed(1)),
       byPlant: oeeByPlant,
       trend: delta(avgOEE, prevAvgOEE),
+      sparkline: oeeWeekly.map((r) => Number(r.OEE.toFixed(1))),
     },
     productivity: {
       e2e: e2e.avgE2EProd,
@@ -139,6 +146,7 @@ export async function GET(req: NextRequest) {
       downstream: downstream.avgDownstreamProd,
       e2eTrend: delta(e2e.avgE2EProd, prevE2E.avgE2EProd),
       byPlant: oeeByPlant.map((p) => ({ PLANT: p.PLANT })),
+      sparkline: e2eWeekly.map((r) => Number(r.AVG_PROD.toFixed(1))),
     },
     _errors: failures.length > 0 ? failures.map(([name]) => name) : undefined,
   });

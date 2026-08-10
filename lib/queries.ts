@@ -257,6 +257,39 @@ export async function getOEEByPlant(filters: QueryFilters) {
   `);
 }
 
+// OEE weekly series → used for sparklines in dashboard cards
+export async function getOEEWeekly(filters: QueryFilters) {
+  return executeQuery<{ WEEK: string; OEE: number }>(`
+    SELECT
+      DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
+      AVG(
+        (CASE WHEN QTY_TOTAL > 0 THEN QTY_FG_GOOD::FLOAT / QTY_TOTAL ELSE 0 END) *
+        (CASE WHEN ACTIVITY_PRODUCTIVITY_STD > 0
+              THEN LEAST(PRODUCTIVITY::FLOAT / ACTIVITY_PRODUCTIVITY_STD, 1.0)
+              ELSE 0 END)
+      ) * 100 AS OEE
+    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
+    WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    ${plantWhere(filters.plant)}
+    GROUP BY 1
+    ORDER BY 1
+  `);
+}
+
+// E2E Productivity weekly series → used for sparklines in dashboard cards
+export async function getE2EWeekly(filters: QueryFilters) {
+  return executeQuery<{ WEEK: string; AVG_PROD: number }>(`
+    SELECT
+      DATE_TRUNC('week', ACTIVITY_START::DATE) AS WEEK,
+      AVG(PRODUCTIVITY) AS AVG_PROD
+    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+    WHERE ACTIVITY_START::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    ${plantWhere(filters.plant)}
+    GROUP BY 1
+    ORDER BY 1
+  `);
+}
+
 // Trend Line → CT_MANUF_TRENDS for charting (weekly aggregated)
 export async function getTrendsData(filters: QueryFilters) {
   return executeQuery<{

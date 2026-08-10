@@ -31,6 +31,8 @@ interface KPICardProps {
   alert?: boolean;
   compact?: boolean;
   tooltip?: string;
+  sparkline?: number[];
+  sparklineColor?: string;
 }
 
 // Peta warna badge sesuai status yang diberikan dari parent
@@ -72,6 +74,8 @@ export function KPICard({
   alert,
   compact,
   tooltip,
+  sparkline,
+  sparklineColor,
 }: KPICardProps) {
   return (
     <div
@@ -95,7 +99,15 @@ export function KPICard({
           <span className="text-sm font-bold text-slate-700 leading-tight">{title}</span>
           {tooltip && <InfoTooltip text={tooltip} />}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
+          {sparkline && sparkline.length >= 2 && (
+            <Sparkline
+              data={sparkline}
+              color={sparklineColor ?? iconColor}
+              width={64}
+              height={24}
+            />
+          )}
           {trend !== undefined && <TrendBadge trend={trend} />}
           {badge && (
             <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-medium", badgeColors[badgeColor])}>
