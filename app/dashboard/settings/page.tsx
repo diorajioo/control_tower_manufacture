@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { cn } from "@/lib/utils";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -154,13 +155,13 @@ export default function SettingsPage() {
 
 // ── Section nav config ────────────────────────────────────────────────────────
 
-const SECTIONS = [
-  { id: "profil" as const,     label: "Profil",            icon: User,             adminOnly: false },
-  { id: "tampilan" as const,   label: "Tampilan",          icon: Monitor,          adminOnly: false },
-  { id: "notifikasi" as const, label: "Notifikasi",        icon: Bell,             adminOnly: true  },
-  { id: "threshold" as const,  label: "Alert & Threshold", icon: SlidersHorizontal, adminOnly: true  },
-  { id: "integrasi" as const,  label: "Integrasi",         icon: Database,         adminOnly: false },
-  { id: "admin" as const,      label: "Admin",             icon: Shield,           adminOnly: true  },
+const SECTIONS: { id: "profil"|"tampilan"|"notifikasi"|"threshold"|"integrasi"|"admin"; tKey: TranslationKey; icon: React.ElementType; adminOnly: boolean }[] = [
+  { id: "profil",      tKey: "settings_profil",      icon: User,              adminOnly: false },
+  { id: "tampilan",    tKey: "settings_tampilan",    icon: Monitor,           adminOnly: false },
+  { id: "notifikasi",  tKey: "settings_notifikasi",  icon: Bell,              adminOnly: true  },
+  { id: "threshold",   tKey: "settings_threshold",   icon: SlidersHorizontal, adminOnly: true  },
+  { id: "integrasi",   tKey: "settings_integrasi",   icon: Database,          adminOnly: false },
+  { id: "admin",       tKey: "settings_admin",       icon: Shield,            adminOnly: true  },
 ];
 
 type SectionId = typeof SECTIONS[number]["id"];
@@ -172,6 +173,7 @@ function SettingsShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const active = (searchParams.get("s") as SectionId) || "profil";
+  const { t, setLang } = useI18n();
 
   const [notif, setNotif] = useState<NotifSettings>(DEFAULT_NOTIF);
   const [thresholds, setThresholds] = useState<ThresholdSettings>(DEFAULT_THRESHOLDS);
@@ -206,11 +208,11 @@ function SettingsShell() {
       {/* Inner left nav */}
       <nav className="w-48 shrink-0 bg-white border-r border-gray-100 flex flex-col py-6 px-2 gap-0.5">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">
-          Pengaturan
+          {t("settings_title")}
         </p>
         {SECTIONS
           .filter(({ id }) => id !== "admin" || isAdmin)
-          .map(({ id, label, icon: Icon, adminOnly }) => {
+          .map(({ id, tKey, icon: Icon, adminOnly }) => {
             const locked = adminOnly && !isAdmin;
             return (
               <button
@@ -224,7 +226,7 @@ function SettingsShell() {
                 )}
               >
                 <Icon size={15} />
-                <span className="flex-1">{label}</span>
+                <span className="flex-1">{t(tKey)}</span>
                 {locked && <Lock size={11} className="text-gray-300 shrink-0" />}
               </button>
             );
@@ -247,6 +249,7 @@ function SettingsShell() {
               display={display}
               setDisplay={setDisplay}
               onSave={() => localStorage.setItem("ct-display-settings", JSON.stringify(display))}
+              onLangChange={setLang}
             />
           )}
           {active === "notifikasi" && (
@@ -483,10 +486,12 @@ function TampilanSection({
   display,
   setDisplay,
   onSave,
+  onLangChange,
 }: {
   display: DisplaySettings;
   setDisplay: (d: DisplaySettings) => void;
   onSave: () => void;
+  onLangChange?: (lang: "id" | "en") => void;
 }) {
   const set = (patch: Partial<DisplaySettings>) => setDisplay({ ...display, ...patch });
 
@@ -531,7 +536,7 @@ function TampilanSection({
           ] as const).map(({ value, label, flag, sub }) => (
             <button
               key={value}
-              onClick={() => set({ language: value })}
+              onClick={() => { set({ language: value }); onLangChange?.(value); }}
               className={cn(
                 "flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-colors",
                 display.language === value

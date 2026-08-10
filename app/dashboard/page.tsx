@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useI18n } from "@/lib/i18n";
 import { useRouter } from "next/navigation";
 import { Clock, Droplets, ShieldCheck, Package, Gauge, Activity, Users } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
@@ -64,6 +65,7 @@ interface Filters {
 export default function DashboardPage() {
   const { status } = useSession();
   const router = useRouter();
+  const { t } = useI18n();
 
   const [kpi, setKpi] = useState<KPIResponse | null>(null);
   const [plants, setPlants] = useState<string[]>(["All Plant"]);
@@ -222,7 +224,7 @@ export default function DashboardPage() {
           {/* ── Section: Operation KPIs ─────────────────────────────────── */}
           <div className="flex items-center gap-3 mb-2">
             <div className="w-0.5 h-3 bg-brand-400 rounded-full shrink-0" />
-            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Operation KPIs</h2>
+            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">{t("section_operation_kpis")}</h2>
             <div className="flex-1 h-px bg-gray-100" />
           </div>
 
@@ -234,7 +236,7 @@ export default function DashboardPage() {
               <>
                 {/* Lead Time — CT_MANUF_LEADTIME */}
                 <KPICard
-                  title="Lead Time"
+                  title={t("card_leadtime")}
                   tooltip="Waktu dari PO dibuat hingga produk diterima NDC. Gross = total proses; Nett = waktu aktual produksi. Target: serendah mungkin."
                   icon={<Clock size={17} />}
                   iconColor="#3b82f6"
@@ -246,25 +248,25 @@ export default function DashboardPage() {
                       : "—"
                   }
                   unit={leadTimeUnit === "days" ? "days" : "hrs"}
-                  subtitle={leadTimeType === "gross" ? "Gross LT · PO Created → NDC Receive" : "Nett LT · Actual on-line time"}
+                  subtitle={leadTimeType === "gross" ? t("lt_subtitle_gross") : t("lt_subtitle_nett")}
                   trend={leadTimeTrendInverted}
-                  trendLabel="vs periode sebelumnya"
+                  trendLabel={t("lt_vs_prev")}
                   alert={visibleAlerts.some((a) => a.id.startsWith("leadtime"))}
                 >
                   <div className="flex gap-1.5 pt-0.5">
                     <div className="flex gap-1">
-                      {(["gross", "nett"] as const).map((t) => (
+                      {(["gross", "nett"] as const).map((lt) => (
                         <button
-                          key={t}
-                          onClick={() => setLeadTimeType(t)}
+                          key={lt}
+                          onClick={() => setLeadTimeType(lt)}
                           className={cn(
                             "text-xs px-2 py-0.5 rounded-full transition-colors",
-                            leadTimeType === t
+                            leadTimeType === lt
                               ? "bg-brand-600 text-white"
                               : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                           )}
                         >
-                          {t === "gross" ? "Gross" : "Nett"}
+                          {lt === "gross" ? t("lt_gross") : t("lt_nett")}
                         </button>
                       ))}
                     </div>
@@ -281,7 +283,7 @@ export default function DashboardPage() {
                               : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                           )}
                         >
-                          {u === "days" ? "Daily" : "Hourly"}
+                          {u === "days" ? t("lt_daily") : t("lt_hourly")}
                         </button>
                       ))}
                     </div>
@@ -321,7 +323,7 @@ export default function DashboardPage() {
 
                 {/* Yield — CT_MANUF_KEMAS (pack) + DATAMART_PRODUCTION_OUTPUT_OLAH (bulk) */}
                 <KPICard
-                  title="Yield / Loss"
+                  title={t("card_yield")}
                   tooltip="Persentase bahan baku yang hilang dalam proses produksi. Bulk Loss = kehilangan di proses olah; Pack Loss = proses kemas. Target: serendah mungkin."
                   icon={<Droplets size={17} />}
                   iconColor="#f59e0b"
@@ -335,7 +337,7 @@ export default function DashboardPage() {
                         </span>
                         <span className="text-xs text-gray-400">%</span>
                       </div>
-                      <p className="text-xs text-gray-400">Bulk Loss</p>
+                      <p className="text-xs text-gray-400">{t("yield_bulk_loss")}</p>
                       {bulkLossTrendInverted !== undefined && (
                         <span className={`text-xs font-semibold ${bulkLossTrendInverted >= 0 ? "text-green-600" : "text-red-500"}`}>
                           {bulkLossTrendInverted >= 0 ? "↓" : "↑"} {Math.abs(bulkLossTrendInverted).toFixed(1)}%
@@ -350,7 +352,7 @@ export default function DashboardPage() {
                         </span>
                         <span className="text-xs text-gray-400">%</span>
                       </div>
-                      <p className="text-xs text-gray-400">Pack Loss</p>
+                      <p className="text-xs text-gray-400">{t("yield_pack_loss")}</p>
                       {packLossTrendInverted !== undefined && (
                         <span className={`text-xs font-semibold ${packLossTrendInverted >= 0 ? "text-green-600" : "text-red-500"}`}>
                           {packLossTrendInverted >= 0 ? "↓" : "↑"} {Math.abs(packLossTrendInverted).toFixed(1)}%
@@ -360,14 +362,14 @@ export default function DashboardPage() {
                   </div>
                   {kpi && (
                     <p className="text-xs text-gray-400 pt-1 border-t border-gray-100">
-                      ~{formatThousands(kpi.yield?.bulkLossKg ?? 0)} kg bulk loss
+                      ~{formatThousands(kpi.yield?.bulkLossKg ?? 0)} {t("yield_loss_volume")}
                     </p>
                   )}
                 </KPICard>
 
                 {/* Right First Time — CT_MANUF_LEADTIME: RELEASE_QTY / TARGET_QTY */}
                 <KPICard
-                  title="Right First Time"
+                  title={t("card_rft")}
                   tooltip="Persentase batch yang lulus QC tanpa rework atau rejection pada percobaan pertama. Target: ≥95%."
                   icon={<ShieldCheck size={17} />}
                   iconColor="#22c55e"
@@ -382,11 +384,11 @@ export default function DashboardPage() {
                       ariaLabel={`Right First Time: ${rftValue.toFixed(1)}% dari target 95%`}
                     />
                     <div>
-                      <p className="text-xs text-gray-500 leading-snug">First Time Passed Rate</p>
+                      <p className="text-xs text-gray-500 leading-snug">{t("rft_passed_rate")}</p>
                       {rftValue >= 95 ? (
-                        <p className="text-xs text-green-600 font-semibold mt-1">✓ Meets target</p>
+                        <p className="text-xs text-green-600 font-semibold mt-1">{t("rft_meets")}</p>
                       ) : rftValue > 0 ? (
-                        <p className="text-xs text-amber-600 font-semibold mt-1">! Below target</p>
+                        <p className="text-xs text-amber-600 font-semibold mt-1">{t("rft_below")}</p>
                       ) : null}
                     </div>
                   </div>
@@ -394,7 +396,7 @@ export default function DashboardPage() {
 
                 {/* Output — DATAMART_PRODUCTION_OUTPUT_OLAH + DATAMART_PRODUCTION_OUTPUT_FG */}
                 <KPICard
-                  title="Output"
+                  title={t("card_output")}
                   tooltip="Jumlah produk yang berhasil diproduksi dalam periode ini. Finished Goods (FG) = produk jadi dalam pcs; Bulk = produk setengah jadi."
                   icon={<Package size={17} />}
                   iconColor="#6366f1"
@@ -410,7 +412,7 @@ export default function DashboardPage() {
                         </div>
                         {kpi?.output?.fgTrend != null && <TrendBadge trend={kpi.output.fgTrend} />}
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">Finished Goods released</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{t("output_fg")}</p>
                     </div>
                     <div className="h-px bg-gray-100" />
                     <div>
@@ -423,7 +425,7 @@ export default function DashboardPage() {
                         </div>
                         {kpi?.output?.bulkTrend != null && <TrendBadge trend={kpi.output.bulkTrend} />}
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">Accepted Bulk</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{t("output_bulk")}</p>
                     </div>
                   </div>
                 </KPICard>
@@ -434,7 +436,7 @@ export default function DashboardPage() {
           {/* ── Section: Equipment & People ──────────────────────────── */}
           <div className="flex items-center gap-3 mb-2">
             <div className="w-0.5 h-3 bg-purple-400 rounded-full shrink-0" />
-            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Equipment &amp; People</h2>
+            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">{t("section_equipment_people")}</h2>
             <div className="flex-1 h-px bg-gray-100" />
           </div>
 
@@ -446,16 +448,16 @@ export default function DashboardPage() {
               <>
                 {/* OEE — CT_MANUF_KEMAS: Quality × Performance per plant */}
                 <KPICard
-                  title="OEE"
+                  title={t("card_oee")}
                   tooltip="Overall Equipment Effectiveness: efisiensi penggunaan mesin (Performance × Quality). Target: ≥65%."
                   icon={<Gauge size={17} />}
                   iconColor="#8b5cf6"
                   value={kpi?.oee?.value?.toFixed(1) ?? "—"}
                   unit="%"
                   trend={kpi?.oee?.trend ?? undefined}
-                  trendLabel="vs periode sebelumnya"
-                  subtitle="Overall Equipment Effectiveness"
-                  badge={(kpi?.oee?.value ?? 100) < 65 ? "Critical" : "On Track"}
+                  trendLabel={t("lt_vs_prev")}
+                  subtitle={t("oee_subtitle")}
+                  badge={(kpi?.oee?.value ?? 100) < 65 ? t("badge_critical") : t("badge_on_track")}
                   badgeColor={(kpi?.oee?.value ?? 100) < 65 ? "red" : "green"}
                   alert={visibleAlerts.some((a) => a.id.startsWith("oee"))}
                   sparkline={kpi?.oee?.sparkline}
@@ -465,9 +467,9 @@ export default function DashboardPage() {
                     <>
                       <div className="space-y-1">
                         <div className="flex justify-between text-xs">
-                          <span className="text-gray-400">vs target 65.0%</span>
+                          <span className="text-gray-400">{t("oee_vs_target")} 65.0%</span>
                           {(kpi.oee?.value ?? 100) < 65 && (
-                            <span className="text-red-500 font-semibold">gap {(65 - kpi.oee.value).toFixed(1)} pts</span>
+                            <span className="text-red-500 font-semibold">{t("oee_gap")} {(65 - kpi.oee.value).toFixed(1)} {t("oee_pts")}</span>
                           )}
                         </div>
                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -479,11 +481,11 @@ export default function DashboardPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-2 border-t border-gray-100">
                         <div>
-                          <p className="text-xs text-gray-400">Performance</p>
+                          <p className="text-xs text-gray-400">{t("oee_performance")}</p>
                           <p className="text-sm font-bold text-slate-700">{kpi.oee.performance.toFixed(1)}<span className="text-xs font-normal text-gray-400 ml-0.5">%</span></p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-400">Quality</p>
+                          <p className="text-xs text-gray-400">{t("oee_quality")}</p>
                           <p className="text-sm font-bold text-slate-700">{kpi.oee.quality.toFixed(1)}<span className="text-xs font-normal text-gray-400 ml-0.5">%</span></p>
                         </div>
                       </div>
@@ -493,14 +495,14 @@ export default function DashboardPage() {
 
                 {/* OPE — derived: OEE × 0.8 (no direct Snowflake column yet) */}
                 <KPICard
-                  title="OPE"
+                  title={t("card_ope")}
                   tooltip="Overall Plant Effectiveness: estimasi performa seluruh pabrik, dihitung sebagai OEE × 0.8. Belum ada kolom langsung di Snowflake."
                   icon={<Activity size={17} />}
                   iconColor="#06b6d4"
                   value={opeValue !== null ? opeValue.toFixed(1) : "—"}
                   unit="%"
-                  subtitle="Overall Plant Effectiveness"
-                  badge={(opeValue ?? 100) < 60 ? "Below Target" : "On Track"}
+                  subtitle={t("ope_subtitle")}
+                  badge={(opeValue ?? 100) < 60 ? t("badge_below_target") : t("badge_on_track")}
                   badgeColor={(opeValue ?? 100) < 60 ? "amber" : "green"}
                   sparkline={kpi?.oee?.sparkline?.map((v) => Number((v * 0.8).toFixed(1)))}
                   sparklineColor={(opeValue ?? 100) < 60 ? "#f59e0b" : "#22c55e"}
@@ -508,9 +510,9 @@ export default function DashboardPage() {
                   {kpi && opeValue !== null && (
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-400">vs target 60.0%</span>
+                        <span className="text-gray-400">{t("oee_vs_target")} 60.0%</span>
                         {opeValue < 60 && (
-                          <span className="text-amber-500 font-semibold">gap {(60 - opeValue).toFixed(1)} pts</span>
+                          <span className="text-amber-500 font-semibold">{t("oee_gap")} {(60 - opeValue).toFixed(1)} {t("oee_pts")}</span>
                         )}
                       </div>
                       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -525,36 +527,36 @@ export default function DashboardPage() {
 
                 {/* Productivity — CT_MANUF_E2E (e2e), CT_MANUF_OLAH (upstream), CT_MANUF_KEMAS (downstream) */}
                 <KPICard
-                  title="Productivity"
+                  title={t("card_productivity")}
                   tooltip="Efisiensi tenaga kerja. E2E = pcs/manhour keseluruhan; Upstream = kg/manhour proses olah; Downstream = pcs/manhour proses kemas."
                   icon={<Users size={17} />}
                   iconColor="#10b981"
                   value={kpi?.productivity?.e2e?.toFixed(1) ?? "—"}
                   unit="pcs/manhour"
-                  subtitle="Downstream · E2E productivity"
+                  subtitle={t("prod_subtitle")}
                   trend={kpi?.productivity?.e2eTrend ?? undefined}
-                  trendLabel="vs periode sebelumnya"
+                  trendLabel={t("lt_vs_prev")}
                   sparkline={kpi?.productivity?.sparkline}
                   sparklineColor="#10b981"
                 >
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-2 border-t border-gray-100">
                     <MiniStat
-                      label="Upstream"
+                      label={t("prod_upstream")}
                       value={kpi ? formatThousands(kpi.productivity?.upstream ?? 0) : "—"}
                       unit=" kg/mh"
                     />
                     <MiniStat
-                      label="Downstream"
+                      label={t("prod_downstream")}
                       value={kpi?.productivity?.downstream?.toFixed(1) ?? "—"}
                       unit=" pcs/mh"
                     />
                     <MiniStat
-                      label="Manhours logged"
+                      label={t("prod_manhours")}
                       value={kpi ? formatThousands(Math.round(kpi.productivity?.manhours ?? 0)) : "—"}
                       unit=" mh"
                     />
                     <MiniStat
-                      label="Avg operator/batch"
+                      label={t("prod_avg_operator")}
                       value={kpi?.productivity?.avgOperators ?? "—"}
                       unit=" opr"
                     />
@@ -567,7 +569,7 @@ export default function DashboardPage() {
           {/* ── Section: Trend & Benchmark ──────────────────────────────── */}
           <div className="flex items-center gap-3 mb-2">
             <div className="w-0.5 h-3 bg-blue-400 rounded-full shrink-0" />
-            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">Trend &amp; Benchmark</h2>
+            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">{t("section_trend_benchmark")}</h2>
             <div className="flex-1 h-px bg-gray-100" />
           </div>
 
@@ -599,9 +601,9 @@ export default function DashboardPage() {
       {/* Undo toast setelah dismiss alert */}
       {undoId && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-200">
-          <span>Alert dihapus</span>
+          <span>{t("alert_dismissed")}</span>
           <button onClick={handleUndoDismiss} className="text-brand-300 font-semibold hover:text-brand-200 transition-colors">
-            Batalkan
+            {t("alert_undo")}
           </button>
         </div>
       )}

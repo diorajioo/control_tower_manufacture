@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useI18n } from "@/lib/i18n";
 import {
   BarChart,
   Bar,
@@ -33,10 +34,19 @@ interface StackedBarChartProps {
   onKpiChange: (kpi: string) => void;
 }
 
+const KPI_TAB_LABELS: Record<string, string> = {
+  leadtime:   "chart_tab_leadtime",
+  upstream:   "chart_tab_upstream",
+  downstream: "chart_tab_downstream",
+  e2e:        "chart_tab_e2e",
+  output:     "chart_tab_output",
+};
+
 export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarChartProps) {
   const [rawData,  setRawData]  = useState<Record<string, unknown>[]>([]);
   const [plants,   setPlants]   = useState<string[]>([]);
   const [loading,  setLoading]  = useState(false);
+  const { t } = useI18n();
 
   const selectedKpi = KPI_OPTIONS.find((o) => o.value === kpiType)!;
 
@@ -94,9 +104,9 @@ export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarCha
   // Tentukan status kontrol tiap plant berdasarkan posisi nilai terhadap UCL/LCL global
   const getStatus = (val: number) => {
     if (ucl === 0) return { label: "—", cls: "text-gray-400" };
-    if (val > ucl)  return { label: "Above UCL", cls: "text-red-500"   };
-    if (lcl > 0 && val < lcl) return { label: "Below LCL", cls: "text-amber-500" };
-    return                   { label: "In Control", cls: "text-green-600" };
+    if (val > ucl)  return { label: `Above ${t("chart_ucl")}`, cls: "text-red-500"   };
+    if (lcl > 0 && val < lcl) return { label: `Below ${t("chart_lcl")}`, cls: "text-amber-500" };
+    return                   { label: t("chart_in_control"), cls: "text-green-600" };
   };
 
   return (
@@ -104,9 +114,9 @@ export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarCha
       {/* Judul card dan badge KPI yang sedang dipilih */}
       <div className="flex items-start justify-between mb-1.5">
         <div>
-          <h3 className="text-sm font-bold text-slate-700">KPI by Plant</h3>
+          <h3 className="text-sm font-bold text-slate-700">{t("chart_kpi_by_plant")}</h3>
           <p className="text-xs text-gray-400 mt-0.5">
-            Avg per plant vs Control Limits (UCL / LCL)
+            {t("chart_subtitle_plant")}
           </p>
         </div>
         <div className="flex items-center gap-1.5">
@@ -131,7 +141,7 @@ export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarCha
                 : "bg-gray-100 text-gray-500 hover:bg-gray-200"
             }`}
           >
-            {opt.label}
+            {KPI_TAB_LABELS[opt.value] ? t(KPI_TAB_LABELS[opt.value] as Parameters<typeof t>[0]) : opt.label}
           </button>
         ))}
       </div>

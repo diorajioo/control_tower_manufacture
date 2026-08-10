@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useI18n } from "@/lib/i18n";
 import {
   ComposedChart,
   Line,
@@ -34,10 +35,19 @@ interface TrendChartProps {
   onKpiChange: (kpi: string) => void;
 }
 
+const KPI_TAB_LABELS: Record<string, string> = {
+  leadtime:   "chart_tab_leadtime",
+  upstream:   "chart_tab_upstream",
+  downstream: "chart_tab_downstream",
+  e2e:        "chart_tab_e2e",
+  output:     "chart_tab_output",
+};
+
 export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
   const [data,    setData]      = useState<Record<string, unknown>[]>([]);
   const [plants,  setPlants]    = useState<string[]>([]);
   const [loading, setLoading]   = useState(false);
+  const { t } = useI18n();
 
   const selectedKpi = KPI_OPTIONS.find((o) => o.value === kpiType)!;
 
@@ -92,7 +102,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
       {/* Judul chart, badge KPI aktif, dan spinner loading */}
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1.5">
-          <h3 className="text-sm font-bold text-gray-800">Metric Trend</h3>
+          <h3 className="text-sm font-bold text-gray-800">{t("chart_metric_trend")}</h3>
           {loading && (
             <span className="w-3 h-3 border border-brand-400 border-t-transparent rounded-full animate-spin inline-block" />
           )}
@@ -115,7 +125,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
                   : "bg-gray-100 text-gray-500 hover:bg-gray-200"
               }`}
             >
-              {opt.label}
+              {KPI_TAB_LABELS[opt.value] ? t(KPI_TAB_LABELS[opt.value] as Parameters<typeof t>[0]) : opt.label}
             </button>
           ))}
         </div>

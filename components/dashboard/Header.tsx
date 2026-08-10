@@ -5,19 +5,24 @@ import { RefreshCw, Bell, LayoutGrid, Calendar, ChevronDown, Check } from "lucid
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { PLANT_COLORS } from "@/lib/chartConfig";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 // Interval auto-refresh data: setiap 1 jam sekali
 const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
-// Daftar preset periode tanggal yang bisa dipilih user di header
+// Daftar preset periode tanggal — key stabil, label diterjemahkan di render
 const PERIOD_PRESETS = [
-  { label: "Year-to-Date", short: "YTD", getValue: () => ({ start: `${new Date().getFullYear()}-01-01`, end: today() }) },
-  { label: "Last 30 Days", short: "30D", getValue: () => ({ start: daysAgo(30),  end: today() }) },
-  { label: "Last 90 Days", short: "90D", getValue: () => ({ start: daysAgo(90),  end: today() }) },
-  { label: "Last 6 Months", short: "6M",  getValue: () => ({ start: daysAgo(180), end: today() }) },
+  { key: "YTD", short: "YTD", tKey: "header_period_ytd" as TranslationKey, getValue: () => ({ start: `${new Date().getFullYear()}-01-01`, end: today() }) },
+  { key: "30D", short: "30D", tKey: "header_period_30d" as TranslationKey, getValue: () => ({ start: daysAgo(30),  end: today() }) },
+  { key: "90D", short: "90D", tKey: "header_period_90d" as TranslationKey, getValue: () => ({ start: daysAgo(90),  end: today() }) },
+  { key: "6M",  short: "6M",  tKey: "header_period_6m"  as TranslationKey, getValue: () => ({ start: daysAgo(180), end: today() }) },
 ];
 
-const DATA_LEVELS = ["Daily", "Weekly", "Monthly"];
+const DATA_LEVELS: { value: string; tKey: TranslationKey }[] = [
+  { value: "Daily",   tKey: "header_data_daily"   },
+  { value: "Weekly",  tKey: "header_data_weekly"  },
+  { value: "Monthly", tKey: "header_data_monthly" },
+];
 
 // Helper: kembalikan tanggal hari ini dan N hari lalu dalam format YYYY-MM-DD
 function today() { return new Date().toISOString().split("T")[0]; }
@@ -43,9 +48,10 @@ export function Header({
   onRefresh, isLoading, lastUpdated, alertCount = 0, onBellClick,
 }: HeaderProps) {
   const { data: session } = useSession();
+  const { t } = useI18n();
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL_MS);
   const [plant,     setPlant]     = useState("All Plant");
-  const [period,    setPeriod]    = useState("Year-to-Date");
+  const [period,    setPeriod]    = useState("YTD");
   const [startDate, setStartDate] = useState(`${new Date().getFullYear()}-01-01`);
   const [endDate,   setEndDate]   = useState(today());
   const [dataLevel, setDataLevel] = useState("Daily");
@@ -80,10 +86,10 @@ export function Header({
 
   // Handler tiap kontrol filter: update state lokal lalu push ke parent
   const handlePlant     = (v: string) => { setPlant(v);  push({ plant: v }); };
-  const handlePeriod    = (label: string) => {
-    const p = PERIOD_PRESETS.find((x) => x.label === label); if (!p) return;
+  const handlePeriod    = (key: string) => {
+    const p = PERIOD_PRESETS.find((x) => x.key === key); if (!p) return;
     const { start, end } = p.getValue();
-    setStartDate(start); setEndDate(end); setPeriod(label); push({ startDate: start, endDate: end });
+    setStartDate(start); setEndDate(end); setPeriod(key); push({ startDate: start, endDate: end });
   };
   const handleDataLevel = (v: string) => { setDataLevel(v); push({ dataLevel: v }); };
   const handleStart     = (v: string) => { setStartDate(v); push({ startDate: v }); };
@@ -114,9 +120,9 @@ export function Header({
       {/* ── Period pills ── */}
       <div className="flex items-center gap-0.5 bg-gray-100 rounded-full p-0.5 shrink-0">
         {PERIOD_PRESETS.map((p) => (
-          <button key={p.label} onClick={() => handlePeriod(p.label)}
+          <button key={p.key} onClick={() => handlePeriod(p.key)}
             className={cn("px-2.5 py-1 rounded-full text-xs font-semibold transition-all",
-              period === p.label ? "bg-white text-brand-600 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
+              period === p.key ? "bg-white text-brand-600 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
             {p.short}
           </button>
         ))}
@@ -161,11 +167,11 @@ export function Header({
 
       {/* ── Data level ── */}
       <div className="flex items-center gap-0.5 bg-gray-100 rounded-full p-0.5 shrink-0">
-        {DATA_LEVELS.map((l) => (
-          <button key={l} onClick={() => handleDataLevel(l)}
+        {DATA_LEVELS.map(({ value, tKey }) => (
+          <button key={value} onClick={() => handleDataLevel(value)}
             className={cn("px-2.5 py-1 rounded-full text-xs font-semibold transition-all",
-              dataLevel === l ? "bg-white text-brand-600 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
-            {l}
+              dataLevel === value ? "bg-white text-brand-600 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
+            {t(tKey)}
           </button>
         ))}
       </div>
@@ -176,9 +182,9 @@ export function Header({
       <div className="flex items-center gap-0.5 bg-gray-100 rounded-full p-0.5 shrink-0">
         {(["strategic", "tactical"] as const).map((v) => (
           <button key={v} onClick={() => onViewChange(v)}
-            className={cn("px-2.5 py-1 rounded-full text-xs font-semibold transition-all capitalize",
+            className={cn("px-2.5 py-1 rounded-full text-xs font-semibold transition-all",
               activeView === v ? "bg-white text-brand-600 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
-            {v}
+            {v === "strategic" ? t("header_view_strategic") : t("header_view_tactical")}
           </button>
         ))}
       </div>
@@ -200,7 +206,7 @@ export function Header({
           className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 disabled:opacity-50 transition-all">
           <span className={cn("w-1.5 h-1.5 rounded-full bg-green-500", !isLoading && "animate-pulse")} />
           <RefreshCw size={10} className={cn(isLoading && "animate-spin")} />
-          {isLoading ? "Loading" : `Live ${lastUpdated ? fmtCountdown(countdown) : ""}`}
+          {isLoading ? t("common_loading") : `Live ${lastUpdated ? fmtCountdown(countdown) : ""}`}
         </button>
 
         <div className="w-7 h-7 bg-gradient-to-br from-brand-500 to-brand-700 rounded-full flex items-center justify-center shadow-sm cursor-pointer shrink-0"

@@ -6,19 +6,21 @@ import { usePathname } from "next/navigation";
 import { LayoutGrid, Factory, CheckCircle2, Zap, FileText, Settings, LogOut, BarChart3 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 const INACTIVITY_MS = 15 * 60 * 1000;
 
-const NAV_ITEMS = [
-  { icon: BarChart3, label: "Overview", href: "/dashboard" },
-  { icon: Factory, label: "Production", href: "/dashboard/production" },
-  { icon: CheckCircle2, label: "Quality", href: "/dashboard/quality" },
-  { icon: Zap, label: "Energy", href: "/dashboard/energy" },
-  { icon: FileText, label: "Reports", href: "/dashboard/reports" },
+const NAV_ITEMS: { icon: React.ElementType; tKey: TranslationKey; href: string }[] = [
+  { icon: BarChart3, tKey: "nav_overview", href: "/dashboard" },
+  { icon: Factory, tKey: "nav_production", href: "/dashboard/production" },
+  { icon: CheckCircle2, tKey: "nav_quality", href: "/dashboard/quality" },
+  { icon: Zap, tKey: "nav_energy", href: "/dashboard/energy" },
+  { icon: FileText, tKey: "nav_reports", href: "/dashboard/reports" },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { t } = useI18n();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -50,11 +52,11 @@ export function Sidebar() {
       </div>
 
       <nav className="px-3 py-2 flex flex-col gap-0.5 flex-1">
-        {NAV_ITEMS.map(({ icon, label, href }) => (
+        {NAV_ITEMS.map(({ icon, tKey, href }) => (
           <NavItem
             key={href}
             icon={icon}
-            label={label}
+            label={t(tKey)}
             href={href}
             active={pathname === href}
           />
@@ -64,7 +66,7 @@ export function Sidebar() {
       <div className="px-3 py-4 border-t border-brand-700/50 flex flex-col gap-0.5">
         <NavItem
           icon={Settings}
-          label="Settings"
+          label={t("nav_settings")}
           href="/dashboard/settings"
           active={pathname === "/dashboard/settings"}
         />
@@ -73,7 +75,7 @@ export function Sidebar() {
           className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-brand-300/60 hover:text-red-300 hover:bg-red-900/30 transition-colors w-full text-left"
         >
           <LogOut size={16} />
-          <span className="text-sm font-medium">Sign Out</span>
+          <span className="text-sm font-medium">{t("nav_signout")}</span>
         </button>
       </div>
     </aside>
