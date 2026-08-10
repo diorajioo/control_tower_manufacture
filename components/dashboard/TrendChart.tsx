@@ -252,7 +252,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
             return (
               <Line
                 key={plant}
-                type="monotone"
+                type="linear"
                 dataKey={plant}
                 stroke={color}
                 strokeWidth={2.5}
