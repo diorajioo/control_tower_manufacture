@@ -188,10 +188,10 @@ export async function getOutputKPI(filters: QueryFilters) {
   };
 }
 
-// E2E Productivity → CT_MANUF_E2E.PRODUCTIVITY filtered on ACTIVITY_START
+// E2E Productivity → CT_MANUF_E2E.E2E_PRODUCTIVITY averaged per period
 export async function getE2EProductivity(filters: QueryFilters) {
   const rows = await executeQuery<{ AVG_E2E_PROD: number }>(`
-    SELECT AVG(PRODUCTIVITY) AS AVG_E2E_PROD
+    SELECT AVG(E2E_PRODUCTIVITY) AS AVG_E2E_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
     WHERE ACTIVITY_START::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
     ${plantWhere(filters.plant)}
@@ -302,7 +302,7 @@ export async function getE2EWeekly(filters: QueryFilters) {
   return executeQuery<{ WEEK: string; AVG_PROD: number }>(`
     SELECT
       DATE_TRUNC('week', ACTIVITY_START::DATE) AS WEEK,
-      AVG(PRODUCTIVITY) AS AVG_PROD
+      AVG(E2E_PRODUCTIVITY) AS AVG_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
     WHERE ACTIVITY_START::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
     ${plantWhere(filters.plant)}
