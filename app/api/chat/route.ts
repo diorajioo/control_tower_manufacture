@@ -187,7 +187,7 @@ async function executeGetKpiData(args: {
       case "productivity_e2e": {
         rows = await executeQuery(`
           SELECT AVG(E2E_PRODUCTIVITY) AS AVG_E2E_PROD FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-          WHERE ACTIVITY_START::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
         `);
         break;
       }
@@ -305,9 +305,9 @@ async function executeGetWeeklyTrend(args: {
       GROUP BY WEEK, PLANT ORDER BY WEEK`,
     e2e: `
       SELECT WEEK, PLANT, AVG(po_prod) AS KPI_VALUE FROM (
-        SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', ACTIVITY_START::DATE) AS WEEK, PLANT, AVG(PRODUCTIVITY) AS po_prod
+        SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK, PLANT, AVG(E2E_PRODUCTIVITY) AS po_prod
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-        WHERE ACTIVITY_START::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+        WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
         GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     output: `

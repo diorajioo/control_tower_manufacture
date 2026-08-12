@@ -193,7 +193,7 @@ export async function getE2EProductivity(filters: QueryFilters) {
   const rows = await executeQuery<{ AVG_E2E_PROD: number }>(`
     SELECT AVG(E2E_PRODUCTIVITY) AS AVG_E2E_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-    WHERE ACTIVITY_START::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
     ${plantWhere(filters.plant)}
   `);
   return { avgE2EProd: Number((rows[0]?.AVG_E2E_PROD ?? 0).toFixed(1)) };
@@ -330,10 +330,10 @@ export async function getOEEWeekly(filters: QueryFilters) {
 export async function getE2EWeekly(filters: QueryFilters) {
   return executeQuery<{ WEEK: string; AVG_PROD: number }>(`
     SELECT
-      DATE_TRUNC('week', ACTIVITY_START::DATE) AS WEEK,
+      DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
       AVG(E2E_PRODUCTIVITY) AS AVG_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-    WHERE ACTIVITY_START::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
     ${plantWhere(filters.plant)}
     GROUP BY 1
     ORDER BY 1
@@ -483,11 +483,11 @@ export async function getTrendKPIByPlant(
         FROM (
           SELECT
             PROCESS_ORDER_FG,
-            DATE_TRUNC('week', ACTIVITY_START::DATE) AS WEEK,
+            DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
             PLANT,
-            AVG(PRODUCTIVITY) AS po_prod
+            AVG(E2E_PRODUCTIVITY) AS po_prod
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-          WHERE ACTIVITY_START::DATE BETWEEN ${dateRange}
+          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ${dateRange}
             ${pf}
           GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
         ) sub
