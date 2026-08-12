@@ -199,21 +199,50 @@ export async function getE2EProductivity(filters: QueryFilters) {
   return { avgE2EProd: Number((rows[0]?.AVG_E2E_PROD ?? 0).toFixed(1)) };
 }
 
-// Upstream Productivity → CT_MANUF_OLAH: MAX(BESAR_BATCH)/SUM(MAN_HOURS) per NOMO
-// Matches Tableau LOD: {FIXED [NOMO]: MAX(BESAR_BATCH) / SUM(MAN_HOURS)}
+// Upstream Productivity → CT_MANUF_OLAH
+// Tableau LOD: {FIXED [Process Order Sfg]: MAX(Release_Bulk_per_SFG) / (SUM(Leadtime_per_ActivityID)/60) / SUM(Operator_per_Position)}
 export async function getUpstreamProductivity(filters: QueryFilters) {
   const rows = await executeQuery<{ AVG_UPSTREAM_PROD: number }>(`
-    SELECT AVG(NOMO_PROD) AS AVG_UPSTREAM_PROD
-    FROM (
+    WITH activity_lvl AS (
       SELECT
-        NOMO,
-        MAX(BESAR_BATCH) / NULLIF(SUM(MAN_HOURS), 0) AS NOMO_PROD
+        PROCESS_ORDER_SFG,
+        POSITION,
+        ACTIVITY,
+        ACTIVITY_ID,
+        MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN RELEASE_BULK END)       AS release_bulk_sfg,
+        MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN LEADTIME_IN_MINUTE END) AS leadtime_per_act,
+        MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN OPERATOR_COUNT END)     AS operator_per_act
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
       WHERE OLAH_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
-        AND MAN_HOURS > 0
       ${plantWhere(filters.plant)}
-      GROUP BY NOMO
-    ) sub
+      GROUP BY PROCESS_ORDER_SFG, POSITION, ACTIVITY, ACTIVITY_ID
+    ),
+    position_lvl AS (
+      SELECT
+        PROCESS_ORDER_SFG,
+        MAX(release_bulk_sfg)      AS release_bulk_sfg,
+        SUM(leadtime_per_act)      AS leadtime_sum,
+        SUM(operator_per_act)      AS operator_per_position
+      FROM activity_lvl
+      GROUP BY PROCESS_ORDER_SFG, POSITION
+    ),
+    sfg_lvl AS (
+      SELECT
+        PROCESS_ORDER_SFG,
+        MAX(release_bulk_sfg)      AS max_release_bulk,
+        SUM(leadtime_sum)          AS total_leadtime_min,
+        SUM(operator_per_position) AS total_operators
+      FROM position_lvl
+      GROUP BY PROCESS_ORDER_SFG
+    )
+    SELECT
+      AVG(
+        CASE WHEN total_leadtime_min > 0 AND total_operators > 0
+        THEN max_release_bulk / (total_leadtime_min / 60.0) / total_operators
+        END
+      ) AS AVG_UPSTREAM_PROD
+    FROM sfg_lvl
+    WHERE max_release_bulk > 0
   `);
   return { avgUpstreamProd: Number((rows[0]?.AVG_UPSTREAM_PROD ?? 0).toFixed(1)) };
 }
@@ -375,21 +404,51 @@ export async function getTrendKPIByPlant(
       `);
 
     case "upstream":
-      // {FIXED [NOMO]: MAX(BESAR_BATCH)/SUM(MAN_HOURS)} → AVG per week per plant
+      // Tableau LOD: {FIXED [Process Order Sfg]: MAX(Release_Bulk)/((SUM(Leadtime)/60)/SUM(Operators))} → AVG per week per plant
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT WEEK, PLANT, AVG(nomo_prod) AS KPI_VALUE
-        FROM (
+        WITH activity_lvl AS (
           SELECT
-            NOMO,
-            DATE_TRUNC('week', OLAH_COMPLETED_AT::DATE) AS WEEK,
+            PROCESS_ORDER_SFG,
             PLANT,
-            MAX(BESAR_BATCH) / NULLIF(SUM(MAN_HOURS), 0) AS nomo_prod
+            DATE_TRUNC('week', OLAH_COMPLETED_AT::DATE) AS WEEK,
+            POSITION,
+            ACTIVITY,
+            ACTIVITY_ID,
+            MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN RELEASE_BULK END)       AS release_bulk_sfg,
+            MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN LEADTIME_IN_MINUTE END) AS leadtime_per_act,
+            MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN OPERATOR_COUNT END)     AS operator_per_act
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
           WHERE OLAH_COMPLETED_AT::DATE BETWEEN ${dateRange}
-            AND MAN_HOURS > 0
             ${pf}
-          GROUP BY NOMO, WEEK, PLANT
-        ) sub
+          GROUP BY PROCESS_ORDER_SFG, PLANT, WEEK, POSITION, ACTIVITY, ACTIVITY_ID
+        ),
+        position_lvl AS (
+          SELECT
+            PROCESS_ORDER_SFG, PLANT, WEEK,
+            MAX(release_bulk_sfg)      AS release_bulk_sfg,
+            SUM(leadtime_per_act)      AS leadtime_sum,
+            SUM(operator_per_act)      AS operator_per_position
+          FROM activity_lvl
+          GROUP BY PROCESS_ORDER_SFG, PLANT, WEEK, POSITION
+        ),
+        sfg_lvl AS (
+          SELECT
+            PROCESS_ORDER_SFG, PLANT, WEEK,
+            MAX(release_bulk_sfg)      AS max_release_bulk,
+            SUM(leadtime_sum)          AS total_leadtime_min,
+            SUM(operator_per_position) AS total_operators
+          FROM position_lvl
+          GROUP BY PROCESS_ORDER_SFG, PLANT, WEEK
+        )
+        SELECT
+          WEEK, PLANT,
+          AVG(
+            CASE WHEN total_leadtime_min > 0 AND total_operators > 0
+            THEN max_release_bulk / (total_leadtime_min / 60.0) / total_operators
+            END
+          ) AS KPI_VALUE
+        FROM sfg_lvl
+        WHERE max_release_bulk > 0
         GROUP BY WEEK, PLANT
         ORDER BY WEEK
       `);
