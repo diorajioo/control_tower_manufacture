@@ -86,7 +86,7 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
 }
 
 export async function getLeadTimeByPosition(filters: QueryFilters) {
-  const dateRange = `'${filters.startDate}' AND '${filters.endDate}'`;
+  const datePred = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const plantFilter = plantWhere(filters.plant);
 
   const [nettRows, grossRows] = await Promise.all([
@@ -95,7 +95,7 @@ export async function getLeadTimeByPosition(filters: QueryFilters) {
       FROM (
         SELECT PROCESS_ORDER_FG, POSITION, SUM(NET_LEADTIME) AS pos_minutes
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-        WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
+        WHERE ${datePred}
           AND ACTIVITY_TYPE = 'ACTUAL'
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG, POSITION
@@ -110,7 +110,7 @@ export async function getLeadTimeByPosition(filters: QueryFilters) {
         SELECT PROCESS_ORDER_FG, POSITION,
           DATEDIFF('minute', MIN(ACTIVITY_START), MAX(ACTIVITY_STOP)) AS pos_minutes
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-        WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
+        WHERE ${datePred}
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG, POSITION
       ) sub
@@ -146,7 +146,7 @@ export async function getRightFirstTime(filters: QueryFilters) {
       COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) * 100.0
         / NULLIF(COUNT(ACTIVITY), 0) AS RFT_PCT
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-    WHERE PO_FG_DONE_DATE::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    WHERE ${periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate)}
     ${plantWhere(filters.plant)}
   `);
   return { rftPct: Number((rows[0]?.RFT_PCT ?? 0).toFixed(1)) };
@@ -162,7 +162,7 @@ export async function getYieldKPI(filters: QueryFilters) {
         SUM(QTY_FG_RETUR) AS TOTAL_RETUR,
         SUM(QTY_TOTAL)    AS TOTAL_QTY
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-      WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+      WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
       ${plantWhere(filters.plant)}
     `),
     executeQuery<{ TOTAL_REALIZATION: number; TOTAL_THEORETICAL: number }>(`
@@ -170,7 +170,7 @@ export async function getYieldKPI(filters: QueryFilters) {
         SUM(REALIZATION_QUANTITY) AS TOTAL_REALIZATION,
         SUM(THEORETICAL_QUANTITY) AS TOTAL_THEORETICAL
       FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
-      WHERE CORRECTION_DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+      WHERE ${periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate)}
     `),
   ]);
 
@@ -201,12 +201,12 @@ export async function getOutputKPI(filters: QueryFilters) {
     executeQuery<{ TOTAL_BULK: number }>(`
       SELECT SUM(REALIZATION_QUANTITY) AS TOTAL_BULK
       FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
-      WHERE CORRECTION_DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+      WHERE ${periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate)}
     `),
     executeQuery<{ TOTAL_FG: number }>(`
       SELECT SUM(QUANTITY) AS TOTAL_FG
       FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_FG
-      WHERE CORRECTION_DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+      WHERE ${periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate)}
     `),
   ]);
 
@@ -221,7 +221,7 @@ export async function getE2EProductivity(filters: QueryFilters) {
   const rows = await executeQuery<{ AVG_E2E_PROD: number }>(`
     SELECT AVG(E2E_PRODUCTIVITY) AS AVG_E2E_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-    WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
     ${plantWhere(filters.plant)}
   `);
   return { avgE2EProd: Number((rows[0]?.AVG_E2E_PROD ?? 0).toFixed(1)) };
@@ -241,7 +241,7 @@ export async function getUpstreamProductivity(filters: QueryFilters) {
         MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN LEADTIME_IN_MINUTE END) AS leadtime_per_act,
         MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN OPERATOR_COUNT END)     AS operator_per_act
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-      WHERE OLAH_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+      WHERE ${periodDateWhere("OLAH_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
       ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_SFG, POSITION, ACTIVITY, ACTIVITY_ID
     ),
@@ -287,7 +287,7 @@ export async function getDownstreamProductivity(filters: QueryFilters) {
           / NULLIF(SUM(LEADTIME_IN_MINUTE) / 60.0, 0)
           / NULLIF(MAX(OPERATOR_COUNT), 0) AS PO_PROD
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-      WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+      WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
         AND LEADTIME_IN_MINUTE > 0 AND OPERATOR_COUNT > 0
       ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_FG
@@ -312,7 +312,7 @@ export async function getOEEByPlant(filters: QueryFilters) {
               ELSE 0 END)
       ) * 100 AS OEE
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-    WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
     ${plantWhere(filters.plant)}
     GROUP BY PLANT
   `);
@@ -325,7 +325,7 @@ export async function getProductivityDetails(filters: QueryFilters) {
       ROUND(SUM(LEADTIME_IN_MINUTE / 60.0 * OPERATOR_COUNT)) AS TOTAL_MANHOURS,
       ROUND(AVG(OPERATOR_COUNT))                              AS AVG_OPERATORS
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-    WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
       AND LEADTIME_IN_MINUTE > 0 AND OPERATOR_COUNT > 0
     ${plantWhere(filters.plant)}
   `);
@@ -347,7 +347,7 @@ export async function getOEEWeekly(filters: QueryFilters) {
               ELSE 0 END)
       ) * 100 AS OEE
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-    WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
     ${plantWhere(filters.plant)}
     GROUP BY 1
     ORDER BY 1
@@ -361,7 +361,7 @@ export async function getE2EWeekly(filters: QueryFilters) {
       DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
       AVG(E2E_PRODUCTIVITY) AS AVG_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-    WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
     ${plantWhere(filters.plant)}
     GROUP BY 1
     ORDER BY 1

@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     period: searchParams.get("period") ?? undefined,
   };
 
-  const prev = { ...filters, ...prevPeriod(filters.startDate, filters.endDate) };
+  const prev = { ...filters, ...prevPeriod(filters.startDate, filters.endDate), period: undefined };
 
   const [
     leadTimeRes, yieldRes, rftRes, outputRes,
