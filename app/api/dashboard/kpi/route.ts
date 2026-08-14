@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
     plant: searchParams.get("plant") ?? "All Plant",
     startDate: searchParams.get("startDate") ?? "2024-01-01",
     endDate: searchParams.get("endDate") ?? new Date().toISOString().split("T")[0],
+    period: searchParams.get("period") ?? undefined,
   };
 
   const prev = { ...filters, ...prevPeriod(filters.startDate, filters.endDate) };

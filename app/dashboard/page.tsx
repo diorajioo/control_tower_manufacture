@@ -60,6 +60,7 @@ interface Filters {
   startDate: string;
   endDate: string;
   dataLevel: string;
+  period: string;
 }
 
 export default function DashboardPage() {
@@ -84,6 +85,7 @@ export default function DashboardPage() {
       startDate: `${new Date().getFullYear()}-01-01`,
       endDate: new Date().toISOString().split("T")[0],
       dataLevel: "Daily",
+      period: "YTD",
     };
     try {
       const stored = localStorage.getItem("ct-filters");
@@ -112,6 +114,7 @@ export default function DashboardPage() {
       plant: f.plant,
       startDate: f.startDate,
       endDate: f.endDate,
+      period: f.period,
     });
 
     try {

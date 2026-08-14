@@ -4,6 +4,7 @@ interface QueryFilters {
   plant?: string;
   startDate?: string;
   endDate?: string;
+  period?: string;       // "YTD" | "30D" | "90D" | "6M" | "Today" | "This Week" | "Last Week" | "This Month" | "Last Month" | "Custom"
   leadTimeType?: string; // "Gross Time" | "Nett Time"
   timeUnit?: string;     // "Daily" | "Hourly"
 }
@@ -11,11 +12,38 @@ interface QueryFilters {
 const plantWhere = (plant?: string, col = "PLANT") =>
   plant && plant !== "All Plant" ? `AND ${col} = '${plant}'` : "";
 
+// Translates the Tableau Period calc filter to a Snowflake SQL WHERE predicate.
+// Uses CURRENT_DATE() server-side to avoid JS timezone drift.
+function periodDateWhere(col: string, period?: string, start?: string, end?: string): string {
+  switch (period) {
+    case "Today":
+      return `${col}::DATE = CURRENT_DATE()`;
+    case "This Week":
+      return `DATEADD('day', 1-DAYOFWEEKISO(${col}::DATE), ${col}::DATE) = DATEADD('day', 1-DAYOFWEEKISO(CURRENT_DATE()), CURRENT_DATE())`;
+    case "Last Week":
+      return `DATEADD('day', 1-DAYOFWEEKISO(${col}::DATE), ${col}::DATE) = DATEADD('day', 1-DAYOFWEEKISO(DATEADD('week',-1,CURRENT_DATE())), DATEADD('week',-1,CURRENT_DATE()))`;
+    case "This Month":
+      return `DATE_TRUNC('month', ${col}::DATE) = DATE_TRUNC('month', CURRENT_DATE())`;
+    case "Last Month":
+      return `DATE_TRUNC('month', ${col}::DATE) = DATE_TRUNC('month', DATEADD('month',-1,CURRENT_DATE()))`;
+    case "YTD":
+      return `${col}::DATE BETWEEN DATE_TRUNC('year', CURRENT_DATE()) AND CURRENT_DATE()`;
+    case "30D":
+      return `${col}::DATE BETWEEN DATEADD('day',-30,CURRENT_DATE()) AND CURRENT_DATE()`;
+    case "90D":
+      return `${col}::DATE BETWEEN DATEADD('day',-90,CURRENT_DATE()) AND CURRENT_DATE()`;
+    case "6M":
+      return `${col}::DATE BETWEEN DATEADD('month',-6,CURRENT_DATE()) AND CURRENT_DATE()`;
+    default:
+      return `${col}::DATE BETWEEN '${start}' AND '${end}'`;
+  }
+}
+
 // Lead Time → CT_MANUF_LEADTIME
 // Gross: DATEDIFF from 'PO' activity start to 'RECEIVE NDC' activity stop per PO
 // Nett:  SUM(NET_LEADTIME) for ACTUAL rows where LINE_CATEGORY IS NOT NULL per PO
 export async function getLeadTimeKPI(filters: QueryFilters) {
-  const dateRange = `'${filters.startDate}' AND '${filters.endDate}'`;
+  const datePred = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const plantFilter = plantWhere(filters.plant);
 
   const [grossRows, nettRows] = await Promise.all([
@@ -29,7 +57,7 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
             MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
           ) AS gross_minutes
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-        WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
+        WHERE ${datePred}
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG
         HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
@@ -41,7 +69,7 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
       FROM (
         SELECT PROCESS_ORDER_FG, SUM(NET_LEADTIME) AS nett_minutes
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-        WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
+        WHERE ${datePred}
           AND ACTIVITY_TYPE = 'ACTUAL'
           AND LINE_CATEGORY IS NOT NULL
           ${plantFilter}

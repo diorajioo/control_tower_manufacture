@@ -33,7 +33,7 @@ function daysAgo(n: number) {
 
 interface HeaderProps {
   plants: string[];
-  onFilterChange: (f: { plant: string; startDate: string; endDate: string; dataLevel: string }) => void;
+  onFilterChange: (f: { plant: string; startDate: string; endDate: string; dataLevel: string; period: string }) => void;
   activeView: "strategic" | "tactical";
   onViewChange: (v: "strategic" | "tactical") => void;
   onRefresh: () => void;
@@ -81,15 +81,15 @@ export function Header({
   }, [lastUpdated, onRefresh]);
 
   // Gabungkan nilai filter terbaru lalu kirim ke parent lewat onFilterChange
-  const push = (o: Partial<{ plant: string; startDate: string; endDate: string; dataLevel: string }> = {}) =>
-    onFilterChange({ plant: o.plant ?? plant, startDate: o.startDate ?? startDate, endDate: o.endDate ?? endDate, dataLevel: o.dataLevel ?? dataLevel });
+  const push = (o: Partial<{ plant: string; startDate: string; endDate: string; dataLevel: string; period: string }> = {}) =>
+    onFilterChange({ plant: o.plant ?? plant, startDate: o.startDate ?? startDate, endDate: o.endDate ?? endDate, dataLevel: o.dataLevel ?? dataLevel, period: o.period ?? period });
 
   // Handler tiap kontrol filter: update state lokal lalu push ke parent
   const handlePlant     = (v: string) => { setPlant(v);  push({ plant: v }); };
   const handlePeriod    = (key: string) => {
     const p = PERIOD_PRESETS.find((x) => x.key === key); if (!p) return;
     const { start, end } = p.getValue();
-    setStartDate(start); setEndDate(end); setPeriod(key); push({ startDate: start, endDate: end });
+    setStartDate(start); setEndDate(end); setPeriod(key); push({ startDate: start, endDate: end, period: key });
   };
   const handleDataLevel = (v: string) => { setDataLevel(v); push({ dataLevel: v }); };
   const handleStart     = (v: string) => { setStartDate(v); push({ startDate: v }); };
