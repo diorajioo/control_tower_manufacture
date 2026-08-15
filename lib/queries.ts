@@ -12,30 +12,37 @@ interface QueryFilters {
 const plantWhere = (plant?: string, col = "PLANT") =>
   plant && plant !== "All Plant" ? `AND ${col} = '${plant}'` : "";
 
-// Translates the Tableau Period calc filter to a Snowflake SQL WHERE predicate.
-// Uses CURRENT_DATE() server-side to avoid JS timezone drift.
-function periodDateWhere(col: string, period?: string, start?: string, end?: string): string {
+// Translates the Tableau Period calc filter to a parameterized Snowflake WHERE predicate.
+// Returns { sql, binds } — sql uses ? placeholders, binds holds the values.
+// Period-relative cases use CURRENT_DATE() (server-side, no drift).
+// Custom/fallback cases bind the actual date strings as typed DATE params.
+function periodDateWhere(
+  col: string,
+  period?: string,
+  start?: string,
+  end?: string
+): { sql: string; binds: unknown[] } {
   switch (period) {
     case "Today":
-      return `${col}::DATE = CURRENT_DATE()`;
+      return { sql: `${col}::DATE = CURRENT_DATE()`, binds: [] };
     case "This Week":
-      return `DATEADD('day', 1-DAYOFWEEKISO(${col}::DATE), ${col}::DATE) = DATEADD('day', 1-DAYOFWEEKISO(CURRENT_DATE()), CURRENT_DATE())`;
+      return { sql: `DATEADD('day', 1-DAYOFWEEKISO(${col}::DATE), ${col}::DATE) = DATEADD('day', 1-DAYOFWEEKISO(CURRENT_DATE()), CURRENT_DATE())`, binds: [] };
     case "Last Week":
-      return `DATEADD('day', 1-DAYOFWEEKISO(${col}::DATE), ${col}::DATE) = DATEADD('day', 1-DAYOFWEEKISO(DATEADD('week',-1,CURRENT_DATE())), DATEADD('week',-1,CURRENT_DATE()))`;
+      return { sql: `DATEADD('day', 1-DAYOFWEEKISO(${col}::DATE), ${col}::DATE) = DATEADD('day', 1-DAYOFWEEKISO(DATEADD('week',-1,CURRENT_DATE())), DATEADD('week',-1,CURRENT_DATE()))`, binds: [] };
     case "This Month":
-      return `DATE_TRUNC('month', ${col}::DATE) = DATE_TRUNC('month', CURRENT_DATE())`;
+      return { sql: `DATE_TRUNC('month', ${col}::DATE) = DATE_TRUNC('month', CURRENT_DATE())`, binds: [] };
     case "Last Month":
-      return `DATE_TRUNC('month', ${col}::DATE) = DATE_TRUNC('month', DATEADD('month',-1,CURRENT_DATE()))`;
+      return { sql: `DATE_TRUNC('month', ${col}::DATE) = DATE_TRUNC('month', DATEADD('month',-1,CURRENT_DATE()))`, binds: [] };
     case "YTD":
-      return `${col}::DATE BETWEEN DATE_TRUNC('year', CURRENT_DATE()) AND CURRENT_DATE()`;
+      return { sql: `${col}::DATE BETWEEN DATE_TRUNC('year', CURRENT_DATE()) AND CURRENT_DATE()`, binds: [] };
     case "30D":
-      return `${col}::DATE BETWEEN DATEADD('day',-30,CURRENT_DATE()) AND CURRENT_DATE()`;
+      return { sql: `${col}::DATE BETWEEN DATEADD('day',-30,CURRENT_DATE()) AND CURRENT_DATE()`, binds: [] };
     case "90D":
-      return `${col}::DATE BETWEEN DATEADD('day',-90,CURRENT_DATE()) AND CURRENT_DATE()`;
+      return { sql: `${col}::DATE BETWEEN DATEADD('day',-90,CURRENT_DATE()) AND CURRENT_DATE()`, binds: [] };
     case "6M":
-      return `${col}::DATE BETWEEN DATEADD('month',-6,CURRENT_DATE()) AND CURRENT_DATE()`;
+      return { sql: `${col}::DATE BETWEEN DATEADD('month',-6,CURRENT_DATE()) AND CURRENT_DATE()`, binds: [] };
     default:
-      return `${col}::DATE BETWEEN '${start}' AND '${end}'`;
+      return { sql: `${col}::DATE BETWEEN ?::DATE AND ?::DATE`, binds: [start, end] };
   }
 }
 
@@ -43,7 +50,7 @@ function periodDateWhere(col: string, period?: string, start?: string, end?: str
 // Gross: DATEDIFF from 'PO' activity start to 'RECEIVE NDC' activity stop per PO
 // Nett:  SUM(NET_LEADTIME) for ACTUAL rows where LINE_CATEGORY IS NOT NULL per PO
 export async function getLeadTimeKPI(filters: QueryFilters) {
-  const datePred = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const plantFilter = plantWhere(filters.plant);
 
   const [grossRows, nettRows] = await Promise.all([
@@ -63,7 +70,7 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
         HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
           AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
       ) sub
-    `),
+    `, dateBinds),
     executeQuery<{ AVG_NETT: number }>(`
       SELECT AVG(nett_minutes) / 1440.0 AS AVG_NETT
       FROM (
@@ -75,7 +82,7 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG
       ) sub
-    `),
+    `, dateBinds),
   ]);
 
   return {
@@ -86,7 +93,7 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
 }
 
 export async function getLeadTimeByPosition(filters: QueryFilters) {
-  const datePred = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const plantFilter = plantWhere(filters.plant);
 
   const [nettRows, grossRows] = await Promise.all([
@@ -103,7 +110,7 @@ export async function getLeadTimeByPosition(filters: QueryFilters) {
       GROUP BY POSITION
       ORDER BY AVG_HOURS DESC
       LIMIT 10
-    `),
+    `, dateBinds),
     executeQuery<{ POSITION: string; AVG_HOURS: number }>(`
       SELECT POSITION, AVG(pos_minutes) / 60.0 AS AVG_HOURS
       FROM (
@@ -117,7 +124,7 @@ export async function getLeadTimeByPosition(filters: QueryFilters) {
       GROUP BY POSITION
       ORDER BY AVG_HOURS DESC
       LIMIT 10
-    `),
+    `, dateBinds),
   ]);
 
   return { nett: nettRows, gross: grossRows };
@@ -141,20 +148,23 @@ export async function getLeadTimeTrend(filters: QueryFilters) {
 // Right First Time → CT_MANUF_LEADTIME: non-ADJUST activities / total activities
 // Matches Tableau: SUM(IF ACTIVITY <> "ADJUST" THEN 1 ELSE 0 END) / COUNT(ACTIVITY)
 export async function getRightFirstTime(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ RFT_PCT: number }>(`
     SELECT
       COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) * 100.0
         / NULLIF(COUNT(ACTIVITY), 0) AS RFT_PCT
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-    WHERE ${periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate)}
+    WHERE ${datePred}
     ${plantWhere(filters.plant)}
-  `);
+  `, dateBinds);
   return { rftPct: Number((rows[0]?.RFT_PCT ?? 0).toFixed(1)) };
 }
 
 // Yield (Pack Loss) → CT_MANUF_KEMAS: QTY_FG_RETUR / QTY_TOTAL
 // Yield (Bulk Loss) → DATAMART_PRODUCTION_OUTPUT_OLAH: (THEORETICAL - REALIZATION) / THEORETICAL
 export async function getYieldKPI(filters: QueryFilters) {
+  const { sql: kemasDatePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
+  const { sql: corrDatePred } = periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate);
   const [packRows, bulkRows] = await Promise.all([
     executeQuery<{ TOTAL_GOOD: number; TOTAL_RETUR: number; TOTAL_QTY: number }>(`
       SELECT
@@ -162,16 +172,16 @@ export async function getYieldKPI(filters: QueryFilters) {
         SUM(QTY_FG_RETUR) AS TOTAL_RETUR,
         SUM(QTY_TOTAL)    AS TOTAL_QTY
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-      WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
+      WHERE ${kemasDatePred}
       ${plantWhere(filters.plant)}
-    `),
+    `, dateBinds),
     executeQuery<{ TOTAL_REALIZATION: number; TOTAL_THEORETICAL: number }>(`
       SELECT
         SUM(REALIZATION_QUANTITY) AS TOTAL_REALIZATION,
         SUM(THEORETICAL_QUANTITY) AS TOTAL_THEORETICAL
       FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
-      WHERE ${periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate)}
-    `),
+      WHERE ${corrDatePred}
+    `, dateBinds),
   ]);
 
   const pack = packRows[0];
@@ -197,17 +207,18 @@ export async function getYieldKPI(filters: QueryFilters) {
 // Output (Bulk) → DATAMART_PRODUCTION_OUTPUT_OLAH.REALIZATION_QUANTITY filtered on CORRECTION_DATE
 // Output (FG)   → DATAMART_PRODUCTION_OUTPUT_FG.QUANTITY filtered on CORRECTION_DATE
 export async function getOutputKPI(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate);
   const [bulkRows, fgRows] = await Promise.all([
     executeQuery<{ TOTAL_BULK: number }>(`
       SELECT SUM(REALIZATION_QUANTITY) AS TOTAL_BULK
       FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
-      WHERE ${periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate)}
-    `),
+      WHERE ${datePred}
+    `, dateBinds),
     executeQuery<{ TOTAL_FG: number }>(`
       SELECT SUM(QUANTITY) AS TOTAL_FG
       FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_FG
-      WHERE ${periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate)}
-    `),
+      WHERE ${datePred}
+    `, dateBinds),
   ]);
 
   return {
@@ -218,18 +229,20 @@ export async function getOutputKPI(filters: QueryFilters) {
 
 // E2E Productivity → CT_MANUF_E2E.E2E_PRODUCTIVITY averaged per period
 export async function getE2EProductivity(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ AVG_E2E_PROD: number }>(`
     SELECT AVG(E2E_PRODUCTIVITY) AS AVG_E2E_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-    WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
+    WHERE ${datePred}
     ${plantWhere(filters.plant)}
-  `);
+  `, dateBinds);
   return { avgE2EProd: Number((rows[0]?.AVG_E2E_PROD ?? 0).toFixed(1)) };
 }
 
 // Upstream Productivity → CT_MANUF_OLAH
 // Tableau LOD: {FIXED [Process Order Sfg]: MAX(Release_Bulk_per_SFG) / (SUM(Leadtime_per_ActivityID)/60) / SUM(Operator_per_Position)}
 export async function getUpstreamProductivity(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("OLAH_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ AVG_UPSTREAM_PROD: number }>(`
     WITH activity_lvl AS (
       SELECT
@@ -241,7 +254,7 @@ export async function getUpstreamProductivity(filters: QueryFilters) {
         MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN LEADTIME_IN_MINUTE END) AS leadtime_per_act,
         MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN OPERATOR_COUNT END)     AS operator_per_act
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-      WHERE ${periodDateWhere("OLAH_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
+      WHERE ${datePred}
       ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_SFG, POSITION, ACTIVITY, ACTIVITY_ID
     ),
@@ -271,13 +284,14 @@ export async function getUpstreamProductivity(filters: QueryFilters) {
       ) AS AVG_UPSTREAM_PROD
     FROM sfg_lvl
     WHERE max_release_bulk > 0
-  `);
+  `, dateBinds);
   return { avgUpstreamProd: Number((rows[0]?.AVG_UPSTREAM_PROD ?? 0).toFixed(1)) };
 }
 
 // Downstream Productivity → CT_MANUF_KEMAS: QTY_FG_GOOD / (LEADTIME_IN_MINUTE/60) / OPERATOR_COUNT
 // Matches Tableau LOD: {FIXED [PROCESS_ORDER_FG]: SUM/SUM/MAX}
 export async function getDownstreamProductivity(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ AVG_DOWNSTREAM_PROD: number }>(`
     SELECT AVG(PO_PROD) AS AVG_DOWNSTREAM_PROD
     FROM (
@@ -287,17 +301,18 @@ export async function getDownstreamProductivity(filters: QueryFilters) {
           / NULLIF(SUM(LEADTIME_IN_MINUTE) / 60.0, 0)
           / NULLIF(MAX(OPERATOR_COUNT), 0) AS PO_PROD
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-      WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
+      WHERE ${datePred}
         AND LEADTIME_IN_MINUTE > 0 AND OPERATOR_COUNT > 0
       ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_FG
     ) sub
-  `);
+  `, dateBinds);
   return { avgDownstreamProd: Number((rows[0]?.AVG_DOWNSTREAM_PROD ?? 0).toFixed(1)) };
 }
 
 // OEE → CT_MANUF_KEMAS: Quality × Performance per plant + component breakdown
 export async function getOEEByPlant(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ PLANT: string; OEE: number; QUALITY: number; PERFORMANCE: number }>(`
     SELECT
       PLANT,
@@ -312,23 +327,24 @@ export async function getOEEByPlant(filters: QueryFilters) {
               ELSE 0 END)
       ) * 100 AS OEE
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-    WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
+    WHERE ${datePred}
     ${plantWhere(filters.plant)}
     GROUP BY PLANT
-  `);
+  `, dateBinds);
 }
 
 // Productivity details → CT_MANUF_KEMAS: total manhours and avg operator count
 export async function getProductivityDetails(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ TOTAL_MANHOURS: number; AVG_OPERATORS: number }>(`
     SELECT
       ROUND(SUM(LEADTIME_IN_MINUTE / 60.0 * OPERATOR_COUNT)) AS TOTAL_MANHOURS,
       ROUND(AVG(OPERATOR_COUNT))                              AS AVG_OPERATORS
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-    WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
+    WHERE ${datePred}
       AND LEADTIME_IN_MINUTE > 0 AND OPERATOR_COUNT > 0
     ${plantWhere(filters.plant)}
-  `);
+  `, dateBinds);
   return {
     totalManhours: Math.round(rows[0]?.TOTAL_MANHOURS ?? 0),
     avgOperators:  Math.round(rows[0]?.AVG_OPERATORS  ?? 0),
@@ -337,6 +353,7 @@ export async function getProductivityDetails(filters: QueryFilters) {
 
 // OEE weekly series → used for sparklines in dashboard cards
 export async function getOEEWeekly(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ WEEK: string; OEE: number }>(`
     SELECT
       DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
@@ -347,25 +364,26 @@ export async function getOEEWeekly(filters: QueryFilters) {
               ELSE 0 END)
       ) * 100 AS OEE
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-    WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
+    WHERE ${datePred}
     ${plantWhere(filters.plant)}
     GROUP BY 1
     ORDER BY 1
-  `);
+  `, dateBinds);
 }
 
 // E2E Productivity weekly series → used for sparklines in dashboard cards
 export async function getE2EWeekly(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ WEEK: string; AVG_PROD: number }>(`
     SELECT
       DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
       AVG(E2E_PRODUCTIVITY) AS AVG_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-    WHERE ${periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate)}
+    WHERE ${datePred}
     ${plantWhere(filters.plant)}
     GROUP BY 1
     ORDER BY 1
-  `);
+  `, dateBinds);
 }
 
 // Trend Line → CT_MANUF_TRENDS for charting (weekly aggregated)
