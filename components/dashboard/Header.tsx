@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Bell, LayoutGrid, Calendar, ChevronDown, Check } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { PLANT_COLORS } from "@/lib/chartConfig";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
@@ -121,8 +122,16 @@ export function Header({
       <div className="flex items-center gap-0.5 bg-gray-100 rounded-full p-0.5 shrink-0">
         {PERIOD_PRESETS.map((p) => (
           <button key={p.key} onClick={() => handlePeriod(p.key)}
-            className={cn("px-2.5 py-1 rounded-full text-xs font-semibold transition-all",
-              period === p.key ? "bg-white text-brand-600 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
+            className={cn("relative px-2.5 py-1 rounded-full text-xs font-semibold transition-colors z-10",
+              period === p.key ? "text-brand-600" : "text-gray-500 hover:text-gray-700")}>
+            {period === p.key && (
+              <motion.span
+                layoutId="period-pill"
+                className="absolute inset-0 bg-white rounded-full shadow-sm"
+                style={{ zIndex: -1 }}
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              />
+            )}
             {p.short}
           </button>
         ))}
@@ -169,8 +178,16 @@ export function Header({
       <div className="flex items-center gap-0.5 bg-gray-100 rounded-full p-0.5 shrink-0">
         {DATA_LEVELS.map(({ value, tKey }) => (
           <button key={value} onClick={() => handleDataLevel(value)}
-            className={cn("px-2.5 py-1 rounded-full text-xs font-semibold transition-all",
-              dataLevel === value ? "bg-white text-brand-600 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
+            className={cn("relative px-2.5 py-1 rounded-full text-xs font-semibold transition-colors z-10",
+              dataLevel === value ? "text-brand-600" : "text-gray-500 hover:text-gray-700")}>
+            {dataLevel === value && (
+              <motion.span
+                layoutId="datalevel-pill"
+                className="absolute inset-0 bg-white rounded-full shadow-sm"
+                style={{ zIndex: -1 }}
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              />
+            )}
             {t(tKey)}
           </button>
         ))}
@@ -182,8 +199,16 @@ export function Header({
       <div className="flex items-center gap-0.5 bg-gray-100 rounded-full p-0.5 shrink-0">
         {(["strategic", "tactical"] as const).map((v) => (
           <button key={v} onClick={() => onViewChange(v)}
-            className={cn("px-2.5 py-1 rounded-full text-xs font-semibold transition-all",
-              activeView === v ? "bg-white text-brand-600 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
+            className={cn("relative px-2.5 py-1 rounded-full text-xs font-semibold transition-colors z-10",
+              activeView === v ? "text-brand-600" : "text-gray-500 hover:text-gray-700")}>
+            {activeView === v && (
+              <motion.span
+                layoutId="view-pill"
+                className="absolute inset-0 bg-white rounded-full shadow-sm"
+                style={{ zIndex: -1 }}
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              />
+            )}
             {v === "strategic" ? t("header_view_strategic") : t("header_view_tactical")}
           </button>
         ))}

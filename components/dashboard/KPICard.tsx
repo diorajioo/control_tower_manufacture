@@ -1,20 +1,107 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { TrendingUp, TrendingDown, Info } from "lucide-react";
+import {
+  animate,
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useTransform,
+} from "framer-motion";
 import { cn } from "@/lib/utils";
 
+// ── AnimatedNumber ────────────────────────────────────────────────────────────
+// beui.dev Number Animation: count-up from 0 → target using Framer Motion.
+// Preserves the source's decimal precision and comma formatting.
+
+function parseNumeric(v: string | number): { raw: number; decimals: number; prefix: string; suffix: string } {
+  const s = String(v);
+  // Strip leading non-numeric chars (e.g. nothing in this app, but safe)
+  const match = s.match(/^([^\d-]*)(-?[\d,]+(?:\.\d+)?)(.*)$/);
+  if (!match) return { raw: NaN, decimals: 0, prefix: "", suffix: s };
+  const numStr = match[2].replace(/,/g, "");
+  const dotIdx = numStr.indexOf(".");
+  return {
+    raw: parseFloat(numStr),
+    decimals: dotIdx === -1 ? 0 : numStr.length - dotIdx - 1,
+    prefix: match[1],
+    suffix: match[3],
+  };
+}
+
+function fmt(n: number, decimals: number): string {
+  if (decimals === 0) {
+    // Add thousands separator
+    return Math.round(n).toLocaleString("en-US");
+  }
+  return n.toFixed(decimals);
+}
+
+interface AnimatedNumberProps {
+  value: string | number;
+  className?: string;
+}
+
+function AnimatedNumber({ value, className }: AnimatedNumberProps) {
+  const { raw, decimals, prefix, suffix } = parseNumeric(value);
+  const mv = useMotionValue(0);
+  const [display, setDisplay] = useState(() =>
+    isNaN(raw) ? String(value) : `${prefix}${fmt(0, decimals)}${suffix}`
+  );
+  const prevRef = useRef(0);
+
+  useEffect(() => {
+    if (isNaN(raw)) { setDisplay(String(value)); return; }
+    const ctrl = animate(mv, raw, {
+      duration: 0.9,
+      ease: [0.22, 1, 0.36, 1], // expo out
+      from: prevRef.current,
+      onUpdate: (v) => setDisplay(`${prefix}${fmt(v, decimals)}${suffix}`),
+      onComplete: () => { prevRef.current = raw; },
+    });
+    return () => ctrl.stop();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raw]);
+
+  return <span className={className}>{display}</span>;
+}
+
+// ── InfoTooltip ───────────────────────────────────────────────────────────────
+// beui.dev Tooltip: AnimatePresence scale+fade, origin anchored below the icon.
+
 function InfoTooltip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <span className="relative group inline-flex items-center">
-      <Info size={12} className="text-gray-300 group-hover:text-gray-500 cursor-help transition-colors" />
-      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 hidden group-hover:block text-xs text-white bg-gray-900 px-2.5 py-2 rounded-lg shadow-xl z-50 leading-relaxed font-normal normal-case tracking-normal">
-        {text}
-      </span>
+    <span
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+    >
+      <Info size={12} className={cn("cursor-help transition-colors", open ? "text-gray-500" : "text-gray-300")} />
+      <AnimatePresence>
+        {open && (
+          <motion.span
+            role="tooltip"
+            initial={{ opacity: 0, scale: 0.88, y: 6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.88, y: 6 }}
+            transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+            className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 text-xs text-white bg-gray-900 px-2.5 py-2 rounded-lg shadow-xl z-50 leading-relaxed font-normal normal-case tracking-normal"
+            style={{ transformOrigin: "50% 100%" }}
+          >
+            {text}
+          </motion.span>
+        )}
+      </AnimatePresence>
     </span>
   );
 }
 
-// Tipe props untuk komponen KPICard yang bisa menerima nilai, tren, badge, dan konten kustom
+// ── KPICard types ─────────────────────────────────────────────────────────────
+
 interface KPICardProps {
   title: string;
   icon?: React.ReactNode;
@@ -35,7 +122,6 @@ interface KPICardProps {
   sparklineColor?: string;
 }
 
-// Peta warna badge sesuai status yang diberikan dari parent
 const badgeColors = {
   green: "bg-green-50 text-green-600",
   red: "bg-red-50 text-red-500",
@@ -44,7 +130,8 @@ const badgeColors = {
   purple: "bg-purple-50 text-purple-600",
 };
 
-// Badge tren kecil yang tampilkan ikon naik/turun dan persentase perubahan
+// ── TrendBadge ────────────────────────────────────────────────────────────────
+
 export function TrendBadge({ trend }: { trend: number }) {
   const up = trend > 0;
   const cls = up ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500";
@@ -57,7 +144,8 @@ export function TrendBadge({ trend }: { trend: number }) {
   );
 }
 
-// Komponen kartu KPI utama dengan header, nilai besar, subtitle, dan slot konten tambahan
+// ── KPICard ───────────────────────────────────────────────────────────────────
+
 export function KPICard({
   title,
   icon,
@@ -77,6 +165,10 @@ export function KPICard({
   sparkline,
   sparklineColor,
 }: KPICardProps) {
+  const hasValue = value !== undefined && value !== "";
+  // Determine if value looks numeric so AnimatedNumber can handle it
+  const isNumeric = hasValue && !isNaN(parseNumeric(value!).raw);
+
   return (
     <div
       className={cn(
@@ -85,7 +177,7 @@ export function KPICard({
         className
       )}
     >
-      {/* Header card berisi ikon, judul, badge status */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {icon && (
@@ -109,25 +201,28 @@ export function KPICard({
         </div>
       </div>
 
-      {/* Nilai utama KPI dengan sparkline di sisi kanan */}
-      {value !== undefined && value !== "" && (
+      {/* Primary value */}
+      {hasValue && (
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-baseline gap-1">
-            <span className={cn("font-bold text-slate-800 tracking-tight", compact ? "text-2xl" : "text-3xl")}>{value}</span>
+            {isNumeric ? (
+              <AnimatedNumber
+                value={value!}
+                className={cn("font-bold text-slate-800 tracking-tight", compact ? "text-2xl" : "text-3xl")}
+              />
+            ) : (
+              <span className={cn("font-bold text-slate-800 tracking-tight", compact ? "text-2xl" : "text-3xl")}>
+                {value}
+              </span>
+            )}
             {unit && <span className="text-sm text-gray-400 font-medium">{unit}</span>}
           </div>
           {sparkline && sparkline.length >= 2 && (
-            <Sparkline
-              data={sparkline}
-              color={sparklineColor ?? iconColor}
-              width={88}
-              height={36}
-            />
+            <Sparkline data={sparkline} color={sparklineColor ?? iconColor} width={88} height={36} />
           )}
         </div>
       )}
 
-      {/* Teks keterangan tambahan di bawah nilai utama */}
       {subtitle && <p className="text-xs text-gray-500 -mt-1">{subtitle}</p>}
       {trendLabel && <p className="text-xs text-gray-400 -mt-1">{trendLabel}</p>}
 
@@ -136,9 +231,8 @@ export function KPICard({
   );
 }
 
-// ── Circular gauge (SVG) ──────────────────────────────────────────────────────
+// ── CircularGauge ─────────────────────────────────────────────────────────────
 
-// Tipe props untuk gauge lingkaran SVG
 interface CircularGaugeProps {
   value: number;
   max?: number;
@@ -147,9 +241,7 @@ interface CircularGaugeProps {
   ariaLabel?: string;
 }
 
-// Gambar gauge berbentuk lingkaran SVG yang menunjukkan persentase terhadap nilai maksimum
 export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72, ariaLabel }: CircularGaugeProps) {
-  // Hitung offset stroke berdasarkan persentase untuk animasi lingkaran
   const radius = (size - 12) / 2;
   const circumference = 2 * Math.PI * radius;
   const pct = Math.min(Math.max(value / max, 0), 1);
@@ -163,16 +255,7 @@ export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72, 
       aria-label={ariaLabel ?? `${value.toFixed(1)}% dari ${max}%`}
     >
       <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
-        {/* Lingkaran latar belakang */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="#f0fdf4"
-          strokeWidth={10}
-        />
-        {/* Lingkaran progress yang berubah sesuai nilai */}
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#f0fdf4" strokeWidth={10} />
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -186,7 +269,6 @@ export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72, 
           style={{ transition: "stroke-dashoffset 0.6s ease" }}
         />
       </svg>
-      {/* Label nilai di tengah gauge */}
       <div className="absolute text-center">
         <span className="text-sm font-bold text-slate-800 leading-none">{value.toFixed(1)}</span>
         <span className="text-xs text-gray-400 block leading-none">%</span>
@@ -195,9 +277,8 @@ export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72, 
   );
 }
 
-// ── Sparkline (inline SVG polyline) ──────────────────────────────────────────
+// ── Sparkline ─────────────────────────────────────────────────────────────────
 
-// Tipe props untuk sparkline mini yang menerima array angka
 interface SparklineProps {
   data: number[];
   color?: string;
@@ -205,13 +286,11 @@ interface SparklineProps {
   height?: number;
 }
 
-// Render sparkline SVG kecil dari array data, normalisasi nilai ke koordinat SVG
 export function Sparkline({ data, color = "#6366f1", width = 80, height = 32 }: SparklineProps) {
   if (data.length < 2) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;
-  // Konversi tiap nilai ke koordinat x,y dalam viewBox SVG
   const pts = data
     .map((v, i) => {
       const x = (i / (data.length - 1)) * width;
@@ -234,9 +313,8 @@ export function Sparkline({ data, color = "#6366f1", width = 80, height = 32 }: 
   );
 }
 
-// ── Mini stat (used inside cards) ─────────────────────────────────────────────
+// ── MiniStat ──────────────────────────────────────────────────────────────────
 
-// Tipe props untuk komponen statistik mini yang dipakai di dalam kartu
 interface MiniStatProps {
   label: string;
   value: string | number;
@@ -246,7 +324,6 @@ interface MiniStatProps {
   trend?: number;
 }
 
-// Tampilkan nilai kecil dengan label, satuan opsional, dan indikator tren naik/turun
 export function MiniStat({ label, value, unit, positive, negative, trend }: MiniStatProps) {
   return (
     <div className="flex flex-col">
@@ -260,7 +337,6 @@ export function MiniStat({ label, value, unit, positive, negative, trend }: Mini
           {value}
           {unit && <span className="text-xs font-normal ml-0.5 text-gray-400">{unit}</span>}
         </span>
-        {/* Panah tren kecil naik/turun dengan persentase perubahan */}
         {trend !== undefined && (
           <span className={cn("text-xs font-semibold", trend > 0 ? "text-green-500" : "text-red-500")}>
             {trend > 0 ? "↑" : "↓"}{Math.abs(trend).toFixed(1)}%
