@@ -7,7 +7,6 @@ import {
   AnimatePresence,
   motion,
   useMotionValue,
-  useTransform,
 } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -52,13 +51,18 @@ function AnimatedNumber({ value, className }: AnimatedNumberProps) {
   const prevRef = useRef(0);
 
   useEffect(() => {
-    if (isNaN(raw)) { setDisplay(String(value)); return; }
+    if (isNaN(raw)) {
+      setDisplay(String(value));
+      prevRef.current = 0; // reset so next mount always counts from 0
+      return;
+    }
+    const from = prevRef.current;
+    prevRef.current = raw; // update immediately so interruptions don't leave stale from
     const ctrl = animate(mv, raw, {
       duration: 0.9,
-      ease: [0.22, 1, 0.36, 1], // expo out
-      from: prevRef.current,
+      ease: [0.22, 1, 0.36, 1],
+      from,
       onUpdate: (v) => setDisplay(`${prefix}${fmt(v, decimals)}${suffix}`),
-      onComplete: () => { prevRef.current = raw; },
     });
     return () => ctrl.stop();
   // eslint-disable-next-line react-hooks/exhaustive-deps

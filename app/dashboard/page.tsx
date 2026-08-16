@@ -110,6 +110,7 @@ export default function DashboardPage() {
   // Fetch semua data KPI dari API lalu hitung alert berdasarkan threshold yang sudah ditentukan
   const fetchData = useCallback(async (f: Filters) => {
     setLoading(true);
+    setKpi(null); // clear before await so React renders loading state before new data arrives
     const params = new URLSearchParams({
       plant: f.plant,
       startDate: f.startDate,
