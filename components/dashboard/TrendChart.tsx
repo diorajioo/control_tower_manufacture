@@ -302,6 +302,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
                   minWidth: 190,
                   boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
                   fontFamily: "inherit",
+                  animation: "chart-tooltip-in 0.15s ease-out",
                 }}>
                   <p style={{ fontWeight: 500, marginBottom: 7, color: "#64748b", fontSize: 10, letterSpacing: "0.02em" }}>
                     {dateLabel}

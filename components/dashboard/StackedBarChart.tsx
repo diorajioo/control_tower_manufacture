@@ -210,6 +210,7 @@ export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarCha
                 minWidth: 170,
                 boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
                 fontFamily: "inherit",
+                animation: "chart-tooltip-in 0.15s ease-out",
               }}>
                 <p style={{ fontWeight: 700, marginBottom: 6, color: String(color) }}>{String(indexValue)}</p>
                 {(() => {
