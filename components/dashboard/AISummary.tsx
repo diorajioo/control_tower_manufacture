@@ -3,38 +3,66 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, RefreshCw, AlertCircle } from "lucide-react";
 
-const KPI_CHIP_LABELS: Record<string, string> = {
-  leadtime:     "Lead Time",
-  yield:        "Yield",
-  rft:          "RFT",
-  output:       "Output",
-  oee:          "OEE",
-  ope:          "OPE",
-  productivity: "Produktivitas",
-};
+const KPI_PATTERNS: { pattern: RegExp; id: string }[] = [
+  { pattern: /lead[\s-]?time/gi,                         id: "leadtime"     },
+  { pattern: /bulk[\s-]?loss|pack[\s-]?loss/gi,          id: "yield"        },
+  { pattern: /right[\s-]?first[\s-]?time|\bRFT\b/g,     id: "rft"          },
+  { pattern: /\bOEE\b/g,                                 id: "oee"          },
+  { pattern: /\bOPE\b/g,                                 id: "ope"          },
+  { pattern: /produktivitas|\bproductivity\b/gi,         id: "productivity" },
+  { pattern: /\boutput\b/gi,                             id: "output"       },
+];
+
+interface Segment { text: string; kpi?: string }
+
+function parseSummary(text: string): Segment[] {
+  const matches: { start: number; end: number; id: string; raw: string }[] = [];
+  const seen = new Set<string>();
+
+  for (const { pattern, id } of KPI_PATTERNS) {
+    if (seen.has(id)) continue;
+    pattern.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(text)) !== null) {
+      if (!seen.has(id)) {
+        matches.push({ start: m.index, end: m.index + m[0].length, id, raw: m[0] });
+        seen.add(id);
+        break;
+      }
+    }
+  }
+
+  matches.sort((a, b) => a.start - b.start);
+
+  const segs: Segment[] = [];
+  let pos = 0;
+  for (const m of matches) {
+    if (m.start > pos) segs.push({ text: text.slice(pos, m.start) });
+    segs.push({ text: m.raw, kpi: m.id });
+    pos = m.end;
+  }
+  if (pos < text.length) segs.push({ text: text.slice(pos) });
+  return segs;
+}
 
 function SummaryText({ text }: { text: string }) {
-  const parts = text.split(/(\[kpi:[a-z]+\])/g);
+  const segments = parseSummary(text);
   return (
     <>
-      {parts.map((part, i) => {
-        const kpiMatch = part.match(/^\[kpi:([a-z]+)\]$/);
-        if (kpiMatch) {
-          const kpiId = kpiMatch[1];
-          const label = KPI_CHIP_LABELS[kpiId] ?? kpiId;
-          return (
-            <button
-              key={i}
-              onClick={() => window.dispatchEvent(new CustomEvent("kpi-highlight", { detail: { kpi: kpiId } }))}
-              title={`Highlight ${label} di dashboard`}
-              className="inline-flex items-center gap-0.5 text-[10px] text-white bg-white/20 hover:bg-white/35 border border-white/20 px-1.5 py-0.5 rounded-md font-semibold transition-colors ml-0.5 align-middle cursor-pointer"
-            >
-              {label} ↗
-            </button>
-          );
-        }
-        return part;
-      })}
+      {segments.map((seg, i) =>
+        seg.kpi ? (
+          <button
+            key={i}
+            onClick={() => window.dispatchEvent(new CustomEvent("kpi-highlight", { detail: { kpi: seg.kpi } }))}
+            title={`Highlight ${seg.text} di dashboard`}
+            className="font-bold underline decoration-white/40 underline-offset-2 hover:decoration-white transition-colors cursor-pointer"
+          >
+            {seg.text}
+          </button>
+        ) : (
+          <span key={i}>{seg.text}</span>
+        )
+      )}
     </>
   );
 }
