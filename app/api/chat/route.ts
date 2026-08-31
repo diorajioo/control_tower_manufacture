@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getGroqClient, GROQ_MODEL_PRIORITY, isGroqModelUnavailable } from "@/lib/ai-provider";
+import { getGroqClient, GROQ_CHAT_MODEL_PRIORITY, isGroqModelUnavailable } from "@/lib/ai-provider";
 import { executeQuery } from "@/lib/snowflake";
 import type Groq from "groq-sdk";
 
@@ -83,7 +83,12 @@ KPI Targets:
 - Bulk Loss: target < 3%
 - Pack Loss: target < 1%
 - Right First Time (RFT): target ≥ 95%
-- OEE: target ≥ 65%`;
+- OEE: target ≥ 65%
+
+Highlight tagging: Saat menyebut nilai aktual sebuah KPI, tambahkan tag [kpi:ID] tepat setelah angkanya:
+[kpi:leadtime] = Lead Time · [kpi:yield] = Bulk/Pack Loss · [kpi:rft] = RFT · [kpi:output] = Output FG/Bulk · [kpi:oee] = OEE · [kpi:ope] = OPE · [kpi:productivity] = Produktivitas
+Contoh: "Lead Time saat ini 5.2 hari [kpi:leadtime], OEE 67.3% [kpi:oee]."
+Gunakan tag HANYA saat menyebut nilai angka aktual KPI tersebut, bukan saat membahas topik secara umum.`;
 }
 
 function validateDate(d?: string): string | undefined {
@@ -366,7 +371,7 @@ export async function POST(req: NextRequest) {
   const MAX_TOOL_ROUNDS = 3;
 
   // Find first available model
-  let selectedModel = GROQ_MODEL_PRIORITY[0];
+  let selectedModel = GROQ_CHAT_MODEL_PRIORITY[0];
   let modelResolved = false;
 
   try {
@@ -375,7 +380,7 @@ export async function POST(req: NextRequest) {
 
       if (!modelResolved) {
         let lastErr: unknown;
-        for (const model of GROQ_MODEL_PRIORITY) {
+        for (const model of GROQ_CHAT_MODEL_PRIORITY) {
           try {
             response = await groq.chat.completions.create({
               model,

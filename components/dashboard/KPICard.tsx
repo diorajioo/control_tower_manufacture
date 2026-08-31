@@ -118,6 +118,7 @@ interface KPICardProps {
   tooltip?: string;
   sparkline?: number[];
   sparklineColor?: string;
+  dimmed?: boolean;
 }
 
 const badgeColors = {
@@ -162,6 +163,7 @@ export function KPICard({
   tooltip,
   sparkline,
   sparklineColor,
+  dimmed,
 }: KPICardProps) {
   const hasValue = value !== undefined && value !== "";
   const isNumeric = hasValue && !isNaN(parseNumeric(value!).raw);
@@ -169,11 +171,12 @@ export function KPICard({
   return (
     <div
       className={cn(
-        "bg-white rounded-2xl p-4 flex flex-col gap-3 transition-all",
+        "bg-white rounded-2xl p-4 flex flex-col gap-3 transition-all duration-300",
         "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]",
         alert
           ? "border border-red-200 ring-1 ring-red-100/50"
           : "border border-gray-100/80",
+        dimmed && "opacity-30 scale-[0.99]",
         className
       )}
     >

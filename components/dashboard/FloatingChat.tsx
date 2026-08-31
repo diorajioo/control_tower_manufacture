@@ -20,24 +20,48 @@ const QUICK_ACTIONS = [
   "Tren RFT 3 bulan terakhir",
 ];
 
-// Inline: **bold** → <strong>
-function formatInline(text: string): React.ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+const KPI_CHIP_LABELS: Record<string, string> = {
+  leadtime:     "Lead Time",
+  yield:        "Yield",
+  rft:          "RFT",
+  output:       "Output",
+  oee:          "OEE",
+  ope:          "OPE",
+  productivity: "Produktivitas",
+};
+
+// Inline: **bold** → <strong>, [kpi:ID] → highlight chip
+function formatInline(text: string, onKpiClick?: (kpi: string) => void): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*|\[kpi:[a-z]+\])/g);
   return (
     <>
-      {parts.map((part, i) =>
-        part.startsWith("**") && part.endsWith("**") ? (
-          <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>
-        ) : (
-          part
-        )
-      )}
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>;
+        }
+        const kpiMatch = part.match(/^\[kpi:([a-z]+)\]$/);
+        if (kpiMatch) {
+          const kpiId = kpiMatch[1];
+          const label = KPI_CHIP_LABELS[kpiId] ?? kpiId;
+          return (
+            <button
+              key={i}
+              onClick={() => onKpiClick?.(kpiId)}
+              title={`Highlight ${label} di dashboard`}
+              className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-1.5 py-0.5 rounded-md font-semibold transition-colors ml-0.5 align-middle cursor-pointer"
+            >
+              {label} ↗
+            </button>
+          );
+        }
+        return part;
+      })}
     </>
   );
 }
 
 // Block renderer: paragraphs + bullet lists
-function MarkdownContent({ text }: { text: string }) {
+function MarkdownContent({ text, onKpiClick }: { text: string; onKpiClick?: (kpi: string) => void }) {
   const lines = text.split("\n");
   const nodes: React.ReactNode[] = [];
   const listBuf: React.ReactNode[] = [];
@@ -58,7 +82,7 @@ function MarkdownContent({ text }: { text: string }) {
     if (isBullet) {
       listBuf.push(
         <li key={i} className="leading-relaxed text-[13px] text-gray-700">
-          {formatInline(line.replace(/^[-•]\s/, ""))}
+          {formatInline(line.replace(/^[-•]\s/, ""), onKpiClick)}
         </li>
       );
     } else if (line.trim() === "") {
@@ -66,7 +90,7 @@ function MarkdownContent({ text }: { text: string }) {
     } else {
       nodes.push(
         <p key={i} className="text-[13px] leading-relaxed text-gray-700">
-          {formatInline(line)}
+          {formatInline(line, onKpiClick)}
         </p>
       );
     }
@@ -99,6 +123,10 @@ export function FloatingChat({ filters }: FloatingChatProps) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading, typed]);
+
+  function handleKpiHighlight(kpi: string) {
+    window.dispatchEvent(new CustomEvent("kpi-highlight", { detail: { kpi } }));
+  }
 
   // RAF-based character drip: reveals ~8 chars per frame (~480/s at 60fps)
   function startTyping() {
@@ -247,7 +275,7 @@ export function FloatingChat({ filters }: FloatingChatProps) {
                   </div>
                 ) : (
                   <div className="max-w-[92%] bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
-                    <MarkdownContent text={msg.content} />
+                    <MarkdownContent text={msg.content} onKpiClick={handleKpiHighlight} />
                   </div>
                 )}
               </div>
@@ -257,7 +285,7 @@ export function FloatingChat({ filters }: FloatingChatProps) {
             {streaming && (
               <div className="flex justify-start">
                 <div className="max-w-[92%] bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
-                  <MarkdownContent text={typed} />
+                  <MarkdownContent text={typed} onKpiClick={handleKpiHighlight} />
                   <span className="inline-block w-0.5 h-3.5 bg-gray-400 ml-0.5 animate-pulse align-middle" />
                 </div>
               </div>

@@ -15,6 +15,16 @@ export const GROQ_MODEL_PRIORITY: string[] = process.env.GROQ_MODEL
       "qwen/qwen3.8-27b",
     ];
 
+// Chat uses speed-optimized order: smaller models have lower TTFB
+export const GROQ_CHAT_MODEL_PRIORITY: string[] = process.env.GROQ_CHAT_MODEL
+  ? [process.env.GROQ_CHAT_MODEL]
+  : [
+      "qwen/qwen3.6-27b",
+      "qwen/qwen3.8-27b",
+      "groq/compound",
+      "openai/gpt-oss-120b",
+    ];
+
 export function isGroqModelUnavailable(err: unknown): boolean {
   const code = (err as { error?: { code?: string } })?.error?.code;
   return code === "model_not_found" || code === "model_decommissioned";
