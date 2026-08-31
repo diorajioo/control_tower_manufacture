@@ -6,7 +6,7 @@ export const AI_PROVIDER: AIProvider =
   (process.env.AI_PROVIDER as AIProvider) ?? "groq";
 
 export const AI_MODELS: Record<AIProvider, string> = {
-  groq: process.env.GROQ_MODEL ?? "llama3-70b-8192",
+  groq: process.env.GROQ_MODEL ?? "llama-3.1-8b-instant",
   gemini: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
 };
 
