@@ -41,7 +41,7 @@ curl -i http://localhost:8080/_stcore/health   # must return 200
 
 1. Read the [**Web Dashboard Deployment Workbook**](https://paracorpgroup.sharepoint.com/:b:/s/DataEngineering/IQBwxC0b3rK_TJtzqgOvlyRNAWlldVuqDi8qm4SqNwNVn9E?e=44FtEs).
 2. Run the test suite in workbook section 2.7 (Claude Code can run it for you).
-3. Download and complete the [**Deployment Request & Pre-Flight Checklist**](https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQBY5zjYR9fYTqzk_WlfUeV2Ac2QKpNAPeW5G4WdtTzcKxc?e=wgcYiy) document,
+3. Download and complete the [**Deployment Request & Pre-Flight Checklist**](https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQBY5zjYR9fYTqzk_WlfUeV2AfdOqtgfLCFBCYJpsngclxg?e=Gpjiwk) document,
    or the plain-text copy in `DEPLOYMENT-REQUEST.md`.
 4. Send it to the DAI Platform Team.
 
@@ -50,7 +50,7 @@ curl -i http://localhost:8080/_stcore/health   # must return 200
 | Document | What it is for |
 |---|---|
 | [**Web Dashboard Deployment Workbook**](https://paracorpgroup.sharepoint.com/:b:/s/DataEngineering/IQBwxC0b3rK_TJtzqgOvlyRNAWlldVuqDi8qm4SqNwNVn9E?e=44FtEs) | Read this first. What to build, and why each rule exists. |
-| [**Deployment Request & Pre-Flight Checklist**](https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQBY5zjYR9fYTqzk_WlfUeV2Ac2QKpNAPeW5G4WdtTzcKxc?e=wgcYiy) | Fill in before you ask for a deployment. <!-- PLATFORM TEAM: add the SharePoint link here --> |
+| [**Deployment Request & Pre-Flight Checklist**](https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQBY5zjYR9fYTqzk_WlfUeV2AfdOqtgfLCFBCYJpsngclxg?e=Gpjiwk) | Fill in before you ask for a deployment. <!-- PLATFORM TEAM: add the SharePoint link here --> |
 
 Both live on the Data Engineering SharePoint site and need your company sign-in.
 
