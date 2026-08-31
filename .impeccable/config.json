@@ -3,7 +3,8 @@
     "ignoreRules": [],
     "ignoreFiles": [
       "lib/email.ts",
-      "app/query-docs/page.tsx"
+      "app/query-docs/page.tsx",
+      "QUERIES.md"
     ],
     "ignoreValues": [
       {
