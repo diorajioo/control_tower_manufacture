@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getGroqClient, AI_MODELS } from "@/lib/ai-provider";
+import { getGroqClient, GROQ_MODEL_PRIORITY, isGroqModelUnavailable } from "@/lib/ai-provider";
 import { executeQuery } from "@/lib/snowflake";
 import type Groq from "groq-sdk";
 
@@ -365,16 +365,48 @@ export async function POST(req: NextRequest) {
 
   const MAX_TOOL_ROUNDS = 3;
 
+  // Find first available model
+  let selectedModel = GROQ_MODEL_PRIORITY[0];
+  let modelResolved = false;
+
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const response = await groq.chat.completions.create({
-        model: AI_MODELS.groq,
-        messages: allMessages as Groq.Chat.ChatCompletionMessageParam[],
-        tools: TOOLS,
-        tool_choice: "auto",
-        max_tokens: 1500,
-        temperature: 0.3,
-      });
+      let response: Groq.Chat.ChatCompletion | null = null;
+
+      if (!modelResolved) {
+        let lastErr: unknown;
+        for (const model of GROQ_MODEL_PRIORITY) {
+          try {
+            response = await groq.chat.completions.create({
+              model,
+              messages: allMessages as Groq.Chat.ChatCompletionMessageParam[],
+              tools: TOOLS,
+              tool_choice: "auto",
+              max_tokens: 1500,
+              temperature: 0.3,
+            });
+            selectedModel = model;
+            modelResolved = true;
+            break;
+          } catch (err) {
+            if (isGroqModelUnavailable(err)) { lastErr = err; continue; }
+            throw err;
+          }
+        }
+        if (!response) {
+          const msg = lastErr instanceof Error ? lastErr.message : "No Groq model available";
+          return NextResponse.json({ error: msg }, { status: 503 });
+        }
+      } else {
+        response = await groq.chat.completions.create({
+          model: selectedModel,
+          messages: allMessages as Groq.Chat.ChatCompletionMessageParam[],
+          tools: TOOLS,
+          tool_choice: "auto",
+          max_tokens: 1500,
+          temperature: 0.3,
+        });
+      }
 
       const choice = response.choices[0];
       const msg = choice.message;
@@ -400,9 +432,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Stream final answer
+    // Stream final answer with the resolved model
     const finalStream = await groq.chat.completions.create({
-      model: AI_MODELS.groq,
+      model: selectedModel,
       messages: allMessages as Groq.Chat.ChatCompletionMessageParam[],
       max_tokens: 800,
       temperature: 0.3,

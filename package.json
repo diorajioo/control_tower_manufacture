@@ -33,6 +33,9 @@
     "snowflake-sdk": "^1.14.0",
     "tailwind-merge": "^2.4.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["unrs-resolver"]
+  },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
