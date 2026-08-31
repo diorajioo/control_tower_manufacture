@@ -1,33 +1,22 @@
 import Groq from "groq-sdk";
+import {
+  SUMMARY_MODEL_PRIORITY,
+  buildChatModelPriority,
+  isModelUnavailableError,
+} from "./ai-models";
 
-export type AIProvider = "groq" | "gemini";
+export type AIProvider = "groq";
 
-export const AI_PROVIDER: AIProvider =
-  (process.env.AI_PROVIDER as AIProvider) ?? "groq";
+export const AI_PROVIDER: AIProvider = "groq";
 
-// Ordered by preference — first available model wins
-export const GROQ_MODEL_PRIORITY: string[] = process.env.GROQ_MODEL
-  ? [process.env.GROQ_MODEL]
-  : [
-      "openai/gpt-oss-120b",
-      "groq/compound",
-      "qwen/qwen3.6-27b",
-      "qwen/qwen3.8-27b",
-    ];
+/** Summary route: quality-first, 2-model list */
+export const GROQ_MODEL_PRIORITY: string[] = SUMMARY_MODEL_PRIORITY;
 
-// Chat uses speed-optimized order: smaller models have lower TTFB
-export const GROQ_CHAT_MODEL_PRIORITY: string[] = process.env.GROQ_CHAT_MODEL
-  ? [process.env.GROQ_CHAT_MODEL]
-  : [
-      "qwen/qwen3.6-27b",
-      "qwen/qwen3.8-27b",
-      "groq/compound",
-      "openai/gpt-oss-120b",
-    ];
+/** Chat route: call with the user's preferred model ID to get ordered list */
+export { buildChatModelPriority };
 
 export function isGroqModelUnavailable(err: unknown): boolean {
-  const code = (err as { error?: { code?: string } })?.error?.code;
-  return code === "model_not_found" || code === "model_decommissioned";
+  return isModelUnavailableError(err);
 }
 
 export function getGroqClient(): Groq {

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getGroqClient, GROQ_CHAT_MODEL_PRIORITY, isGroqModelUnavailable } from "@/lib/ai-provider";
+import { getGroqClient, buildChatModelPriority, isGroqModelUnavailable } from "@/lib/ai-provider";
+import { isValidModelId } from "@/lib/ai-models";
 import { executeQuery } from "@/lib/snowflake";
 import type Groq from "groq-sdk";
 
@@ -357,10 +358,13 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { messages, context } = body as {
+  const { messages, context, model: requestedModel } = body as {
     messages: { role: "user" | "assistant"; content: string }[];
     context?: { plant?: string; startDate?: string; endDate?: string };
+    model?: string;
   };
+
+  const validatedModel = requestedModel && isValidModelId(requestedModel) ? requestedModel : undefined;
 
   const groq = getGroqClient();
   const allMessages: ChatMessage[] = [
@@ -370,8 +374,8 @@ export async function POST(req: NextRequest) {
 
   const MAX_TOOL_ROUNDS = 3;
 
-  // Find first available model
-  let selectedModel = GROQ_CHAT_MODEL_PRIORITY[0];
+  const chatModelPriority = buildChatModelPriority(validatedModel);
+  let selectedModel = chatModelPriority[0];
   let modelResolved = false;
 
   try {
@@ -380,7 +384,7 @@ export async function POST(req: NextRequest) {
 
       if (!modelResolved) {
         let lastErr: unknown;
-        for (const model of GROQ_CHAT_MODEL_PRIORITY) {
+        for (const model of chatModelPriority) {
           try {
             response = await groq.chat.completions.create({
               model,

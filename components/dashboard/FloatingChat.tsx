@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MessageSquare, X, Send, Sparkles, Loader2 } from "lucide-react";
+import { MessageSquare, X, Send, Sparkles, Loader2, ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GROQ_MODELS, CHAT_DEFAULT_MODEL_ID, getModelConfig } from "@/lib/ai-models";
 
 interface Message {
   role: "user" | "assistant";
@@ -100,14 +101,26 @@ function MarkdownContent({ text, onKpiClick }: { text: string; onKpiClick?: (kpi
   return <div className="space-y-0.5">{nodes}</div>;
 }
 
+const BADGE_CLS: Record<string, { bg: string; text: string }> = {
+  indigo:  { bg: "bg-indigo-100",  text: "text-indigo-700"  },
+  emerald: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  amber:   { bg: "bg-amber-100",   text: "text-amber-700"   },
+  cyan:    { bg: "bg-cyan-100",    text: "text-cyan-700"    },
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 export function FloatingChat({ filters }: FloatingChatProps) {
-  const [open,      setOpen]      = useState(false);
-  const [messages,  setMessages]  = useState<Message[]>([]);
-  const [input,     setInput]     = useState("");
-  const [loading,   setLoading]   = useState(false);
-  const [streaming, setStreaming] = useState(false);
-  const [typed,     setTyped]     = useState(""); // character-drip display
+  const [open,           setOpen]           = useState(false);
+  const [messages,       setMessages]       = useState<Message[]>([]);
+  const [input,          setInput]          = useState("");
+  const [loading,        setLoading]        = useState(false);
+  const [streaming,      setStreaming]      = useState(false);
+  const [typed,          setTyped]          = useState("");
+  const [selectedModel,  setSelectedModel]  = useState<string>(() => {
+    try { return localStorage.getItem("ct-chat-model") ?? CHAT_DEFAULT_MODEL_ID; }
+    catch { return CHAT_DEFAULT_MODEL_ID; }
+  });
+  const [showPicker,     setShowPicker]     = useState(false);
 
   const bottomRef  = useRef<HTMLDivElement>(null);
   const inputRef   = useRef<HTMLInputElement>(null);
@@ -119,6 +132,10 @@ export function FloatingChat({ filters }: FloatingChatProps) {
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 100);
   }, [open]);
+
+  useEffect(() => {
+    try { localStorage.setItem("ct-chat-model", selectedModel); } catch { /* ignore */ }
+  }, [selectedModel]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -168,7 +185,7 @@ export function FloatingChat({ filters }: FloatingChatProps) {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next, context: filters }),
+        body: JSON.stringify({ messages: next, context: filters, model: selectedModel }),
       });
 
       if (!res.ok || !res.body) throw new Error("Gagal mendapatkan respons");
@@ -214,19 +231,59 @@ export function FloatingChat({ filters }: FloatingChatProps) {
           style={{ height: "540px" }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-brand-800 text-white shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="bg-white/20 rounded-md p-1">
-                <Sparkles size={13} className="text-blue-200" />
+          <div className="bg-brand-800 text-white shrink-0">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2">
+                <div className="bg-white/20 rounded-md p-1">
+                  <Sparkles size={13} className="text-blue-200" />
+                </div>
+                <span className="text-sm font-semibold">AI Analyst</span>
               </div>
-              <span className="text-sm font-semibold">AI Analyst</span>
-              <span className="text-[10px] bg-white/15 px-2 py-0.5 rounded-full text-blue-200 font-medium tracking-tight">
-                Groq · auto
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowPicker((v) => !v)}
+                  className="flex items-center gap-1 text-[10px] bg-white/15 hover:bg-white/25 px-2 py-0.5 rounded-full text-blue-200 font-medium tracking-tight transition-colors"
+                >
+                  {getModelConfig(selectedModel)?.badge ?? "auto"}
+                  <ChevronDown size={10} className={cn("transition-transform duration-150", showPicker && "rotate-180")} />
+                </button>
+                <button onClick={() => { setOpen(false); setShowPicker(false); }} className="text-white/70 hover:text-white transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
             </div>
-            <button onClick={() => setOpen(false)} className="text-white/70 hover:text-white transition-colors">
-              <X size={16} />
-            </button>
+
+            {/* Model picker */}
+            {showPicker && (
+              <div className="px-3 pb-3 space-y-1.5">
+                {GROQ_MODELS.map((m) => {
+                  const badge = BADGE_CLS[m.badgeVariant];
+                  const active = m.id === selectedModel;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => { setSelectedModel(m.id); setShowPicker(false); }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 rounded-xl transition-all flex items-start gap-2.5",
+                        active ? "bg-white/20" : "bg-white/5 hover:bg-white/12"
+                      )}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-[12px] font-semibold text-white leading-none">{m.name}</span>
+                          <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none", badge.bg, badge.text)}>
+                            {m.badge}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-blue-200/70 leading-snug">{m.tagline}</p>
+                        <p className="text-[9px] text-white/30 mt-0.5">{m.limit}</p>
+                      </div>
+                      {active && <Check size={13} className="text-blue-300 shrink-0 mt-0.5" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Context pill */}
