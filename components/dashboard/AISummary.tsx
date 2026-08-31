@@ -3,43 +3,51 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, RefreshCw, AlertCircle } from "lucide-react";
 
-const KPI_PATTERNS: { pattern: RegExp; id: string }[] = [
-  { pattern: /lead[\s-]?time/gi,                         id: "leadtime"     },
-  { pattern: /bulk[\s-]?loss|pack[\s-]?loss/gi,          id: "yield"        },
-  { pattern: /right[\s-]?first[\s-]?time|\bRFT\b/g,     id: "rft"          },
-  { pattern: /\bOEE\b/g,                                 id: "oee"          },
-  { pattern: /\bOPE\b/g,                                 id: "ope"          },
-  { pattern: /produktivitas|\bproductivity\b/gi,         id: "productivity" },
-  { pattern: /\boutput\b/gi,                             id: "output"       },
+// KPI keyword → look for the next number within 50 chars and make it clickable
+const KPI_KEYWORDS: { pattern: RegExp; id: string }[] = [
+  { pattern: /lead[\s-]?time/gi,                     id: "leadtime"     },
+  { pattern: /bulk[\s-]?loss|pack[\s-]?loss/gi,      id: "yield"        },
+  { pattern: /right[\s-]?first[\s-]?time|\bRFT\b/g, id: "rft"          },
+  { pattern: /\bOEE\b/g,                             id: "oee"          },
+  { pattern: /\bOPE\b/g,                             id: "ope"          },
+  { pattern: /produktivitas|\bproductivity\b/gi,     id: "productivity" },
+  { pattern: /\boutput\b/gi,                         id: "output"       },
 ];
+const NUM_RE = /\d+(?:[.,]\d+)?\s*(?:%|hari|days|kg|pcs)?/;
 
 interface Segment { text: string; kpi?: string }
 
 function parseSummary(text: string): Segment[] {
-  const matches: { start: number; end: number; id: string; raw: string }[] = [];
+  const hits: { start: number; end: number; id: string; raw: string }[] = [];
   const seen = new Set<string>();
 
-  for (const { pattern, id } of KPI_PATTERNS) {
+  for (const { pattern, id } of KPI_KEYWORDS) {
     if (seen.has(id)) continue;
     pattern.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = pattern.exec(text)) !== null) {
-      if (!seen.has(id)) {
-        matches.push({ start: m.index, end: m.index + m[0].length, id, raw: m[0] });
-        seen.add(id);
-        break;
+      const after = text.slice(m.index + m[0].length, m.index + m[0].length + 50);
+      const num = NUM_RE.exec(after);
+      if (num) {
+        const start = m.index + m[0].length + num.index;
+        const end   = start + num[0].length;
+        if (!hits.some(h => h.start < end && h.end > start)) {
+          hits.push({ start, end, id, raw: text.slice(start, end) });
+          seen.add(id);
+          break;
+        }
       }
     }
   }
 
-  matches.sort((a, b) => a.start - b.start);
+  hits.sort((a, b) => a.start - b.start);
 
   const segs: Segment[] = [];
   let pos = 0;
-  for (const m of matches) {
-    if (m.start > pos) segs.push({ text: text.slice(pos, m.start) });
-    segs.push({ text: m.raw, kpi: m.id });
-    pos = m.end;
+  for (const h of hits) {
+    if (h.start > pos) segs.push({ text: text.slice(pos, h.start) });
+    segs.push({ text: h.raw, kpi: h.id });
+    pos = h.end;
   }
   if (pos < text.length) segs.push({ text: text.slice(pos) });
   return segs;
@@ -53,9 +61,12 @@ function SummaryText({ text }: { text: string }) {
         seg.kpi ? (
           <button
             key={i}
-            onClick={() => window.dispatchEvent(new CustomEvent("kpi-highlight", { detail: { kpi: seg.kpi } }))}
-            title={`Highlight ${seg.text} di dashboard`}
-            className="font-bold underline decoration-white/40 underline-offset-2 hover:decoration-white transition-colors cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation(); // prevent main onClick from clearing highlight
+              window.dispatchEvent(new CustomEvent("kpi-highlight", { detail: { kpi: seg.kpi } }));
+            }}
+            title={`Highlight di dashboard`}
+            className="font-bold underline decoration-white/50 underline-offset-2 hover:decoration-white hover:text-white transition-colors cursor-pointer"
           >
             {seg.text}
           </button>
