@@ -213,7 +213,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
             margin={{ top: 8, right: 20, bottom: 28, left: 40 }}
             xScale={{ type: "point" }}
             yScale={{ type: "linear", min: "auto", max: "auto", stacked: false }}
-            curve="monotoneX"
+            curve="linear"
             axisBottom={{
               format: (v) => formatTick(String(v)),
               tickSize: 0,
@@ -226,7 +226,11 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
               format: (v) => Number(v).toFixed(1),
             }}
             gridYValues={5}
-            enablePoints={false}
+            enablePoints={true}
+            pointSize={5}
+            pointBorderWidth={2}
+            pointBorderColor={{ from: "seriesColor" }}
+            pointColor={{ theme: "background" }}
             enableSlices="x"
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             colors={(serie: any) => String(serie.color)}

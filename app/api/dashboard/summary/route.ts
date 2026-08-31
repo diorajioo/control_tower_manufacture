@@ -57,7 +57,7 @@ Buat ringkasan eksekutif singkat:`;
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
     const stream = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: "llama3-70b-8192",
       max_tokens: 400,
       stream: true,
       messages: [
