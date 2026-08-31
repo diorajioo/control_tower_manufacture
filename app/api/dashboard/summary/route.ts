@@ -21,7 +21,12 @@ Lead Time (hari, lebih rendah = lebih baik), Bulk Loss % (target < 3%), Pack Los
 Right First Time/RFT % (target >= 95%), Output Bulk kg & FG Release pcs,
 OEE % (target >= 65%), Productivity pcs/manhour.
 
-Berikan analisis berdasarkan data yang diberikan saja. Jangan menambahkan data yang tidak ada.`;
+Berikan analisis berdasarkan data yang diberikan saja. Jangan menambahkan data yang tidak ada.
+
+Highlight tagging: Setiap kali menyebut nilai angka aktual sebuah KPI, tambahkan tag [kpi:ID] tepat setelah angkanya:
+[kpi:leadtime] = Lead Time · [kpi:yield] = Bulk/Pack Loss · [kpi:rft] = RFT · [kpi:output] = Output FG/Bulk · [kpi:oee] = OEE · [kpi:ope] = OPE · [kpi:productivity] = Produktivitas
+Contoh: "OEE 36,6% [kpi:oee] jauh di bawah target, Bulk Loss 2,6% [kpi:yield] masih dalam batas."
+Gunakan tag HANYA saat menyebut nilai angka aktual KPI tersebut.`;
 
 async function createStreamWithFallback(
   groq: Groq,

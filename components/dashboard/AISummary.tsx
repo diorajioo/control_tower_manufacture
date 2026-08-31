@@ -3,6 +3,42 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, RefreshCw, AlertCircle } from "lucide-react";
 
+const KPI_CHIP_LABELS: Record<string, string> = {
+  leadtime:     "Lead Time",
+  yield:        "Yield",
+  rft:          "RFT",
+  output:       "Output",
+  oee:          "OEE",
+  ope:          "OPE",
+  productivity: "Produktivitas",
+};
+
+function SummaryText({ text }: { text: string }) {
+  const parts = text.split(/(\[kpi:[a-z]+\])/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const kpiMatch = part.match(/^\[kpi:([a-z]+)\]$/);
+        if (kpiMatch) {
+          const kpiId = kpiMatch[1];
+          const label = KPI_CHIP_LABELS[kpiId] ?? kpiId;
+          return (
+            <button
+              key={i}
+              onClick={() => window.dispatchEvent(new CustomEvent("kpi-highlight", { detail: { kpi: kpiId } }))}
+              title={`Highlight ${label} di dashboard`}
+              className="inline-flex items-center gap-0.5 text-[10px] text-white bg-white/20 hover:bg-white/35 border border-white/20 px-1.5 py-0.5 rounded-md font-semibold transition-colors ml-0.5 align-middle cursor-pointer"
+            >
+              {label} ↗
+            </button>
+          );
+        }
+        return part;
+      })}
+    </>
+  );
+}
+
 interface AISummaryProps {
   kpi: unknown;
   filters: {
@@ -118,7 +154,7 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
           )}
           {(summary || loading) && (
             <p className="text-xs text-blue-50 leading-relaxed">
-              {summary}
+              <SummaryText text={summary} />
               {loading && <span className="inline-block w-0.5 h-3 bg-blue-300 ml-0.5 animate-pulse align-middle" />}
             </p>
           )}
