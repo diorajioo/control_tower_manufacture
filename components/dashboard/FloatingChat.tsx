@@ -10,11 +10,7 @@ interface Message {
 }
 
 interface FloatingChatProps {
-  filters?: {
-    plant: string;
-    startDate: string;
-    endDate: string;
-  };
+  filters?: { plant: string; startDate: string; endDate: string };
 }
 
 const QUICK_ACTIONS = [
@@ -24,33 +20,121 @@ const QUICK_ACTIONS = [
   "Tren RFT 3 bulan terakhir",
 ];
 
+// Inline: **bold** → <strong>
+function formatInline(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("**") && part.endsWith("**") ? (
+          <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
+// Block renderer: paragraphs + bullet lists
+function MarkdownContent({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const nodes: React.ReactNode[] = [];
+  const listBuf: React.ReactNode[] = [];
+
+  const flushList = (key: string) => {
+    if (!listBuf.length) return;
+    nodes.push(
+      <ul key={key} className="my-1 pl-3.5 space-y-0.5 list-disc">
+        {listBuf.splice(0)}
+      </ul>
+    );
+  };
+
+  lines.forEach((line, i) => {
+    const isBullet = /^[-•]\s/.test(line);
+    if (!isBullet) flushList(`l${i}`);
+
+    if (isBullet) {
+      listBuf.push(
+        <li key={i} className="leading-relaxed text-[13px] text-gray-700">
+          {formatInline(line.replace(/^[-•]\s/, ""))}
+        </li>
+      );
+    } else if (line.trim() === "") {
+      if (i > 0) nodes.push(<div key={i} className="h-1.5" />);
+    } else {
+      nodes.push(
+        <p key={i} className="text-[13px] leading-relaxed text-gray-700">
+          {formatInline(line)}
+        </p>
+      );
+    }
+  });
+
+  flushList("end");
+  return <div className="space-y-0.5">{nodes}</div>;
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export function FloatingChat({ filters }: FloatingChatProps) {
-  const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [open,      setOpen]      = useState(false);
+  const [messages,  setMessages]  = useState<Message[]>([]);
+  const [input,     setInput]     = useState("");
+  const [loading,   setLoading]   = useState(false);
   const [streaming, setStreaming] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [typed,     setTyped]     = useState(""); // character-drip display
+
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const inputRef   = useRef<HTMLInputElement>(null);
+  const streamBuf  = useRef("");   // full received content
+  const streamDone = useRef(false);
+  const rafRef     = useRef<number | null>(null);
+  const nextRef    = useRef<Message[]>([]); // capture message array for RAF closure
 
   useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
+    if (open) setTimeout(() => inputRef.current?.focus(), 100);
   }, [open]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, loading, typed]);
+
+  // RAF-based character drip: reveals ~8 chars per frame (~480/s at 60fps)
+  function startTyping() {
+    let pos = 0;
+    const tick = () => {
+      const target = streamBuf.current.length;
+      if (pos < target) {
+        pos = Math.min(pos + 8, target);
+        setTyped(streamBuf.current.slice(0, pos));
+      }
+
+      if (pos >= target && streamDone.current) {
+        // Caught up and stream is finished — commit to messages
+        setMessages([...nextRef.current, { role: "assistant", content: streamBuf.current }]);
+        setStreaming(false);
+        setTyped("");
+        return;
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }
 
   async function sendMessage(text: string) {
     if (!text.trim() || loading || streaming) return;
 
     const userMsg: Message = { role: "user", content: text.trim() };
     const next = [...messages, userMsg];
+    nextRef.current = next;
     setMessages(next);
     setInput("");
     setLoading(true);
+    streamBuf.current = "";
+    streamDone.current = false;
+    setTyped("");
 
     try {
       const res = await fetch("/api/chat", {
@@ -61,35 +145,29 @@ export function FloatingChat({ filters }: FloatingChatProps) {
 
       if (!res.ok || !res.body) throw new Error("Gagal mendapatkan respons");
 
-      // Mulai streaming — tambah pesan kosong dulu, isi sedikit demi sedikit
-      setMessages([...next, { role: "assistant", content: "" }]);
       setLoading(false);
       setStreaming(true);
+      startTyping();
 
-      const reader = res.body.getReader();
+      const reader  = res.body.getReader();
       const decoder = new TextDecoder();
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: "assistant",
-            content: updated[updated.length - 1].content + chunk,
-          };
-          return updated;
-        });
+        streamBuf.current += decoder.decode(value, { stream: true });
       }
+      streamDone.current = true;
+      // RAF tick will detect this and finalize
+
     } catch {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       setMessages([
-        ...next,
+        ...nextRef.current,
         { role: "assistant", content: "Maaf, terjadi kesalahan. Coba lagi beberapa saat." },
       ]);
-    } finally {
       setLoading(false);
       setStreaming(false);
+      setTyped("");
     }
   }
 
@@ -103,7 +181,8 @@ export function FloatingChat({ filters }: FloatingChatProps) {
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
       {open && (
-        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-96 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200"
+        <div
+          className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[22rem] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200"
           style={{ height: "540px" }}
         >
           {/* Header */}
@@ -113,8 +192,8 @@ export function FloatingChat({ filters }: FloatingChatProps) {
                 <Sparkles size={13} className="text-blue-200" />
               </div>
               <span className="text-sm font-semibold">AI Analyst</span>
-              <span className="text-xs bg-white/15 px-2 py-0.5 rounded-full text-blue-200 font-medium">
-                Groq · llama-3.3-70b
+              <span className="text-[10px] bg-white/15 px-2 py-0.5 rounded-full text-blue-200 font-medium tracking-tight">
+                Groq · auto
               </span>
             </div>
             <button onClick={() => setOpen(false)} className="text-white/70 hover:text-white transition-colors">
@@ -125,7 +204,7 @@ export function FloatingChat({ filters }: FloatingChatProps) {
           {/* Context pill */}
           {filters?.plant && (
             <div className="px-4 py-1.5 bg-gray-50 border-b border-gray-100 shrink-0">
-              <span className="text-xs text-gray-500">
+              <span className="text-[11px] text-gray-500">
                 Konteks: <span className="font-medium text-gray-700">{filters.plant}</span>
                 {" · "}{filters.startDate} s/d {filters.endDate}
               </span>
@@ -133,8 +212,8 @@ export function FloatingChat({ filters }: FloatingChatProps) {
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-            {messages.length === 0 && !loading && (
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
+            {messages.length === 0 && !loading && !streaming && (
               <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
                 <div className="bg-brand-50 rounded-full p-4">
                   <Sparkles size={24} className="text-brand-600" />
@@ -159,24 +238,32 @@ export function FloatingChat({ filters }: FloatingChatProps) {
               </div>
             )}
 
+            {/* Completed messages */}
             {messages.map((msg, i) => (
               <div key={i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
-                <div
-                  className={cn(
-                    "max-w-[82%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
-                    msg.role === "user"
-                      ? "bg-brand-800 text-white rounded-br-sm"
-                      : "bg-gray-100 text-gray-800 rounded-bl-sm"
-                  )}
-                >
-                  {msg.content}
-                  {streaming && i === messages.length - 1 && msg.role === "assistant" && (
-                    <span className="inline-block w-0.5 h-3.5 bg-gray-500 ml-0.5 animate-pulse align-middle" />
-                  )}
-                </div>
+                {msg.role === "user" ? (
+                  <div className="max-w-[82%] bg-brand-800 text-white text-[13px] leading-relaxed rounded-2xl rounded-br-sm px-3.5 py-2.5">
+                    {msg.content}
+                  </div>
+                ) : (
+                  <div className="max-w-[92%] bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
+                    <MarkdownContent text={msg.content} />
+                  </div>
+                )}
               </div>
             ))}
 
+            {/* Streaming message (typing animation) */}
+            {streaming && (
+              <div className="flex justify-start">
+                <div className="max-w-[92%] bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
+                  <MarkdownContent text={typed} />
+                  <span className="inline-block w-0.5 h-3.5 bg-gray-400 ml-0.5 animate-pulse align-middle" />
+                </div>
+              </div>
+            )}
+
+            {/* Loading dots */}
             {loading && (
               <div className="flex justify-start">
                 <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
@@ -199,12 +286,12 @@ export function FloatingChat({ filters }: FloatingChatProps) {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Tanya tentang KPI atau pola data..."
-              disabled={loading}
+              disabled={loading || streaming}
               className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 placeholder:text-gray-400 disabled:opacity-50 transition-all"
             />
             <button
               onClick={() => sendMessage(input)}
-              disabled={!input.trim() || loading}
+              disabled={!input.trim() || loading || streaming}
               className="shrink-0 w-9 h-9 bg-brand-800 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl flex items-center justify-center transition-colors"
             >
               {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
@@ -216,7 +303,7 @@ export function FloatingChat({ filters }: FloatingChatProps) {
       {/* FAB */}
       <button
         onClick={() => setOpen(!open)}
-        className="group w-12 h-12 bg-brand-800 hover:bg-brand-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center"
+        className="group relative w-12 h-12 bg-brand-800 hover:bg-brand-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center"
       >
         {open ? <X size={18} /> : <MessageSquare size={18} />}
         {!open && (
