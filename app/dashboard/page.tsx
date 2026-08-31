@@ -17,7 +17,6 @@ import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { formatThousands, cn } from "@/lib/utils";
 import { computeAlerts, type KPIAlert } from "@/lib/alerts";
 
-// Tipe respons dari API /api/dashboard/kpi yang memuat semua KPI manufaktur
 interface KPIResponse {
   leadTime: {
     grossDays: number;
@@ -54,7 +53,6 @@ interface KPIResponse {
   };
 }
 
-// Tipe filter aktif yang dikirim ke semua API endpoint dan komponen chart
 interface Filters {
   plant: string;
   startDate: string;
@@ -63,29 +61,46 @@ interface Filters {
   period: string;
 }
 
+// ── Section divider ────────────────────────────────────────────────────────────
+
+function SectionDivider({ label, accentColor = "#6366f1" }: { label: string; accentColor?: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-3">
+      <div className="h-px flex-1 bg-gray-100" />
+      <span
+        className="text-[10px] font-bold tracking-widest uppercase shrink-0"
+        style={{ color: accentColor, opacity: 0.7 }}
+      >
+        {label}
+      </span>
+      <div className="h-px flex-1 bg-gray-100" />
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { status } = useSession();
   const router = useRouter();
   const { t } = useI18n();
 
-  const [kpi, setKpi] = useState<KPIResponse | null>(null);
-  const [plants, setPlants] = useState<string[]>(["All Plant"]);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date>();
-  const [activeView, setActiveView] = useState<"strategic" | "tactical">("strategic");
-  const [alerts, setAlerts] = useState<KPIAlert[]>([]);
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [kpi,           setKpi]           = useState<KPIResponse | null>(null);
+  const [plants,        setPlants]        = useState<string[]>(["All Plant"]);
+  const [loading,       setLoading]       = useState(true);
+  const [lastUpdated,   setLastUpdated]   = useState<Date>();
+  const [activeView,    setActiveView]    = useState<"strategic" | "tactical">("strategic");
+  const [alerts,        setAlerts]        = useState<KPIAlert[]>([]);
+  const [dismissedIds,  setDismissedIds]  = useState<Set<string>>(new Set());
   const [alertPanelOpen, setAlertPanelOpen] = useState(false);
-  const [leadTimeUnit, setLeadTimeUnit] = useState<"days" | "hours">("days");
-  const [leadTimeType, setLeadTimeType] = useState<"gross" | "nett">("gross");
-  const [kpiType, setKpiType] = useState("leadtime");
+  const [leadTimeUnit,  setLeadTimeUnit]  = useState<"days" | "hours">("days");
+  const [leadTimeType,  setLeadTimeType]  = useState<"gross" | "nett">("gross");
+  const [kpiType,       setKpiType]       = useState("leadtime");
   const [filters, setFilters] = useState<Filters>(() => {
     const defaults: Filters = {
-      plant: "All Plant",
+      plant:     "All Plant",
       startDate: `${new Date().getFullYear()}-01-01`,
-      endDate: new Date().toISOString().split("T")[0],
+      endDate:   new Date().toISOString().split("T")[0],
       dataLevel: "Daily",
-      period: "YTD",
+      period:    "YTD",
     };
     try {
       const stored = localStorage.getItem("ct-filters");
@@ -95,46 +110,36 @@ export default function DashboardPage() {
   const [undoId, setUndoId] = useState<string | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Redirect ke halaman login jika session belum terautentikasi
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
 
-  // Ambil daftar plant dari API saat pertama kali halaman dimuat
   useEffect(() => {
     fetch("/api/dashboard/plants")
       .then((r) => r.json())
       .then((d) => setPlants(d.plants ?? ["All Plant"]));
   }, []);
 
-  // Fetch semua data KPI dari API lalu hitung alert berdasarkan threshold yang sudah ditentukan
   const fetchData = useCallback(async (f: Filters) => {
     setLoading(true);
-    setKpi(null); // clear before await so React renders loading state before new data arrives
+    setKpi(null);
     const params = new URLSearchParams({
-      plant: f.plant,
+      plant:     f.plant,
       startDate: f.startDate,
-      endDate: f.endDate,
-      period: f.period,
+      endDate:   f.endDate,
+      period:    f.period,
     });
-
     try {
       const [kpiRes] = await Promise.all([
         fetch(`/api/dashboard/kpi?${params}`).then((r) => r.json()),
       ]);
       setKpi(kpiRes);
       setLastUpdated(new Date());
-
       const newAlerts = computeAlerts({
-        leadTime: { value: kpiRes.leadTime?.grossDays ?? 0, trend: kpiRes.leadTime?.grossTrend ?? null },
-        yield: {
-          bulkLossPct: kpiRes.yield?.bulkLossPct ?? 0,
-          packLossPct: kpiRes.yield?.packLossPct ?? 0,
-          bulkLossTrend: kpiRes.yield?.bulkLossTrend ?? null,
-          packLossTrend: kpiRes.yield?.packLossTrend ?? null,
-        },
+        leadTime:     { value: kpiRes.leadTime?.grossDays ?? 0, trend: kpiRes.leadTime?.grossTrend ?? null },
+        yield:        { bulkLossPct: kpiRes.yield?.bulkLossPct ?? 0, packLossPct: kpiRes.yield?.packLossPct ?? 0, bulkLossTrend: kpiRes.yield?.bulkLossTrend ?? null, packLossTrend: kpiRes.yield?.packLossTrend ?? null },
         rightFirstTime: { value: kpiRes.rightFirstTime?.value ?? 100, trend: kpiRes.rightFirstTime?.trend ?? null },
-        oee: { value: kpiRes.oee?.value ?? 100, trend: kpiRes.oee?.trend ?? null },
+        oee:          { value: kpiRes.oee?.value ?? 100, trend: kpiRes.oee?.trend ?? null },
       });
       setAlerts(newAlerts);
     } catch (err) {
@@ -144,19 +149,16 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // Jalankan fetchData pertama kali setelah session authenticated
   useEffect(() => {
     if (status === "authenticated") fetchData(filters);
   }, [status, fetchData, filters]);
 
-  // Simpan filter baru ke state, localStorage, lalu trigger fetch ulang
   const handleFilterChange = (newFilters: Filters) => {
     setFilters(newFilters);
     try { localStorage.setItem("ct-filters", JSON.stringify(newFilters)); } catch { /* ignore */ }
     fetchData(newFilters);
   };
 
-  // Tambah ID alert yang di-dismiss ke set, tampilkan opsi undo selama 5 detik
   const handleDismissAlert = (id: string) => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     setDismissedIds((prev) => new Set(Array.from(prev).concat(id)));
@@ -171,36 +173,27 @@ export default function DashboardPage() {
     setUndoId(null);
   };
 
-  // Filter alert aktif yang belum di-dismiss oleh user
   const visibleAlerts = alerts.filter((a) => !dismissedIds.has(a.id));
 
+  const leadTimeRawDays   = leadTimeType === "gross" ? (kpi?.leadTime?.grossDays ?? 0) : (kpi?.leadTime?.nettDays ?? 0);
+  const leadTimeRawTrend  = leadTimeType === "gross" ? kpi?.leadTime?.grossTrend : kpi?.leadTime?.nettTrend;
+  const leadTimeTrendInverted  = leadTimeRawTrend  != null ? -leadTimeRawTrend  : undefined;
+  const bulkLossTrendInverted  = kpi?.yield?.bulkLossTrend  != null ? -kpi.yield.bulkLossTrend  : undefined;
+  const packLossTrendInverted  = kpi?.yield?.packLossTrend  != null ? -kpi.yield.packLossTrend  : undefined;
 
-  // Nilai dan tren Lead Time sesuai mode gross/nett yang dipilih user
-  const leadTimeRawDays = leadTimeType === "gross"
-    ? (kpi?.leadTime?.grossDays ?? 0)
-    : (kpi?.leadTime?.nettDays ?? 0);
-  const leadTimeRawTrend = leadTimeType === "gross"
-    ? kpi?.leadTime?.grossTrend
-    : kpi?.leadTime?.nettTrend;
-  // Tren dibalik tanda karena LT turun = bagus (warna hijau), sedangkan badge positif = naik
-  const leadTimeTrendInverted = leadTimeRawTrend != null ? -leadTimeRawTrend : undefined;
-  const bulkLossTrendInverted = kpi?.yield?.bulkLossTrend != null ? -kpi.yield.bulkLossTrend : undefined;
-  const packLossTrendInverted = kpi?.yield?.packLossTrend != null ? -kpi.yield.packLossTrend : undefined;
-
-  // OPE dihitung sebagai estimasi dari OEE × 0.8 karena belum ada kolom langsung di Snowflake
-  const rftValue = kpi?.rightFirstTime?.value ?? 0;
-  const opeValue = kpi ? (kpi.oee?.value ?? 0) * 0.8 : null;
+  const rftValue  = kpi?.rightFirstTime?.value ?? 0;
+  const opeValue  = kpi ? (kpi.oee?.value ?? 0) * 0.8 : null;
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f7ff]">
-        <div className="w-8 h-8 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#f0eff8]">
+        <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f8f7ff]">
+    <div className="flex min-h-screen bg-[#f0eff8]">
       <Sidebar />
 
       <div className="flex flex-col flex-1 min-w-0">
@@ -216,33 +209,26 @@ export default function DashboardPage() {
           onBellClick={() => setAlertPanelOpen(!alertPanelOpen)}
         />
 
-        <main className="flex-1 p-3 overflow-auto">
-          {/* AI Summary */}
+        <main className="flex-1 p-4 overflow-auto">
           <AISummary kpi={kpi} filters={filters} ready={!loading && kpi !== null} />
 
-          {/* Alerts */}
           {(alertPanelOpen || visibleAlerts.some((a) => a.severity === "critical")) && (
             <AlertPanel alerts={visibleAlerts} onDismiss={handleDismissAlert} />
           )}
 
-          {/* ── Section: Operation KPIs ─────────────────────────────────── */}
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-0.5 h-3 bg-brand-400 rounded-full shrink-0" />
-            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">{t("section_operation_kpis")}</h2>
-            <div className="flex-1 h-px bg-gray-100" />
-          </div>
+          {/* ── Operation KPIs ─────────────────────────────────────────── */}
+          <SectionDivider label={t("section_operation_kpis")} accentColor="#6366f1" />
 
-          {/* ── Row 1: 4 main KPI cards ─────────────────────────────────── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
             ) : (
               <>
-                {/* Lead Time — CT_MANUF_LEADTIME */}
+                {/* Lead Time */}
                 <KPICard
                   title={t("card_leadtime")}
-                  tooltip="Waktu dari PO dibuat hingga produk diterima NDC. Gross = total proses; Nett = waktu aktual produksi. Target: serendah mungkin."
-                  icon={<Clock size={17} />}
+                  tooltip="Waktu dari PO dibuat hingga produk diterima NDC. Gross = total proses; Nett = waktu aktual produksi."
+                  icon={<Clock size={16} />}
                   iconColor="#3b82f6"
                   value={
                     kpi
@@ -264,9 +250,9 @@ export default function DashboardPage() {
                           key={lt}
                           onClick={() => setLeadTimeType(lt)}
                           className={cn(
-                            "text-xs px-2 py-0.5 rounded-full transition-colors",
+                            "text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors",
                             leadTimeType === lt
-                              ? "bg-brand-600 text-white"
+                              ? "bg-blue-600 text-white"
                               : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                           )}
                         >
@@ -274,16 +260,16 @@ export default function DashboardPage() {
                         </button>
                       ))}
                     </div>
-                    <div className="w-px bg-gray-200 self-stretch" />
+                    <div className="w-px bg-gray-100 self-stretch" />
                     <div className="flex gap-1">
                       {(["days", "hours"] as const).map((u) => (
                         <button
                           key={u}
                           onClick={() => setLeadTimeUnit(u)}
                           className={cn(
-                            "text-xs px-2 py-0.5 rounded-full transition-colors",
+                            "text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors",
                             leadTimeUnit === u
-                              ? "bg-gray-700 text-white"
+                              ? "bg-slate-700 text-white"
                               : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                           )}
                         >
@@ -292,7 +278,6 @@ export default function DashboardPage() {
                       ))}
                     </div>
                   </div>
-                  {/* Position breakdown bar chart */}
                   {(() => {
                     const positions = leadTimeType === "gross"
                       ? (kpi?.leadTime?.byPositionGross ?? [])
@@ -303,19 +288,19 @@ export default function DashboardPage() {
                       leadTimeUnit === "days" ? (h / 24).toFixed(2) : h.toFixed(1);
                     const unitLabel = leadTimeUnit === "days" ? "d" : "h";
                     return (
-                      <div className="pt-1.5 border-t border-gray-100 space-y-1 max-h-20 overflow-y-auto">
+                      <div className="pt-2 border-t border-gray-100 space-y-1.5 max-h-20 overflow-y-auto">
                         {positions.map((p) => (
                           <div key={p.position} className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500 w-24 shrink-0 truncate" title={p.position}>
+                            <span className="text-[10px] text-gray-500 w-24 shrink-0 truncate tracking-tight" title={p.position}>
                               {p.position}
                             </span>
-                            <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                            <div className="flex-1 bg-gray-100 rounded-full h-1 overflow-hidden">
                               <div
-                                className="h-full bg-brand-400 rounded-full"
+                                className="h-full bg-blue-400 rounded-full"
                                 style={{ width: `${(p.avgHours / max) * 100}%` }}
                               />
                             </div>
-                            <span className="text-xs text-gray-400 w-10 text-right shrink-0">
+                            <span className="text-[10px] text-gray-400 w-10 text-right shrink-0 tabular-nums">
                               {toDisplay(p.avgHours)}{unitLabel}
                             </span>
                           </div>
@@ -325,25 +310,25 @@ export default function DashboardPage() {
                   })()}
                 </KPICard>
 
-                {/* Yield — CT_MANUF_KEMAS (pack) + DATAMART_PRODUCTION_OUTPUT_OLAH (bulk) */}
+                {/* Yield */}
                 <KPICard
                   title={t("card_yield")}
-                  tooltip="Persentase bahan baku yang hilang dalam proses produksi. Bulk Loss = kehilangan di proses olah; Pack Loss = proses kemas. Target: serendah mungkin."
-                  icon={<Droplets size={17} />}
+                  tooltip="Persentase bahan baku yang hilang dalam proses produksi. Bulk Loss = proses olah; Pack Loss = proses kemas."
+                  icon={<Droplets size={16} />}
                   iconColor="#f59e0b"
                   alert={visibleAlerts.some((a) => a.id.startsWith("bulkloss") || a.id.startsWith("packloss"))}
                 >
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <div className="flex items-baseline gap-1 mb-0.5">
-                        <span className="text-2xl font-bold text-slate-800 tracking-tight">
+                        <span className="text-2xl font-bold text-slate-900 tracking-tighter tabular-nums">
                           {kpi?.yield?.bulkLossPct?.toFixed(1) ?? "—"}
                         </span>
-                        <span className="text-xs text-gray-400">%</span>
+                        <span className="text-[11px] text-gray-400">%</span>
                       </div>
-                      <p className="text-xs text-gray-400">{t("yield_bulk_loss")}</p>
+                      <p className="text-[10px] text-gray-400">{t("yield_bulk_loss")}</p>
                       {bulkLossTrendInverted !== undefined && (
-                        <span className={`text-xs font-semibold ${bulkLossTrendInverted >= 0 ? "text-green-600" : "text-red-500"}`}>
+                        <span className={`text-[10px] font-semibold ${bulkLossTrendInverted >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                           {bulkLossTrendInverted >= 0 ? "↓" : "↑"} {Math.abs(bulkLossTrendInverted).toFixed(1)}%
                         </span>
                       )}
@@ -351,31 +336,31 @@ export default function DashboardPage() {
                     <div className="w-px bg-gray-100 self-stretch" />
                     <div className="flex-1">
                       <div className="flex items-baseline gap-1 mb-0.5">
-                        <span className="text-2xl font-bold text-slate-800 tracking-tight">
+                        <span className="text-2xl font-bold text-slate-900 tracking-tighter tabular-nums">
                           {kpi?.yield?.packLossPct?.toFixed(1) ?? "—"}
                         </span>
-                        <span className="text-xs text-gray-400">%</span>
+                        <span className="text-[11px] text-gray-400">%</span>
                       </div>
-                      <p className="text-xs text-gray-400">{t("yield_pack_loss")}</p>
+                      <p className="text-[10px] text-gray-400">{t("yield_pack_loss")}</p>
                       {packLossTrendInverted !== undefined && (
-                        <span className={`text-xs font-semibold ${packLossTrendInverted >= 0 ? "text-green-600" : "text-red-500"}`}>
+                        <span className={`text-[10px] font-semibold ${packLossTrendInverted >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                           {packLossTrendInverted >= 0 ? "↓" : "↑"} {Math.abs(packLossTrendInverted).toFixed(1)}%
                         </span>
                       )}
                     </div>
                   </div>
                   {kpi && (
-                    <p className="text-xs text-gray-400 pt-1 border-t border-gray-100">
+                    <p className="text-[10px] text-gray-400 pt-2 border-t border-gray-100">
                       ~{formatThousands(kpi.yield?.bulkLossKg ?? 0)} {t("yield_loss_volume")}
                     </p>
                   )}
                 </KPICard>
 
-                {/* Right First Time — CT_MANUF_LEADTIME: RELEASE_QTY / TARGET_QTY */}
+                {/* Right First Time */}
                 <KPICard
                   title={t("card_rft")}
                   tooltip="Persentase batch yang lulus QC tanpa rework atau rejection pada percobaan pertama. Target: ≥95%."
-                  icon={<ShieldCheck size={17} />}
+                  icon={<ShieldCheck size={16} />}
                   iconColor="#22c55e"
                   trend={kpi?.rightFirstTime?.trend ?? undefined}
                   trendLabel="vs periode sebelumnya"
@@ -388,48 +373,48 @@ export default function DashboardPage() {
                       ariaLabel={`Right First Time: ${rftValue.toFixed(1)}% dari target 95%`}
                     />
                     <div>
-                      <p className="text-xs text-gray-500 leading-snug">{t("rft_passed_rate")}</p>
+                      <p className="text-[11px] text-gray-500 leading-snug">{t("rft_passed_rate")}</p>
                       {rftValue >= 95 ? (
-                        <p className="text-xs text-green-600 font-semibold mt-1">{t("rft_meets")}</p>
+                        <p className="text-[11px] text-emerald-600 font-semibold mt-1">{t("rft_meets")}</p>
                       ) : rftValue > 0 ? (
-                        <p className="text-xs text-amber-600 font-semibold mt-1">{t("rft_below")}</p>
+                        <p className="text-[11px] text-amber-600 font-semibold mt-1">{t("rft_below")}</p>
                       ) : null}
                     </div>
                   </div>
                 </KPICard>
 
-                {/* Output — DATAMART_PRODUCTION_OUTPUT_OLAH + DATAMART_PRODUCTION_OUTPUT_FG */}
+                {/* Output */}
                 <KPICard
                   title={t("card_output")}
-                  tooltip="Jumlah produk yang berhasil diproduksi dalam periode ini. Finished Goods (FG) = produk jadi dalam pcs; Bulk = produk setengah jadi."
-                  icon={<Package size={17} />}
+                  tooltip="Jumlah produk yang berhasil diproduksi dalam periode ini. FG = produk jadi (pcs); Bulk = produk setengah jadi."
+                  icon={<Package size={16} />}
                   iconColor="#6366f1"
                 >
                   <div className="space-y-3">
                     <div>
                       <div className="flex items-baseline justify-between gap-2">
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-bold text-slate-800 tracking-tight">
+                          <span className="text-2xl font-bold text-slate-900 tracking-tighter tabular-nums">
                             {kpi ? formatThousands(kpi.output?.fgQty ?? 0) : "—"}
                           </span>
-                          <span className="text-xs text-gray-400 font-medium">pcs</span>
+                          <span className="text-[11px] text-gray-400 font-medium">pcs</span>
                         </div>
                         {kpi?.output?.fgTrend != null && <TrendBadge trend={kpi.output.fgTrend} />}
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{t("output_fg")}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{t("output_fg")}</p>
                     </div>
                     <div className="h-px bg-gray-100" />
                     <div>
                       <div className="flex items-baseline justify-between gap-2">
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-bold text-slate-800 tracking-tight">
+                          <span className="text-2xl font-bold text-slate-900 tracking-tighter tabular-nums">
                             {kpi ? formatThousands(kpi.output?.bulkQty ?? 0) : "—"}
                           </span>
-                          <span className="text-xs text-gray-400 font-medium">kg</span>
+                          <span className="text-[11px] text-gray-400 font-medium">kg</span>
                         </div>
                         {kpi?.output?.bulkTrend != null && <TrendBadge trend={kpi.output.bulkTrend} />}
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{t("output_bulk")}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">{t("output_bulk")}</p>
                     </div>
                   </div>
                 </KPICard>
@@ -437,24 +422,19 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* ── Section: Equipment & People ──────────────────────────── */}
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-0.5 h-3 bg-purple-400 rounded-full shrink-0" />
-            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">{t("section_equipment_people")}</h2>
-            <div className="flex-1 h-px bg-gray-100" />
-          </div>
+          {/* ── Equipment & People ──────────────────────────────────────── */}
+          <SectionDivider label={t("section_equipment_people")} accentColor="#8b5cf6" />
 
-          {/* ── Row 2: 3 operational KPI cards ──────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 mb-2">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-5">
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
             ) : (
               <>
-                {/* OEE — CT_MANUF_KEMAS: Quality × Performance per plant */}
+                {/* OEE */}
                 <KPICard
                   title={t("card_oee")}
                   tooltip="Overall Equipment Effectiveness: efisiensi penggunaan mesin (Performance × Quality). Target: ≥65%."
-                  icon={<Gauge size={17} />}
+                  icon={<Gauge size={16} />}
                   iconColor="#8b5cf6"
                   value={kpi?.oee?.value?.toFixed(1) ?? "—"}
                   unit="%"
@@ -469,8 +449,8 @@ export default function DashboardPage() {
                 >
                   {kpi && (
                     <>
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs">
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-[11px]">
                           <span className="text-gray-400">{t("oee_vs_target")} 65.0%</span>
                           {(kpi.oee?.value ?? 100) < 65 && (
                             <span className="text-red-500 font-semibold">{t("oee_gap")} {(65 - kpi.oee.value).toFixed(1)} {t("oee_pts")}</span>
@@ -478,30 +458,30 @@ export default function DashboardPage() {
                         </div>
                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div
-                            className={(kpi.oee?.value ?? 0) >= 65 ? "h-full bg-green-400 rounded-full transition-all" : "h-full bg-red-400 rounded-full transition-all"}
+                            className={(kpi.oee?.value ?? 0) >= 65 ? "h-full bg-emerald-400 rounded-full transition-all" : "h-full bg-red-400 rounded-full transition-all"}
                             style={{ width: `${Math.min(((kpi.oee?.value ?? 0) / 65) * 100, 100)}%` }}
                           />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-2 border-t border-gray-100">
+                      <div className="grid grid-cols-2 gap-x-3 pt-2 border-t border-gray-100">
                         <div>
-                          <p className="text-xs text-gray-400">{t("oee_performance")}</p>
-                          <p className="text-sm font-bold text-slate-700">{kpi.oee.performance.toFixed(1)}<span className="text-xs font-normal text-gray-400 ml-0.5">%</span></p>
+                          <p className="text-[10px] text-gray-400">{t("oee_performance")}</p>
+                          <p className="text-sm font-bold text-slate-700 tabular-nums">{kpi.oee.performance.toFixed(1)}<span className="text-[10px] font-normal text-gray-400 ml-0.5">%</span></p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-400">{t("oee_quality")}</p>
-                          <p className="text-sm font-bold text-slate-700">{kpi.oee.quality.toFixed(1)}<span className="text-xs font-normal text-gray-400 ml-0.5">%</span></p>
+                          <p className="text-[10px] text-gray-400">{t("oee_quality")}</p>
+                          <p className="text-sm font-bold text-slate-700 tabular-nums">{kpi.oee.quality.toFixed(1)}<span className="text-[10px] font-normal text-gray-400 ml-0.5">%</span></p>
                         </div>
                       </div>
                     </>
                   )}
                 </KPICard>
 
-                {/* OPE — derived: OEE × 0.8 (no direct Snowflake column yet) */}
+                {/* OPE */}
                 <KPICard
                   title={t("card_ope")}
-                  tooltip="Overall Plant Effectiveness: estimasi performa seluruh pabrik, dihitung sebagai OEE × 0.8. Belum ada kolom langsung di Snowflake."
-                  icon={<Activity size={17} />}
+                  tooltip="Overall Plant Effectiveness: estimasi performa seluruh pabrik, dihitung sebagai OEE × 0.8."
+                  icon={<Activity size={16} />}
                   iconColor="#06b6d4"
                   value={opeValue !== null ? opeValue.toFixed(1) : "—"}
                   unit="%"
@@ -512,8 +492,8 @@ export default function DashboardPage() {
                   sparklineColor={(opeValue ?? 100) < 60 ? "#f59e0b" : "#22c55e"}
                 >
                   {kpi && opeValue !== null && (
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[11px]">
                         <span className="text-gray-400">{t("oee_vs_target")} 60.0%</span>
                         {opeValue < 60 && (
                           <span className="text-amber-500 font-semibold">{t("oee_gap")} {(60 - opeValue).toFixed(1)} {t("oee_pts")}</span>
@@ -521,7 +501,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                         <div
-                          className={opeValue >= 60 ? "h-full bg-green-400 rounded-full transition-all" : "h-full bg-amber-400 rounded-full transition-all"}
+                          className={opeValue >= 60 ? "h-full bg-emerald-400 rounded-full transition-all" : "h-full bg-amber-400 rounded-full transition-all"}
                           style={{ width: `${Math.min((opeValue / 60) * 100, 100)}%` }}
                         />
                       </div>
@@ -529,14 +509,14 @@ export default function DashboardPage() {
                   )}
                 </KPICard>
 
-                {/* Productivity — CT_MANUF_E2E (e2e), CT_MANUF_OLAH (upstream), CT_MANUF_KEMAS (downstream) */}
+                {/* Productivity */}
                 <KPICard
                   title={t("card_productivity")}
                   tooltip="Efisiensi tenaga kerja. E2E = pcs/manhour keseluruhan; Upstream = kg/manhour proses olah; Downstream = pcs/manhour proses kemas."
-                  icon={<Users size={17} />}
+                  icon={<Users size={16} />}
                   iconColor="#10b981"
                   value={kpi?.productivity?.e2e?.toFixed(1) ?? "—"}
-                  unit="pcs/manhour"
+                  unit="pcs/mh"
                   subtitle={t("prod_subtitle")}
                   trend={kpi?.productivity?.e2eTrend ?? undefined}
                   trendLabel={t("lt_vs_prev")}
@@ -544,50 +524,29 @@ export default function DashboardPage() {
                   sparklineColor="#10b981"
                 >
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-2 border-t border-gray-100">
-                    <MiniStat
-                      label={t("prod_upstream")}
-                      value={kpi ? formatThousands(kpi.productivity?.upstream ?? 0) : "—"}
-                      unit=" kg/mh"
-                    />
-                    <MiniStat
-                      label={t("prod_downstream")}
-                      value={kpi?.productivity?.downstream?.toFixed(1) ?? "—"}
-                      unit=" pcs/mh"
-                    />
-                    <MiniStat
-                      label={t("prod_manhours")}
-                      value={kpi ? formatThousands(Math.round(kpi.productivity?.manhours ?? 0)) : "—"}
-                      unit=" mh"
-                    />
-                    <MiniStat
-                      label={t("prod_avg_operator")}
-                      value={kpi?.productivity?.avgOperators ?? "—"}
-                      unit=" opr"
-                    />
+                    <MiniStat label={t("prod_upstream")}    value={kpi ? formatThousands(kpi.productivity?.upstream ?? 0) : "—"} unit=" kg/mh"  />
+                    <MiniStat label={t("prod_downstream")}  value={kpi?.productivity?.downstream?.toFixed(1) ?? "—"} unit=" pcs/mh" />
+                    <MiniStat label={t("prod_manhours")}    value={kpi ? formatThousands(Math.round(kpi.productivity?.manhours ?? 0)) : "—"} unit=" mh" />
+                    <MiniStat label={t("prod_avg_operator")} value={kpi?.productivity?.avgOperators ?? "—"} unit=" opr" />
                   </div>
                 </KPICard>
               </>
             )}
           </div>
 
-          {/* ── Section: Trend & Benchmark ──────────────────────────────── */}
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-0.5 h-3 bg-blue-400 rounded-full shrink-0" />
-            <h2 className="text-xs font-semibold text-gray-400 tracking-widest uppercase">{t("section_trend_benchmark")}</h2>
-            <div className="flex-1 h-px bg-gray-100" />
-          </div>
+          {/* ── Trend & Benchmark ────────────────────────────────────────── */}
+          <SectionDivider label={t("section_trend_benchmark")} accentColor="#3b82f6" />
 
-          {/* ── Charts ─────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {loading ? (
               <>
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-64 animate-pulse">
-                  <div className="h-4 bg-gray-100 rounded w-1/3 mb-4" />
-                  <div className="h-48 bg-gray-50 rounded" />
+                <div className="bg-white rounded-2xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] border border-gray-100/80 h-72 animate-pulse">
+                  <div className="h-3.5 bg-gray-100 rounded-full w-1/3 mb-4" />
+                  <div className="h-56 bg-gray-50 rounded-xl" />
                 </div>
-                <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-64 animate-pulse">
-                  <div className="h-4 bg-gray-100 rounded w-1/3 mb-4" />
-                  <div className="h-48 bg-gray-50 rounded" />
+                <div className="bg-white rounded-2xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] border border-gray-100/80 h-72 animate-pulse">
+                  <div className="h-3.5 bg-gray-100 rounded-full w-1/3 mb-4" />
+                  <div className="h-56 bg-gray-50 rounded-xl" />
                 </div>
               </>
             ) : (
@@ -602,11 +561,10 @@ export default function DashboardPage() {
 
       <FloatingChat filters={filters} />
 
-      {/* Undo toast setelah dismiss alert */}
       {undoId && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1e293b] text-slate-100 text-[12px] px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-200">
           <span>{t("alert_dismissed")}</span>
-          <button onClick={handleUndoDismiss} className="text-brand-300 font-semibold hover:text-brand-200 transition-colors">
+          <button onClick={handleUndoDismiss} className="text-indigo-300 font-semibold hover:text-indigo-200 transition-colors">
             {t("alert_undo")}
           </button>
         </div>

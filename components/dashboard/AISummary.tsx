@@ -20,6 +20,7 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
   const [summary,  setSummary]  = useState("");
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
   // Kirim KPI dan filter ke API lalu baca respons streaming chunk per chunk
@@ -34,6 +35,7 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
     setLoading(true);
     setSummary("");
     setError(false);
+    setErrorMsg("");
 
     try {
       const res = await fetch("/api/dashboard/summary", {
@@ -43,7 +45,13 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
         signal: controller.signal,
       });
 
-      if (!res.ok || !res.body) throw new Error("Failed");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        const detail = body?.error ?? `HTTP ${res.status}`;
+        setErrorMsg(detail);
+        throw new Error(detail);
+      }
+      if (!res.body) throw new Error("No response body");
 
       // Baca stream respons dan gabungkan teks per chunk ke state summary
       const reader = res.body.getReader();
@@ -90,11 +98,10 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
               {loading && <span className="inline-block w-0.5 h-3 bg-blue-300 ml-0.5 animate-pulse align-middle" />}
             </p>
           )}
-          {/* Pesan error kalau fetch ke API summary gagal */}
           {error && (
             <div className="flex items-center gap-1.5 text-[11px] text-red-300">
               <AlertCircle size={11} />
-              <span>Gagal memuat. Pastikan ANTHROPIC_API_KEY sudah dikonfigurasi.</span>
+              <span>{errorMsg || "Gagal memuat ringkasan AI"}</span>
             </div>
           )}
         </div>

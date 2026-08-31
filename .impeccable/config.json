@@ -18,6 +18,66 @@
         "value": "#cbd5e1",
         "createdAt": "2026-08-05T07:08:37.773Z",
         "reason": "Scrollbar thumb chrome color, not a design token"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f3f4f6",
+        "createdAt": "2026-08-31T04:49:06.409Z",
+        "reason": "Nivo theme object requires literal hex for grid line color; Tailwind classes cannot be used in JS chart theme configs"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#94a3b8",
+        "createdAt": "2026-08-31T04:49:06.752Z",
+        "reason": "Nivo mean reference line marker; literal hex required by Nivo marker API"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "13px",
+        "createdAt": "2026-08-31T04:49:07.101Z",
+        "reason": "Intentional dense chart UI font size; also used in Nivo tooltip inline styles where Tailwind is inapplicable"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "10px",
+        "createdAt": "2026-08-31T04:49:07.409Z",
+        "reason": "Intentional compact badge/label font size; also used in Nivo theme and tooltip inline styles"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#1e293b",
+        "createdAt": "2026-08-31T04:49:41.663Z",
+        "reason": "Nivo tooltip background / dark tooltip system; inline style required by render prop API"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#64748b",
+        "createdAt": "2026-08-31T04:49:41.993Z",
+        "reason": "Nivo tooltip date label color; inline style in tooltip render prop"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f1f5f9",
+        "createdAt": "2026-08-31T04:49:42.322Z",
+        "reason": "Nivo tooltip light text; inline style in tooltip render prop"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#475569",
+        "createdAt": "2026-08-31T04:49:42.633Z",
+        "reason": "Nivo tooltip muted text; inline style in tooltip render prop"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f87171",
+        "createdAt": "2026-08-31T04:49:42.933Z",
+        "reason": "Nivo tooltip UCL/LCL highlight (red-400); inline style in tooltip render prop"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "11px",
+        "createdAt": "2026-08-31T04:49:43.235Z",
+        "reason": "Intentional compact status-row font size for dense dashboard data tables"
       }
     ]
   }

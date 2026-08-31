@@ -1,19 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useI18n } from "@/lib/i18n";
-import {
-  ComposedChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  ReferenceLine,
-  ReferenceArea,
-} from "recharts";
+import { ResponsiveLine } from "@nivo/line";
 import { format, parseISO } from "date-fns";
 import {
   PLANT_COLORS,
@@ -22,7 +11,6 @@ import {
   computePerPlantLimits,
 } from "@/lib/chartConfig";
 
-// Tipe props untuk filter yang diterima dari parent
 interface Filters {
   plant: string;
   startDate: string;
@@ -43,15 +31,31 @@ const KPI_TAB_LABELS: Record<string, string> = {
   output:     "chart_tab_output",
 };
 
+const nivoTheme = {
+  background: "transparent",
+  axis: {
+    ticks: {
+      line: { strokeWidth: 0 },
+      text: { fill: "#9ca3af", fontSize: 10, fontFamily: "inherit" },
+    },
+    domain: { line: { strokeWidth: 0 } },
+  },
+  grid: {
+    line: { stroke: "#f3f4f6", strokeWidth: 1 },
+  },
+  crosshair: {
+    line: { stroke: "#6366f1", strokeWidth: 1, strokeOpacity: 0.3 },
+  },
+};
+
 export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
-  const [data,    setData]      = useState<Record<string, unknown>[]>([]);
-  const [plants,  setPlants]    = useState<string[]>([]);
-  const [loading, setLoading]   = useState(false);
+  const [data,    setData]    = useState<Record<string, unknown>[]>([]);
+  const [plants,  setPlants]  = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
   const { t } = useI18n();
 
   const selectedKpi = KPI_OPTIONS.find((o) => o.value === kpiType)!;
 
-  // Ambil data trend dari API tiap filter atau jenis KPI berubah
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams({
@@ -70,8 +74,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
       .finally(() => setLoading(false));
   }, [filters.plant, filters.startDate, filters.endDate, kpiType]);
 
-  // Hitung batas kontrol global untuk garis referensi di chart
-  const { mean, stdev, ucl, lcl } = useMemo(
+  const { mean, ucl, lcl } = useMemo(
     () => computeControlLimits(data, plants),
     [data, plants]
   );
@@ -81,115 +84,194 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
     [data, plants]
   );
 
-  // Parse string tanggal ke objek Date, coba format ISO dulu lalu fallback ke native
   const parseAnyDate = (s: string): Date => {
-    // try ISO "YYYY-MM-DD" first, then fall back to native Date constructor
     const iso = parseISO(s);
     if (!isNaN(iso.getTime())) return iso;
     return new Date(s);
   };
 
-  // Format label tanggal di sumbu X menjadi "d MMM"
-  const formatTick = (s: string) => {
+  const formatTick = useCallback((s: string) => {
     try {
       const d = parseAnyDate(s);
       return isNaN(d.getTime()) ? s : format(d, "d MMM");
     } catch { return s; }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Transform flat data to Nivo Line series format
+  const nivoData = useMemo(
+    () =>
+      plants.map((plant, i) => ({
+        id: plant,
+        color: PLANT_COLORS[i % PLANT_COLORS.length],
+        data: data
+          .filter((pt) => typeof pt[plant] === "number" && !isNaN(pt[plant] as number))
+          .map((pt) => ({ x: pt.date as string, y: pt[plant] as number })),
+      })),
+    [data, plants]
+  );
+
+  // Reference lines for UCL / Mean / LCL
+  const markers = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const m: any[] = [];
+    if (ucl > 0) m.push({
+      axis: "y", value: ucl,
+      lineStyle: { stroke: "#ef4444", strokeDasharray: "5 3", strokeWidth: 1.5 },
+      legend: `UCL ${ucl.toFixed(1)}`,
+      legendOffsetX: -8, legendOffsetY: -8,
+      textStyle: { fill: "#ef4444", fontSize: 9, fontFamily: "inherit", fontWeight: 600 },
+    });
+    if (mean > 0) m.push({
+      axis: "y", value: mean,
+      lineStyle: { stroke: "#94a3b8", strokeDasharray: "4 2", strokeWidth: 1.5 },
+      legend: `Mean ${mean.toFixed(1)}`,
+      legendOffsetX: -8, legendOffsetY: -8,
+      textStyle: { fill: "#94a3b8", fontSize: 9, fontFamily: "inherit" },
+    });
+    if (lcl > 0) m.push({
+      axis: "y", value: lcl,
+      lineStyle: { stroke: "#ef4444", strokeDasharray: "5 3", strokeWidth: 1.5 },
+      legend: `LCL ${lcl.toFixed(1)}`,
+      legendOffsetX: -8, legendOffsetY: 12,
+      textStyle: { fill: "#ef4444", fontSize: 9, fontFamily: "inherit", fontWeight: 600 },
+    });
+    return m;
+  }, [ucl, mean, lcl]);
+
+  // Custom SVG layer that fills the control zone between LCL and UCL
+  const ControlZoneLayer = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (props: any) => {
+      if (!props.yScale || ucl <= 0) return null;
+      const y1  = props.yScale(ucl);
+      const y2  = props.yScale(Math.max(lcl, 0));
+      const top = Math.min(y1, y2);
+      const h   = Math.max(Math.abs(y2 - y1), 0);
+      return <rect x={0} y={top} width={props.innerWidth} height={h} fill="#eef2ff" opacity={0.55} />;
+    },
+    [ucl, lcl]
+  );
+
+  const isEmpty = nivoData.length === 0 || nivoData.every((s) => s.data.length === 0);
 
   return (
-    <div className="bg-white rounded-xl pt-3 px-3 pb-0 shadow-sm border border-gray-200">
-      {/* Judul chart, badge KPI aktif, dan spinner loading */}
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-1.5">
-          <h3 className="text-sm font-bold text-gray-800">{t("chart_metric_trend")}</h3>
+    <div className="bg-white rounded-2xl pt-4 px-4 pb-2 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] border border-gray-100/80">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-[13px] font-bold text-slate-800 tracking-tight">{t("chart_metric_trend")}</h3>
           {loading && (
-            <span className="w-3 h-3 border border-brand-400 border-t-transparent rounded-full animate-spin inline-block" />
+            <span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin inline-block" />
           )}
         </div>
-        <span className="text-xs bg-brand-50 text-brand-600 px-2.5 py-0.5 rounded-full font-medium border border-brand-100">
-          {selectedKpi.label} ({selectedKpi.unit})
+        <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
+          {selectedKpi.label} · {selectedKpi.unit}
         </span>
       </div>
 
-      {/* Tombol pilih KPI dan legend plant dalam satu baris */}
-      <div className="flex items-center justify-between gap-2 mb-1.5">
+      {/* KPI tabs + plant legend */}
+      <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex flex-wrap gap-1">
           {KPI_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => onKpiChange(opt.value)}
-              className={`text-xs px-2 py-0.5 rounded-full transition-colors ${
+              className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
                 kpiType === opt.value
-                  ? "bg-brand-600 text-white"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  ? "bg-indigo-600 text-white"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
               }`}
             >
               {KPI_TAB_LABELS[opt.value] ? t(KPI_TAB_LABELS[opt.value] as Parameters<typeof t>[0]) : opt.label}
             </button>
           ))}
         </div>
-
-        {/* Legend plant di atas chart — muncul setelah data dimuat */}
         {plants.length > 0 && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0">
             {plants.map((plant, i) => (
-              <div key={plant} className="flex items-center gap-1">
+              <div key={plant} className="flex items-center gap-1.5">
                 <span
-                  className="w-5 h-0.5 rounded-full shrink-0"
+                  className="w-4 h-0.5 rounded-full shrink-0"
                   style={{ backgroundColor: PLANT_COLORS[i % PLANT_COLORS.length] }}
                 />
-                <span className="text-[10px] font-medium text-gray-500">{plant}</span>
+                <span className="text-[10px] font-medium text-gray-400 tracking-tight">{plant}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Render chart garis tren per plant dengan batas kontrol UCL/LCL */}
-      <ResponsiveContainer width="100%" height={210}>
-        <ComposedChart data={data as Record<string, string | number>[]} margin={{ top: 0, right: 14, left: -12, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis
-            dataKey="date"
-            tickFormatter={formatTick}
-            tick={{ fontSize: 12, fill: "#6b7280" }}
-            axisLine={false}
-            tickLine={false}
-            interval="preserveStartEnd"
-            height={20}
-          />
-          <YAxis
-            tick={{ fontSize: 12, fill: "#6b7280" }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => Number(v).toFixed(1)}
-            domain={["auto", (dataMax: number) => Math.ceil(dataMax * 1.05)]}
-          />
-          {/* Tooltip kustom yang tampilkan nilai dan batas kontrol tiap plant */}
-          <Tooltip
-            content={({ active, payload, label }) => {
-              if (!active || !payload?.length) return null;
+      {/* Chart */}
+      <div style={{ height: 210 }}>
+        {isEmpty ? (
+          <div className="h-full flex items-center justify-center text-[11px] text-gray-300">No data available</div>
+        ) : (
+          <ResponsiveLine
+            data={nivoData}
+            theme={nivoTheme}
+            margin={{ top: 8, right: 20, bottom: 28, left: 40 }}
+            xScale={{ type: "point" }}
+            yScale={{ type: "linear", min: "auto", max: "auto", stacked: false }}
+            curve="monotoneX"
+            axisBottom={{
+              format: (v) => formatTick(String(v)),
+              tickSize: 0,
+              tickPadding: 10,
+            }}
+            axisLeft={{
+              tickSize: 0,
+              tickPadding: 8,
+              tickValues: 5,
+              format: (v) => Number(v).toFixed(1),
+            }}
+            gridYValues={5}
+            enablePoints={false}
+            enableSlices="x"
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            colors={(serie: any) => String(serie.color)}
+            lineWidth={2.5}
+            markers={markers}
+            layers={["grid", "axes", ControlZoneLayer, "lines", "crosshair", "slices", "points", "mesh"]}
+            sliceTooltip={({ slice }) => {
               const dateLabel = (() => {
                 try {
-                  const d = parseAnyDate(String(label));
-                  return isNaN(d.getTime()) ? String(label) : format(d, "dd MMM yyyy");
-                } catch { return String(label); }
+                  const d = parseAnyDate(String(slice.points[0].data.x));
+                  return isNaN(d.getTime()) ? String(slice.points[0].data.x) : format(d, "dd MMM yyyy");
+                } catch { return String(slice.points[0].data.x); }
               })();
               return (
-                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px", fontSize: 11, minWidth: 190 }}>
-                  <p style={{ fontWeight: 600, marginBottom: 6, color: "#374151" }}>{dateLabel}</p>
-                  {payload.map((entry) => {
-                    const pname = String(entry.name);
-                    const lim = perPlantLimits[pname];
+                <div style={{
+                  background: "#1e293b",
+                  borderRadius: 10,
+                  padding: "9px 13px",
+                  fontSize: 11,
+                  minWidth: 190,
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
+                  fontFamily: "inherit",
+                }}>
+                  <p style={{ fontWeight: 500, marginBottom: 7, color: "#64748b", fontSize: 10, letterSpacing: "0.02em" }}>
+                    {dateLabel}
+                  </p>
+                  {slice.points.map((point) => {
+                    const plant = String(point.seriesId);
+                    const lim   = perPlantLimits[plant];
                     return (
-                      <div key={pname} style={{ marginBottom: 6 }}>
-                        <p style={{ color: String(entry.color), margin: 0, fontWeight: 600 }}>
-                          {pname}: {Number(entry.value).toFixed(2)} {selectedKpi.unit}
+                      <div key={point.id} style={{ marginBottom: 6 }}>
+                        <p style={{ color: String(point.seriesColor), margin: 0, fontWeight: 700 }}>
+                          {plant}
+                          <span style={{ color: "#f1f5f9", fontWeight: 400, marginLeft: 6 }}>
+                            {Number(point.data.y).toFixed(2)}
+                          </span>
+                          <span style={{ color: "#475569", fontWeight: 400, marginLeft: 3 }}>
+                            {selectedKpi.unit}
+                          </span>
                         </p>
                         {lim && (
-                          <p style={{ color: "#9ca3af", margin: "1px 0 0 0", fontSize: 10 }}>
-                            Mean {lim.mean.toFixed(2)} · σ {lim.stdev.toFixed(2)} · UCL <span style={{ color: "#ef4444" }}>{lim.ucl.toFixed(2)}</span> · LCL <span style={{ color: "#ef4444" }}>{lim.lcl.toFixed(2)}</span>
+                          <p style={{ color: "#475569", margin: "3px 0 0 0", fontSize: 10 }}>
+                            Mean {lim.mean.toFixed(2)} · UCL{" "}
+                            <span style={{ color: "#f87171" }}>{lim.ucl.toFixed(2)}</span> · LCL{" "}
+                            <span style={{ color: "#f87171" }}>{lim.lcl.toFixed(2)}</span>
                           </p>
                         )}
                       </div>
@@ -199,113 +281,8 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
               );
             }}
           />
-
-          {/* Area biru muda sebagai zona kontrol antara LCL dan UCL */}
-          {ucl > 0 && (
-            <ReferenceArea
-              y1={lcl}
-              y2={ucl}
-              fill="#eff6ff"
-              fillOpacity={0.45}
-              ifOverflow="visible"
-            />
-          )}
-
-          {/* ── UCL = Mean + 3σ ── */}
-          <ReferenceLine
-            y={ucl}
-            stroke="#ef4444"
-            strokeDasharray="5 3"
-            strokeWidth={1.5}
-            label={{
-              value: `UCL ${ucl.toFixed(1)}`,
-              position: "insideTopRight",
-              fontSize: 9,
-              fill: "#ef4444",
-            }}
-          />
-          {/* ── Mean (WINDOW_AVG) ── */}
-          <ReferenceLine
-            y={mean}
-            stroke="#6b7280"
-            strokeDasharray="4 2"
-            strokeWidth={1.5}
-            label={{
-              value: `Mean ${mean.toFixed(1)}`,
-              position: "insideTopRight",
-              fontSize: 9,
-              fill: "#6b7280",
-            }}
-          />
-          {/* ── LCL = Mean − 3σ ── */}
-          {lcl > 0 && (
-            <ReferenceLine
-              y={lcl}
-              stroke="#ef4444"
-              strokeDasharray="5 3"
-              strokeWidth={1.5}
-              label={{
-                value: `LCL ${lcl.toFixed(1)}`,
-                position: "insideBottomRight",
-                fontSize: 9,
-                fill: "#ef4444",
-              }}
-            />
-          )}
-
-          {/* Gambar garis tren per plant — label nilai hanya di titik terakhir, digeser vertikal supaya tidak tumpang tindih */}
-          {plants.map((plant, i) => {
-            const color = PLANT_COLORS[i % PLANT_COLORS.length];
-            const lastIndex = data.length - 1;
-            // Offset vertikal bergantian atas-bawah: plant 0 → atas, plant 1 → bawah, dst.
-            const yOffset = i % 2 === 0 ? -10 : 10;
-            return (
-              <Line
-                key={plant}
-                type="linear"
-                dataKey={plant}
-                stroke={color}
-                strokeWidth={2.5}
-                dot={false}
-                activeDot={{ r: 5, fill: color, stroke: "#fff", strokeWidth: 2 }}
-                name={plant}
-                connectNulls
-                label={({ x, y, value, index }: { x?: number; y?: number; value?: unknown; index?: number }) => {
-                  if (index !== lastIndex || typeof value !== "number") return <g key={`lbl-${plant}-${index}`} />;
-                  const cx = x ?? 0;
-                  const cy = y ?? 0;
-                  return (
-                    <g key={`lbl-${plant}-${index}`}>
-                      <circle cx={cx} cy={cy} r={3} fill={color} stroke="#fff" strokeWidth={1.5} />
-                      <rect
-                        x={cx - 18}
-                        y={cy + yOffset - 8}
-                        width={36}
-                        height={13}
-                        rx={4}
-                        fill={color}
-                        opacity={0.12}
-                      />
-                      <text
-                        x={cx}
-                        y={cy + yOffset}
-                        fill={color}
-                        fontSize={9}
-                        fontWeight={700}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        {value.toFixed(1)}
-                      </text>
-                    </g>
-                  );
-                }}
-              />
-            );
-          })}
-        </ComposedChart>
-      </ResponsiveContainer>
-
+        )}
+      </div>
     </div>
   );
 }

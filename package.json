@@ -11,6 +11,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.5",
     "@google/generative-ai": "^0.24.1",
+    "@nivo/bar": "^0.99.0",
+    "@nivo/line": "^0.99.0",
     "@radix-ui/react-dialog": "^1.1.1",
     "@radix-ui/react-popover": "^1.1.1",
     "@radix-ui/react-select": "^2.1.1",

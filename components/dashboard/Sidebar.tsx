@@ -11,11 +11,11 @@ import { useI18n, type TranslationKey } from "@/lib/i18n";
 const INACTIVITY_MS = 15 * 60 * 1000;
 
 const NAV_ITEMS: { icon: React.ElementType; tKey: TranslationKey; href: string }[] = [
-  { icon: BarChart3, tKey: "nav_overview", href: "/dashboard" },
-  { icon: Factory, tKey: "nav_production", href: "/dashboard/production" },
-  { icon: CheckCircle2, tKey: "nav_quality", href: "/dashboard/quality" },
-  { icon: Zap, tKey: "nav_energy", href: "/dashboard/energy" },
-  { icon: FileText, tKey: "nav_reports", href: "/dashboard/reports" },
+  { icon: BarChart3,    tKey: "nav_overview",   href: "/dashboard" },
+  { icon: Factory,      tKey: "nav_production", href: "/dashboard/production" },
+  { icon: CheckCircle2, tKey: "nav_quality",    href: "/dashboard/quality" },
+  { icon: Zap,          tKey: "nav_energy",     href: "/dashboard/energy" },
+  { icon: FileText,     tKey: "nav_reports",    href: "/dashboard/reports" },
 ];
 
 export function Sidebar() {
@@ -38,20 +38,26 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-56 min-h-screen bg-brand-900 flex flex-col shrink-0 border-r border-brand-800">
-      <div className="px-4 py-5">
-        <div className="flex items-center gap-2.5">
-          <div className="bg-brand-600 p-2 rounded-xl shadow-sm">
-            <Factory size={18} className="text-white" />
+    <aside className="w-56 min-h-screen bg-[#0e0c1e] flex flex-col shrink-0 border-r border-white/[0.04]">
+      {/* Logo */}
+      <div className="px-5 pt-6 pb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-900/50 shrink-0">
+            <Factory size={14} className="text-white" />
           </div>
-          <div>
-            <p className="text-sm font-bold text-white leading-tight">Control Tower</p>
-            <p className="text-xs text-brand-300 leading-tight">Manufacture</p>
+          <div className="min-w-0">
+            <p className="text-[13px] font-bold text-white leading-none tracking-tight">Control Tower</p>
+            <p className="text-[11px] text-indigo-300/50 leading-none mt-0.5 tracking-wide">Manufacture</p>
           </div>
         </div>
       </div>
 
-      <nav className="px-3 py-2 flex flex-col gap-0.5 flex-1">
+      {/* Divider */}
+      <div className="mx-5 h-px bg-white/[0.06] mb-4" />
+
+      {/* Nav */}
+      <nav className="px-3 flex flex-col gap-0.5 flex-1">
+        <p className="text-[10px] font-semibold text-white/20 tracking-widest uppercase px-3 mb-2">Menu</p>
         {NAV_ITEMS.map(({ icon, tKey, href }) => (
           <NavItem
             key={href}
@@ -63,7 +69,9 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-3 py-4 border-t border-brand-700/50 flex flex-col gap-0.5">
+      {/* Bottom */}
+      <div className="px-3 pb-5">
+        <div className="h-px bg-white/[0.06] mb-3" />
         <NavItem
           icon={Settings}
           label={t("nav_settings")}
@@ -72,10 +80,10 @@ export function Sidebar() {
         />
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-brand-300/60 hover:text-red-300 hover:bg-red-900/30 transition-colors w-full text-left"
+          className="mt-0.5 flex items-center gap-2.5 px-3 py-2 rounded-xl text-white/25 hover:text-red-300 hover:bg-red-500/[0.08] transition-all duration-150 w-full text-left"
         >
-          <LogOut size={16} />
-          <span className="text-sm font-medium">{t("nav_signout")}</span>
+          <LogOut size={14} strokeWidth={1.75} />
+          <span className="text-[13px] font-medium">{t("nav_signout")}</span>
         </button>
       </div>
     </aside>
@@ -97,14 +105,23 @@ function NavItem({
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors w-full",
+        "relative flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-150 w-full group",
         active
-          ? "bg-white/10 text-white ring-1 ring-white/10"
-          : "text-brand-200/60 hover:text-white hover:bg-white/10"
+          ? "bg-white/[0.09] text-white"
+          : "text-white/35 hover:text-white/65 hover:bg-white/[0.05]"
       )}
     >
-      <Icon size={16} />
-      <span className="text-sm font-medium">{label}</span>
+      <Icon
+        size={14}
+        strokeWidth={active ? 2.5 : 1.75}
+        className="shrink-0"
+      />
+      <span className={cn("text-[13px] tracking-tight flex-1", active ? "font-semibold" : "font-medium")}>
+        {label}
+      </span>
+      {active && (
+        <span className="w-1 h-4 rounded-full bg-indigo-400/70 shrink-0" />
+      )}
     </Link>
   );
 }

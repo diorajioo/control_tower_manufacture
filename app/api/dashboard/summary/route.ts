@@ -82,6 +82,7 @@ Buat ringkasan eksekutif singkat:`;
     });
   } catch (err) {
     console.error("AI summary error:", err);
-    return NextResponse.json({ error: "AI summary failed" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
