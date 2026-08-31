@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useI18n } from "@/lib/i18n";
 import { ResponsiveLine } from "@nivo/line";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, getISOWeek } from "date-fns";
 import {
   PLANT_COLORS,
   KPI_OPTIONS,
@@ -52,6 +52,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
   const [data,    setData]    = useState<Record<string, unknown>[]>([]);
   const [plants,  setPlants]  = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [activeX, setActiveX] = useState<string | null>(null);
   const { t } = useI18n();
 
   const selectedKpi = KPI_OPTIONS.find((o) => o.value === kpiType)!;
@@ -93,12 +94,20 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
   const formatTick = useCallback((s: string) => {
     try {
       const d = parseAnyDate(s);
-      return isNaN(d.getTime()) ? s : format(d, "d MMM");
+      if (isNaN(d.getTime())) return s;
+      return `W${getISOWeek(d)}`;
     } catch { return s; }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Transform flat data to Nivo Line series format
+  // Show every Nth tick so x-axis stays readable at any data density
+  const axisTicks = useMemo(() => {
+    if (!data.length) return undefined;
+    const step = data.length > 24 ? 4 : data.length > 12 ? 2 : 1;
+    return data.filter((_, i) => i % step === 0).map((d) => String(d.date));
+  }, [data]);
+
+  // Transform flat data to Nivo Line series format — must be before ActivePointsLayer
   const nivoData = useMemo(
     () =>
       plants.map((plant, i) => ({
@@ -110,6 +119,35 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
       })),
     [data, plants]
   );
+
+  // Custom layer: render dots only for the currently hovered x position
+  const ActivePointsLayer = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (props: any) => {
+      if (!activeX || !props.xScale || !props.yScale) return null;
+      return (
+        <g>
+          {nivoData.map((serie) => {
+            const pt = serie.data.find((d) => d.x === activeX);
+            if (!pt || pt.y == null) return null;
+            return (
+              <circle
+                key={serie.id}
+                cx={props.xScale(activeX)}
+                cy={props.yScale(pt.y)}
+                r={5}
+                fill="white"
+                stroke={serie.color}
+                strokeWidth={2}
+              />
+            );
+          })}
+        </g>
+      );
+    },
+    [activeX, nivoData]
+  );
+
 
   // Reference lines for UCL / Mean / LCL
   const markers = useMemo(() => {
@@ -218,6 +256,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
               format: (v) => formatTick(String(v)),
               tickSize: 0,
               tickPadding: 10,
+              tickValues: axisTicks,
             }}
             axisLeft={{
               tickSize: 0,
@@ -226,24 +265,31 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
               format: (v) => Number(v).toFixed(1),
             }}
             gridYValues={5}
-            enablePoints={true}
-            pointSize={5}
-            pointBorderWidth={2}
-            pointBorderColor={{ from: "seriesColor" }}
-            pointColor={{ theme: "background" }}
-            enableSlices="x"
+            enablePoints={false}
+            useMesh={true}
+            crosshairType="x"
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onMouseMove={(point: any) => setActiveX(String(point.data.x))}
+            onMouseLeave={() => setActiveX(null)}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             colors={(serie: any) => String(serie.color)}
             lineWidth={2.5}
             markers={markers}
-            layers={["grid", "axes", ControlZoneLayer, "lines", "crosshair", "slices", "points", "mesh"]}
-            sliceTooltip={({ slice }) => {
+            layers={["grid", "axes", ControlZoneLayer, "lines", "crosshair", ActivePointsLayer, "mesh"]}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            tooltip={({ point }: any) => {
+              const x = String(point.data.x);
               const dateLabel = (() => {
                 try {
-                  const d = parseAnyDate(String(slice.points[0].data.x));
-                  return isNaN(d.getTime()) ? String(slice.points[0].data.x) : format(d, "dd MMM yyyy");
-                } catch { return String(slice.points[0].data.x); }
+                  const d = parseAnyDate(x);
+                  return isNaN(d.getTime()) ? x : format(d, "dd MMM yyyy");
+                } catch { return x; }
               })();
+              const allAtX = nivoData.flatMap((serie) =>
+                serie.data
+                  .filter((d) => String(d.x) === x)
+                  .map((d) => ({ plant: String(serie.id), y: d.y, color: serie.color }))
+              );
               return (
                 <div style={{
                   background: "#1e293b",
@@ -257,15 +303,14 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
                   <p style={{ fontWeight: 500, marginBottom: 7, color: "#64748b", fontSize: 10, letterSpacing: "0.02em" }}>
                     {dateLabel}
                   </p>
-                  {slice.points.map((point) => {
-                    const plant = String(point.seriesId);
-                    const lim   = perPlantLimits[plant];
+                  {allAtX.map(({ plant, y, color }) => {
+                    const lim = perPlantLimits[plant];
                     return (
-                      <div key={point.id} style={{ marginBottom: 6 }}>
-                        <p style={{ color: String(point.seriesColor), margin: 0, fontWeight: 700 }}>
+                      <div key={plant} style={{ marginBottom: 6 }}>
+                        <p style={{ color: String(color), margin: 0, fontWeight: 700 }}>
                           {plant}
                           <span style={{ color: "#f1f5f9", fontWeight: 400, marginLeft: 6 }}>
-                            {Number(point.data.y).toFixed(2)}
+                            {Number(y).toFixed(2)}
                           </span>
                           <span style={{ color: "#475569", fontWeight: 400, marginLeft: 3 }}>
                             {selectedKpi.unit}

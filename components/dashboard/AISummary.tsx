@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, RefreshCw, AlertCircle } from "lucide-react";
 
-// Tipe props: data KPI, filter aktif, dan flag ready yang menandakan data sudah siap dikirim ke AI
 interface AISummaryProps {
   kpi: unknown;
   filters: {
@@ -15,25 +14,37 @@ interface AISummaryProps {
   ready: boolean;
 }
 
+const CACHE_TEXT = "ai_summary_text";
+const CACHE_TIME = "ai_summary_time";
+const TTL_MS    = 5 * 60 * 60 * 1000; // 5 hours
+
 export function AISummary({ kpi, filters, ready }: AISummaryProps) {
-  // State lokal untuk teks ringkasan, status loading/error, dan toggle expand
-  const [summary,  setSummary]  = useState("");
+  const [summary,  setSummary]  = useState(() =>
+    typeof window !== "undefined" ? (localStorage.getItem(CACHE_TEXT) ?? "") : ""
+  );
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const abortRef = useRef<AbortController | null>(null);
+  const abortRef   = useRef<AbortController | null>(null);
+  const accumRef   = useRef("");
 
-  // Kirim KPI dan filter ke API lalu baca respons streaming chunk per chunk
-  const fetchSummary = async () => {
+  const fetchSummary = async (force = false) => {
     if (!kpi || !ready) return;
 
-    // Batalkan request sebelumnya kalau masih berjalan
+    // Skip if cache is fresh and not a forced refresh
+    if (!force) {
+      const cachedTime = Number(localStorage.getItem(CACHE_TIME) ?? 0);
+      const cachedText = localStorage.getItem(CACHE_TEXT) ?? "";
+      if (cachedText && Date.now() - cachedTime < TTL_MS) return;
+    }
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     setLoading(true);
     setSummary("");
+    accumRef.current = "";
     setError(false);
     setErrorMsg("");
 
@@ -53,15 +64,20 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
       }
       if (!res.body) throw new Error("No response body");
 
-      // Baca stream respons dan gabungkan teks per chunk ke state summary
-      const reader = res.body.getReader();
+      const reader  = res.body.getReader();
       const decoder = new TextDecoder();
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        setSummary((prev) => prev + decoder.decode(value, { stream: true }));
+        const text = decoder.decode(value, { stream: true });
+        accumRef.current += text;
+        setSummary((prev) => prev + text);
       }
+
+      // Persist to cache only on success
+      localStorage.setItem(CACHE_TEXT, accumRef.current);
+      localStorage.setItem(CACHE_TIME, String(Date.now()));
     } catch (err: unknown) {
       if (err instanceof Error && err.name !== "AbortError") setError(true);
     } finally {
@@ -69,22 +85,30 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
     }
   };
 
-  // Jalankan fetchSummary otomatis setiap kali filter atau status ready berubah
+  // Auto-fetch only when ready first becomes true — NOT on every filter change
   useEffect(() => {
     if (ready) fetchSummary();
     return () => abortRef.current?.abort();
-  }, [ready, filters.plant, filters.startDate, filters.endDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
+  // Age label for cached summary
+  const cachedTime = typeof window !== "undefined"
+    ? Number(localStorage.getItem(CACHE_TIME) ?? 0) : 0;
+  const ageHours = cachedTime ? Math.floor((Date.now() - cachedTime) / (60 * 60 * 1000)) : null;
+  const ageLabel = ageHours === 0 ? "baru saja"
+    : ageHours === 1 ? "1 jam lalu"
+    : ageHours != null ? `${ageHours} jam lalu`
+    : null;
 
   return (
     <div className="bg-gradient-to-r from-brand-800 via-brand-700 to-brand-600 rounded-xl px-3 py-2 mb-2 shadow-sm">
       <div className="flex items-center gap-2">
-        {/* Ikon sparkle dan label AI Summary di sebelah kiri */}
         <div className="bg-white/10 rounded-md p-1 shrink-0">
           <Sparkles size={11} className="text-blue-300" />
         </div>
         <span className="text-[10px] font-semibold text-blue-200 uppercase tracking-wider shrink-0">AI Summary</span>
 
-        {/* Area teks ringkasan dengan skeleton loading saat data belum tiba */}
         <div className="flex-1 min-w-0">
           {(loading && !summary) && (
             <div className="flex gap-1.5 items-center">
@@ -106,9 +130,15 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
-          <button onClick={fetchSummary} disabled={loading}
-            className="flex items-center gap-1 text-[10px] text-blue-300 hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-white/10 disabled:opacity-50">
+        <div className="flex items-center gap-2 shrink-0">
+          {ageLabel && !loading && !error && (
+            <span className="text-[10px] text-blue-300/60 shrink-0">{ageLabel}</span>
+          )}
+          <button
+            onClick={() => fetchSummary(true)}
+            disabled={loading}
+            className="flex items-center gap-1 text-[10px] text-blue-300 hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-white/10 disabled:opacity-50"
+          >
             <RefreshCw size={10} className={loading ? "animate-spin" : ""} />
             {loading ? "..." : "Refresh"}
           </button>
