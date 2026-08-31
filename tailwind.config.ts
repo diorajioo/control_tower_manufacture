@@ -23,8 +23,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans:    ["DM Sans", "sans-serif"],
-        display: ["Barlow Semi Condensed", "sans-serif"],
+        sans:    ["Plus Jakarta Sans", "sans-serif"],
+        display: ["Space Grotesk", "sans-serif"],
       },
     },
   },

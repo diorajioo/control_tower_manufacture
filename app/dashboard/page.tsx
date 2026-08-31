@@ -65,7 +65,7 @@ interface Filters {
 
 function SectionDivider({ label, accentColor = "#6366f1" }: { label: string; accentColor?: string }) {
   return (
-    <div className="flex items-center gap-3 mb-3">
+    <div className="flex items-center gap-3 mb-4">
       <div className="h-px flex-1 bg-gray-100" />
       <span
         className="text-[10px] font-bold tracking-widest uppercase shrink-0"
@@ -229,7 +229,7 @@ export default function DashboardPage() {
           {/* ── Operation KPIs ─────────────────────────────────────────── */}
           <SectionDivider label={t("section_operation_kpis")} accentColor="#6366f1" />
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
             ) : (
@@ -333,7 +333,7 @@ export default function DashboardPage() {
                   <div className="flex gap-3">
                     <div className="flex-1">
                       <div className="flex items-baseline gap-1 mb-0.5">
-                        <span className="text-2xl font-bold text-slate-900 tracking-tighter tabular-nums">
+                        <span className="font-display text-[1.75rem] font-bold text-slate-900 tabular-nums">
                           {kpi?.yield?.bulkLossPct?.toFixed(1) ?? "—"}
                         </span>
                         <span className="text-[11px] text-gray-400">%</span>
@@ -348,7 +348,7 @@ export default function DashboardPage() {
                     <div className="w-px bg-gray-100 self-stretch" />
                     <div className="flex-1">
                       <div className="flex items-baseline gap-1 mb-0.5">
-                        <span className="text-2xl font-bold text-slate-900 tracking-tighter tabular-nums">
+                        <span className="font-display text-[1.75rem] font-bold text-slate-900 tabular-nums">
                           {kpi?.yield?.packLossPct?.toFixed(1) ?? "—"}
                         </span>
                         <span className="text-[11px] text-gray-400">%</span>
@@ -408,7 +408,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="flex items-baseline justify-between gap-2">
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-bold text-slate-900 tracking-tighter tabular-nums">
+                          <span className="font-display text-[1.75rem] font-bold text-slate-900 tabular-nums">
                             {kpi ? formatThousands(kpi.output?.fgQty ?? 0) : "—"}
                           </span>
                           <span className="text-[11px] text-gray-400 font-medium">pcs</span>
@@ -421,7 +421,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="flex items-baseline justify-between gap-2">
                         <div className="flex items-baseline gap-1">
-                          <span className="text-2xl font-bold text-slate-900 tracking-tighter tabular-nums">
+                          <span className="font-display text-[1.75rem] font-bold text-slate-900 tabular-nums">
                             {kpi ? formatThousands(kpi.output?.bulkQty ?? 0) : "—"}
                           </span>
                           <span className="text-[11px] text-gray-400 font-medium">kg</span>
@@ -439,7 +439,7 @@ export default function DashboardPage() {
           {/* ── Equipment & People ──────────────────────────────────────── */}
           <SectionDivider label={t("section_equipment_people")} accentColor="#8b5cf6" />
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
             ) : (
@@ -481,11 +481,11 @@ export default function DashboardPage() {
                       <div className="grid grid-cols-2 gap-x-3 pt-2 border-t border-gray-100">
                         <div>
                           <p className="text-[10px] text-gray-400">{t("oee_performance")}</p>
-                          <p className="text-sm font-bold text-slate-700 tabular-nums">{kpi.oee.performance.toFixed(1)}<span className="text-[10px] font-normal text-gray-400 ml-0.5">%</span></p>
+                          <p className="font-display text-sm font-bold text-slate-700 tabular-nums">{kpi.oee.performance.toFixed(1)}<span className="text-[10px] font-normal text-gray-400 ml-0.5">%</span></p>
                         </div>
                         <div>
                           <p className="text-[10px] text-gray-400">{t("oee_quality")}</p>
-                          <p className="text-sm font-bold text-slate-700 tabular-nums">{kpi.oee.quality.toFixed(1)}<span className="text-[10px] font-normal text-gray-400 ml-0.5">%</span></p>
+                          <p className="font-display text-sm font-bold text-slate-700 tabular-nums">{kpi.oee.quality.toFixed(1)}<span className="text-[10px] font-normal text-gray-400 ml-0.5">%</span></p>
                         </div>
                       </div>
                     </>
@@ -554,7 +554,7 @@ export default function DashboardPage() {
           {/* ── Trend & Benchmark ────────────────────────────────────────── */}
           <SectionDivider label={t("section_trend_benchmark")} accentColor="#3b82f6" />
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {loading ? (
               <>
                 <div className="bg-white rounded-2xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] border border-gray-100/80 h-72 animate-pulse">

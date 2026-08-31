@@ -171,7 +171,7 @@ export function KPICard({
   return (
     <div
       className={cn(
-        "bg-white rounded-2xl p-4 flex flex-col gap-3 transition-all duration-300",
+        "bg-white rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300",
         "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]",
         alert
           ? "border border-red-200 ring-1 ring-red-100/50"
@@ -191,13 +191,13 @@ export function KPICard({
               <span style={{ color: iconColor }}>{icon}</span>
             </div>
           )}
-          <span className="text-[13px] font-bold text-slate-700 leading-tight tracking-tight">{title}</span>
+          <span className="text-[13px] font-semibold text-slate-600 leading-tight">{title}</span>
           {tooltip && <InfoTooltip text={tooltip} />}
         </div>
         <div className="flex items-center gap-1.5">
           {trend !== undefined && <TrendBadge trend={trend} />}
           {badge && (
-            <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold tracking-tight", badgeColors[badgeColor])}>
+            <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold", badgeColors[badgeColor])}>
               {badge}
             </span>
           )}
@@ -206,22 +206,22 @@ export function KPICard({
 
       {/* Primary value */}
       {hasValue && (
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 -mt-1">
           <div className="flex items-baseline gap-1.5">
             {isNumeric ? (
               <AnimatedNumber
                 value={value!}
                 className={cn(
-                  "font-bold text-slate-900 tracking-tighter tabular-nums",
-                  compact ? "text-2xl" : "text-3xl"
+                  "font-display font-bold text-slate-900 tabular-nums",
+                  compact ? "text-[1.75rem]" : "text-[2rem]"
                 )}
               />
             ) : (
-              <span className={cn("font-bold text-slate-900 tracking-tighter", compact ? "text-2xl" : "text-3xl")}>
+              <span className={cn("font-display font-bold text-slate-900", compact ? "text-[1.75rem]" : "text-[2rem]")}>
                 {value}
               </span>
             )}
-            {unit && <span className="text-sm text-gray-400 font-medium">{unit}</span>}
+            {unit && <span className="text-[13px] text-gray-400 font-medium">{unit}</span>}
           </div>
           {sparkline && sparkline.length >= 2 && (
             <Sparkline data={sparkline} color={sparklineColor ?? iconColor} width={88} height={36} />
@@ -229,8 +229,8 @@ export function KPICard({
         </div>
       )}
 
-      {subtitle && <p className="text-[11px] text-gray-400 -mt-1.5 tracking-tight">{subtitle}</p>}
-      {trendLabel && <p className="text-[11px] text-gray-400 -mt-1.5">{trendLabel}</p>}
+      {subtitle && <p className="text-[11px] text-gray-400 -mt-2">{subtitle}</p>}
+      {trendLabel && <p className="text-[11px] text-gray-400 -mt-2">{trendLabel}</p>}
 
       {children}
     </div>
@@ -276,7 +276,7 @@ export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72, 
         />
       </svg>
       <div className="absolute text-center">
-        <span className="text-sm font-bold text-slate-800 tabular-nums leading-none">{value.toFixed(1)}</span>
+        <span className="font-display text-sm font-bold text-slate-800 tabular-nums leading-none">{value.toFixed(1)}</span>
         <span className="text-[10px] text-gray-400 block leading-none mt-0.5">%</span>
       </div>
     </div>

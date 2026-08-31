@@ -78,6 +78,18 @@
         "value": "11px",
         "createdAt": "2026-08-31T04:49:43.235Z",
         "reason": "Intentional compact status-row font size for dense dashboard data tables"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "plus jakarta sans",
+        "createdAt": "2026-08-31T08:00:07.974Z",
+        "reason": "PRODUCT.md declares Plus Jakarta Sans as brand body font"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "space grotesk",
+        "createdAt": "2026-08-31T08:00:08.298Z",
+        "reason": "PRODUCT.md declares Space Grotesk as brand display font"
       }
     ]
   }
