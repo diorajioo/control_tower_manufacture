@@ -23,6 +23,27 @@ OEE % (target >= 65%), Productivity pcs/manhour.
 
 Berikan analisis berdasarkan data yang diberikan saja. Jangan menambahkan data yang tidak ada.`;
 
+async function createStreamWithFallback(
+  groq: Groq,
+  messages: Groq.Chat.ChatCompletionMessageParam[]
+) {
+  let lastErr: unknown;
+  for (const model of GROQ_MODEL_PRIORITY) {
+    try {
+      return await groq.chat.completions.create({
+        model,
+        max_tokens: 400,
+        stream: true as const,
+        messages,
+      });
+    } catch (err) {
+      if (isGroqModelUnavailable(err)) { lastErr = err; continue; }
+      throw err;
+    }
+  }
+  throw lastErr ?? new Error("Tidak ada Groq model yang tersedia");
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -56,38 +77,17 @@ Buat ringkasan eksekutif singkat:`;
 
   try {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const messages: Groq.Chat.ChatCompletionMessageParam[] = [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userMessage },
+    ];
 
-    // Try each model in priority order until one succeeds
-    let stream: Awaited<ReturnType<typeof groq.chat.completions.create<true>>> | null = null;
-    let lastErr: unknown;
-
-    for (const model of GROQ_MODEL_PRIORITY) {
-      try {
-        stream = await groq.chat.completions.create({
-          model,
-          max_tokens: 400,
-          stream: true,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userMessage },
-          ],
-        });
-        break;
-      } catch (err) {
-        if (isGroqModelUnavailable(err)) { lastErr = err; continue; }
-        throw err;
-      }
-    }
-
-    if (!stream) {
-      const msg = lastErr instanceof Error ? lastErr.message : "Tidak ada Groq model yang tersedia";
-      return NextResponse.json({ error: msg }, { status: 503 });
-    }
+    const stream = await createStreamWithFallback(groq, messages);
 
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
-        for await (const chunk of stream!) {
+        for await (const chunk of stream) {
           const text = chunk.choices[0]?.delta?.content ?? "";
           if (text) controller.enqueue(encoder.encode(text));
         }
