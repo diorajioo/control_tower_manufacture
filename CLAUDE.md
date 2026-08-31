@@ -11,9 +11,12 @@ https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQCKOkUYBmkZRailNr6rK
 
 ## The Container Contract -- always follow these
 
-1. The app must listen on 0.0.0.0 and read its port from the PORT
-   environment variable, defaulting to 8080. Never bind to 127.0.0.1
-   or localhost. Never hardcode a port.
+1. The app must listen on 0.0.0.0, never on 127.0.0.1 or localhost.
+   Serve everything on ONE port. Default to 8080, read from the PORT
+   environment variable. Any port above 1024 is acceptable, but the
+   port the app listens on and the EXPOSE line must be the same number,
+   and you must tell me if you change it. Never use a port below 1024:
+   those require root, which rule 9 forbids.
 
 2. Expose a GET /healthz endpoint returning HTTP 200 with a small body.
    It must be cheap: never query a database or an external service in it.
@@ -51,7 +54,11 @@ https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQCKOkUYBmkZRailNr6rK
 11. Maintain a .gitignore excluding .env, .venv/, __pycache__/,
     node_modules/, *.csv, *.parquet, *.xlsx and data/.
 
-12. Handle SIGTERM and shut down cleanly. Start in under 60 seconds.
+12. Start quickly and stop cleanly. Do not load large datasets at import
+    time -- load them inside a cached function so the app can answer its
+    health check immediately. Start the app with exec in the Dockerfile
+    CMD (CMD ["sh","-c","exec streamlit run app.py ..."]) so the app,
+    not the shell, receives SIGTERM.
 
 ## Performance rules
 - Do aggregation in SQL in the warehouse, not in pandas in the app.
