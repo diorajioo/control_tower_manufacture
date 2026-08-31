@@ -193,10 +193,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f0eff8]">
+    <div className="flex h-screen overflow-hidden bg-[#f0eff8]">
       <Sidebar />
 
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Header
           plants={plants}
           onFilterChange={handleFilterChange}
@@ -209,7 +209,7 @@ export default function DashboardPage() {
           onBellClick={() => setAlertPanelOpen(!alertPanelOpen)}
         />
 
-        <main className="flex-1 p-4 overflow-auto">
+        <main className="flex-1 p-4 overflow-y-auto min-h-0">
           <AISummary kpi={kpi} filters={filters} ready={!loading && kpi !== null} />
 
           {(alertPanelOpen || visibleAlerts.some((a) => a.severity === "critical")) && (

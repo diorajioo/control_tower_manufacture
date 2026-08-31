@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import { ResponsiveLine } from "@nivo/line";
 import { format, parseISO, getISOWeek } from "date-fns";
@@ -52,7 +52,8 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
   const [data,    setData]    = useState<Record<string, unknown>[]>([]);
   const [plants,  setPlants]  = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeX, setActiveX] = useState<string | null>(null);
+  // useRef instead of useState — avoids re-render chain that causes twitching
+  const activeXRef = useRef<string | null>(null);
   const { t } = useI18n();
 
   const selectedKpi = KPI_OPTIONS.find((o) => o.value === kpiType)!;
@@ -120,20 +121,21 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
     [data, plants]
   );
 
-  // Custom layer: render dots only for the currently hovered x position
+  // Custom layer: render dots only at hovered x — reads ref (no extra re-render)
   const ActivePointsLayer = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (props: any) => {
-      if (!activeX || !props.xScale || !props.yScale) return null;
+      const x = activeXRef.current;
+      if (!x || !props.xScale || !props.yScale) return null;
       return (
         <g>
           {nivoData.map((serie) => {
-            const pt = serie.data.find((d) => d.x === activeX);
+            const pt = serie.data.find((d) => d.x === x);
             if (!pt || pt.y == null) return null;
             return (
               <circle
                 key={serie.id}
-                cx={props.xScale(activeX)}
+                cx={props.xScale(x)}
                 cy={props.yScale(pt.y)}
                 r={5}
                 fill="white"
@@ -145,7 +147,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
         </g>
       );
     },
-    [activeX, nivoData]
+    [nivoData] // activeXRef is a stable object — not needed in deps
   );
 
 
@@ -269,8 +271,9 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
             useMesh={true}
             crosshairType="x"
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            onMouseMove={(point: any) => setActiveX(String(point.data.x))}
-            onMouseLeave={() => setActiveX(null)}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onMouseMove={(point: any) => { activeXRef.current = String(point.data.x); }}
+            onMouseLeave={() => { activeXRef.current = null; }}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             colors={(serie: any) => String(serie.color)}
             lineWidth={2.5}
