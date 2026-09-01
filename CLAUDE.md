@@ -5,22 +5,19 @@ An internal web dashboard built by the Data team and deployed to an
 on-premises Kubernetes cluster by the DAI Platform team. It runs as a
 container. Treat every rule below as non-negotiable.
 
-The rules below are a summary of the Web Dashboard Deployment Workbook:
-https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQCKOkUYBmkZRailNr6rKZFVAZjE4jkc7_GlH8EjsOYQ3sU?e=HSlZ7L
-(Company sign-in required. If a rule here is ambiguous, the workbook wins.)
+  
 
 ## The Container Contract -- always follow these
 
 1. The app must listen on 0.0.0.0, never on 127.0.0.1 or localhost.
    Serve everything on ONE port. Default to 8080, read from the PORT
    environment variable. Any port above 1024 is acceptable, but the
-   port the app listens on and the EXPOSE line must be the same number,
-   and you must tell me if you change it. Never use a port below 1024:
-   those require root, which rule 9 forbids.
+   port the app listens on and the EXPOSE line must be the same
+   number, and you must tell me if you change it. Never use a port
+   below 1024: those need root, which rule 9 of this file forbids.
 
 2. Expose a GET /healthz endpoint returning HTTP 200 with a small body.
-   It must be cheap: never query a database or an external service in it.
-   (Streamlit already provides /_stcore/health -- use that instead.)
+   It must be cheap: never query a database or an external service in it. 
 
 3. Never hardcode hostnames, usernames, passwords, tokens, API keys,
    account identifiers, IP addresses or absolute file paths. Read them
@@ -43,10 +40,21 @@ https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQCKOkUYBmkZRailNr6rK
 8. Pin every dependency to an exact version in requirements.txt or
    package.json. No version ranges, no unpinned packages.
 
-9. Maintain a working Dockerfile at the repository root. It must build
-   with a single `docker build .` from a clean checkout, use a slim
-   pinned base image, install dependencies before copying source code,
-   and switch to a non-root user before the app starts.
+  
+
+9. CREATE and maintain a Dockerfile at the repository root. This
+   repository deliberately ships without one, because a Dockerfile
+   depends on this app's real entrypoint, dependencies and system
+   packages. Write it alongside the app, and update it whenever the
+   start command or the dependencies change. It must:
+     - build with a single `docker build .` from a clean checkout
+     - use a slim, version-pinned base image (never :latest)
+     - install dependencies BEFORE copying application source
+     - create and switch to a non-root user before the app starts
+     - EXPOSE the port the app listens on (above 1024)
+     - start the app with exec so it receives SIGTERM
+   The DAI Platform team reviews the Dockerfile before the first
+   deployment and may adjust it.  
 
 10. Maintain a .dockerignore excluding .env, .git, data files,
     notebooks, virtual environments and node_modules.
@@ -54,11 +62,11 @@ https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQCKOkUYBmkZRailNr6rK
 11. Maintain a .gitignore excluding .env, .venv/, __pycache__/,
     node_modules/, *.csv, *.parquet, *.xlsx and data/.
 
-12. Start quickly and stop cleanly. Do not load large datasets at import
-    time -- load them inside a cached function so the app can answer its
-    health check immediately. Start the app with exec in the Dockerfile
-    CMD (CMD ["sh","-c","exec streamlit run app.py ..."]) so the app,
-    not the shell, receives SIGTERM.
+12. Start quickly and stop cleanly. Do not load large datasets at
+    import time -- load them inside a cached function so the app can
+    answer its health check immediately. Start the app with exec in
+    the Dockerfile CMD (for example: CMD ["sh","-c","exec streamlit
+    run app.py ..."]) so the app, not the shell, receives SIGTERM.  
 
 ## Performance rules
 - Do aggregation in SQL in the warehouse, not in pandas in the app.
