@@ -111,6 +111,8 @@ export default function DashboardPage() {
   const [refreshCount,  setRefreshCount]  = useState(0);
   const [undoId, setUndoId] = useState<string | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track alert IDs already auto-sent to Teams this session — prevents re-sending same alert every refresh
+  const sentAlertIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
@@ -154,6 +156,25 @@ export default function DashboardPage() {
         oee:          { value: kpiRes.oee?.value ?? 100, trend: kpiRes.oee?.trend ?? null },
       });
       setAlerts(newAlerts);
+
+      // Auto-send new critical alerts to Teams (if configured).
+      // Only sends alert IDs not yet sent this session — prevents spam on every hourly refresh.
+      const newCritical = newAlerts.filter(
+        (a) => a.severity === "critical" && !sentAlertIds.current.has(a.id)
+      );
+      if (newCritical.length > 0) {
+        newCritical.forEach((a) => sentAlertIds.current.add(a.id));
+        fetch("/api/notifications/teams", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            alerts: newCritical,
+            plant: f.plant,
+            period: f.period,
+            withRecommendation: true,
+          }),
+        }).catch(() => {/* silent — Teams is optional */});
+      }
     } catch (err) {
       console.error("Dashboard fetch error:", err);
     } finally {
@@ -225,7 +246,12 @@ export default function DashboardPage() {
           <AISummary kpi={kpi} filters={filters} ready={!loading && kpi !== null} />
 
           {(alertPanelOpen || visibleAlerts.some((a) => a.severity === "critical")) && (
-            <AlertPanel alerts={visibleAlerts} onDismiss={handleDismissAlert} />
+            <AlertPanel
+              alerts={visibleAlerts}
+              onDismiss={handleDismissAlert}
+              plant={filters.plant}
+              period={filters.period}
+            />
           )}
 
           {/* ── Operation KPIs ─────────────────────────────────────────── */}
