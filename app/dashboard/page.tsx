@@ -108,6 +108,7 @@ export default function DashboardPage() {
     } catch { return defaults; }
   });
   const [highlightedKpi, setHighlightedKpi] = useState<string | null>(null);
+  const [refreshCount,  setRefreshCount]  = useState(0);
   const [undoId, setUndoId] = useState<string | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -145,6 +146,7 @@ export default function DashboardPage() {
       ]);
       setKpi(kpiRes);
       setLastUpdated(new Date());
+      setRefreshCount((n) => n + 1);
       const newAlerts = computeAlerts({
         leadTime:     { value: kpiRes.leadTime?.grossDays ?? 0, trend: kpiRes.leadTime?.grossTrend ?? null },
         yield:        { bulkLossPct: kpiRes.yield?.bulkLossPct ?? 0, packLossPct: kpiRes.yield?.packLossPct ?? 0, bulkLossTrend: kpiRes.yield?.bulkLossTrend ?? null, packLossTrend: kpiRes.yield?.packLossTrend ?? null },
@@ -237,6 +239,7 @@ export default function DashboardPage() {
                 {/* Lead Time */}
                 <KPICard
                   dimmed={highlightedKpi !== null && highlightedKpi !== "leadtime"}
+                  flashKey={refreshCount}
                   title={t("card_leadtime")}
                   tooltip="Waktu dari PO dibuat hingga produk diterima NDC. Gross = total proses; Nett = waktu aktual produksi."
                   icon={<Clock size={16} />}
@@ -324,6 +327,7 @@ export default function DashboardPage() {
                 {/* Yield */}
                 <KPICard
                   dimmed={highlightedKpi !== null && highlightedKpi !== "yield"}
+                  flashKey={refreshCount}
                   title={t("card_yield")}
                   tooltip="Persentase bahan baku yang hilang dalam proses produksi. Bulk Loss = proses olah; Pack Loss = proses kemas."
                   icon={<Droplets size={16} />}
@@ -371,6 +375,7 @@ export default function DashboardPage() {
                 {/* Right First Time */}
                 <KPICard
                   dimmed={highlightedKpi !== null && highlightedKpi !== "rft"}
+                  flashKey={refreshCount}
                   title={t("card_rft")}
                   tooltip="Persentase batch yang lulus QC tanpa rework atau rejection pada percobaan pertama. Target: ≥95%."
                   icon={<ShieldCheck size={16} />}
@@ -399,6 +404,7 @@ export default function DashboardPage() {
                 {/* Output */}
                 <KPICard
                   dimmed={highlightedKpi !== null && highlightedKpi !== "output"}
+                  flashKey={refreshCount}
                   title={t("card_output")}
                   tooltip="Jumlah produk yang berhasil diproduksi dalam periode ini. FG = produk jadi (pcs); Bulk = produk setengah jadi."
                   icon={<Package size={16} />}
@@ -447,6 +453,7 @@ export default function DashboardPage() {
                 {/* OEE */}
                 <KPICard
                   dimmed={highlightedKpi !== null && highlightedKpi !== "oee"}
+                  flashKey={refreshCount}
                   title={t("card_oee")}
                   tooltip="Overall Equipment Effectiveness: efisiensi penggunaan mesin (Performance × Quality). Target: ≥65%."
                   icon={<Gauge size={16} />}
@@ -495,6 +502,7 @@ export default function DashboardPage() {
                 {/* OPE */}
                 <KPICard
                   dimmed={highlightedKpi !== null && highlightedKpi !== "ope"}
+                  flashKey={refreshCount}
                   title={t("card_ope")}
                   tooltip="Overall Plant Effectiveness: estimasi performa seluruh pabrik, dihitung sebagai OEE × 0.8."
                   icon={<Activity size={16} />}
@@ -528,6 +536,7 @@ export default function DashboardPage() {
                 {/* Productivity */}
                 <KPICard
                   dimmed={highlightedKpi !== null && highlightedKpi !== "productivity"}
+                  flashKey={refreshCount}
                   title={t("card_productivity")}
                   tooltip="Efisiensi tenaga kerja. E2E = pcs/manhour keseluruhan; Upstream = kg/manhour proses olah; Downstream = pcs/manhour proses kemas."
                   icon={<Users size={16} />}

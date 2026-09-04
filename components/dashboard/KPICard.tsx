@@ -119,6 +119,8 @@ interface KPICardProps {
   sparkline?: number[];
   sparklineColor?: string;
   dimmed?: boolean;
+  /** Increment this value whenever data refreshes to trigger a brief flash. */
+  flashKey?: number;
 }
 
 const badgeColors = {
@@ -164,6 +166,7 @@ export function KPICard({
   sparkline,
   sparklineColor,
   dimmed,
+  flashKey,
 }: KPICardProps) {
   const hasValue = value !== undefined && value !== "";
   const isNumeric = hasValue && !isNaN(parseNumeric(value!).raw);
@@ -171,7 +174,7 @@ export function KPICard({
   return (
     <div
       className={cn(
-        "bg-white rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300",
+        "relative bg-white rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300",
         "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]",
         alert
           ? "border border-red-200 ring-1 ring-red-100/50"
@@ -180,6 +183,16 @@ export function KPICard({
         className
       )}
     >
+      {/* Refresh flash overlay — fires once per flashKey change */}
+      {flashKey !== undefined && flashKey > 0 && (
+        <motion.div
+          key={flashKey}
+          className="pointer-events-none absolute inset-0 rounded-2xl"
+          initial={{ opacity: 0.28, backgroundColor: "#6366f1" }}
+          animate={{ opacity: 0, backgroundColor: "#6366f1" }}
+          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+        />
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">

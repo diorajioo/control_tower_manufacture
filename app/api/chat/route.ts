@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getGroqClient, buildChatModelPriority, isGroqModelUnavailable } from "@/lib/ai-provider";
 import { isValidModelId } from "@/lib/ai-models";
+import { routeModel } from "@/lib/agent-router";
 import { executeQuery } from "@/lib/snowflake";
 import type Groq from "groq-sdk";
 
@@ -364,7 +365,16 @@ export async function POST(req: NextRequest) {
     model?: string;
   };
 
-  const validatedModel = requestedModel && isValidModelId(requestedModel) ? requestedModel : undefined;
+  // Agent routing: classify the latest user message and pick the optimal model.
+  // For complex questions the agent overrides the user's manual selection.
+  // For simple/moderate questions it respects the user's choice.
+  const latestUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const agentRoute = routeModel(latestUserMessage);
+  const resolvedModel = agentRoute.complexity === "complex"
+    ? agentRoute.modelId
+    : (requestedModel && isValidModelId(requestedModel) ? requestedModel : agentRoute.modelId);
+
+  const validatedModel = resolvedModel;
 
   const groq = getGroqClient();
   const allMessages: ChatMessage[] = [
