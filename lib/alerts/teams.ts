@@ -261,8 +261,57 @@ export interface SendTeamsAlertsOptions {
   withRecommendation?: boolean;
 }
 
+// ── Power Automate payload ────────────────────────────────────────────────────
+// PA HTTP trigger accepts any JSON via triggerBody(). We send a flat object
+// so the PA flow can use individual fields directly in its "Post to Teams" action
+// without needing to parse a nested Adaptive Card structure.
+
+function buildPowerAutomatePayload(
+  alerts: KPIAlert[],
+  options: { plant?: string; period?: string; dashboardUrl?: string; recommendation?: string }
+) {
+  const critical = alerts.filter((a) => a.severity === "critical");
+  const warnings = alerts.filter((a) => a.severity === "warning");
+
+  const now = new Date().toLocaleString("id-ID", {
+    timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short",
+  });
+
+  // Pre-formatted text block — PA can paste this straight into a Teams message
+  const alertsText = alerts
+    .map((a) => {
+      const icon = a.severity === "critical" ? "🔴" : a.severity === "warning" ? "🟡" : "🔵";
+      const trend = a.trend != null ? ` (${a.trend > 0 ? "+" : ""}${a.trend.toFixed(1)}% MoM)` : "";
+      return `${icon} **${a.kpi}**: ${a.message}${trend}`;
+    })
+    .join("\n\n");
+
+  return {
+    title:          "⚠️ Control Tower Manufacturing — KPI Alert",
+    plant:          options.plant ?? "All Plant",
+    period:         options.period ?? "",
+    timestamp:      `${now} WIB`,
+    criticalCount:  critical.length,
+    warningCount:   warnings.length,
+    dashboardUrl:   options.dashboardUrl ?? "",
+    recommendation: options.recommendation ?? "",
+    alertsText,
+    alerts: alerts.map((a) => ({
+      severity:  a.severity,
+      kpi:       a.kpi,
+      message:   a.message,
+      trend:     a.trend,
+      threshold: a.threshold,
+    })),
+  };
+}
+
 /**
  * Send a Teams alert card for a list of KPI alerts.
+ *
+ * Auto-detects webhook type:
+ *   - powerplatform.com URL → Power Automate HTTP trigger (flat JSON)
+ *   - everything else       → Teams Incoming Webhook (Adaptive Card)
  *
  * Returns { ok: true } on success, { ok: false, error } on failure.
  * Never throws — safe to call from background jobs and cron routes.
@@ -283,12 +332,22 @@ export async function sendTeamsAlerts(
     ? await fetchLLMRecommendation(alerts)
     : undefined;
 
-  const payload = buildTeamsAlertCard(alerts, {
-    dashboardUrl:    options.dashboardUrl,
-    recommendation,
-    plant:           options.plant,
-    period:          options.period,
-  });
+  const isPowerAutomate = webhookUrl.includes("powerplatform.com") ||
+                          webhookUrl.includes("logic.azure.com");
+
+  const payload = isPowerAutomate
+    ? buildPowerAutomatePayload(alerts, {
+        plant:          options.plant,
+        period:         options.period,
+        dashboardUrl:   options.dashboardUrl,
+        recommendation,
+      })
+    : buildTeamsAlertCard(alerts, {
+        dashboardUrl:   options.dashboardUrl,
+        recommendation,
+        plant:          options.plant,
+        period:         options.period,
+      });
 
   try {
     const res = await fetch(webhookUrl, {
@@ -297,9 +356,10 @@ export async function sendTeamsAlerts(
       body:    JSON.stringify(payload),
     });
 
-    if (!res.ok) {
+    // Power Automate returns 202 Accepted; Teams Incoming Webhook returns 200
+    if (!res.ok && res.status !== 202) {
       const text = await res.text().catch(() => "");
-      return { ok: false, error: `Teams webhook returned ${res.status}: ${text}` };
+      return { ok: false, error: `Webhook returned ${res.status}: ${text}` };
     }
 
     return { ok: true };
