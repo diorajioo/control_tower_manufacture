@@ -17,6 +17,8 @@ import {
   getProductivityDetails,
 } from "@/lib/queries";
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
 function delta(current: number, prev: number) {
   if (!prev || prev === 0) return null;
   return Number((((current - prev) / Math.abs(prev)) * 100).toFixed(1));
@@ -34,135 +36,190 @@ function prevPeriod(startDate: string, endDate: string) {
   };
 }
 
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().split("T")[0];
+}
+
+/** Server-side date resolution for preset periods — mirrors client-side Header.tsx logic. */
+function resolvePeriodDates(period: string): { startDate: string; endDate: string } {
+  const today = new Date().toISOString().split("T")[0];
+  const year  = new Date().getFullYear();
+  switch (period) {
+    case "Today": return { startDate: today, endDate: today };
+    case "YTD":   return { startDate: `${year}-01-01`, endDate: today };
+    case "30D":   return { startDate: daysAgo(30),  endDate: today };
+    case "90D":   return { startDate: daysAgo(90),  endDate: today };
+    case "6M":    return { startDate: daysAgo(180), endDate: today };
+    default:      return { startDate: `${year}-01-01`, endDate: today };
+  }
+}
+
 function val<T>(result: PromiseSettledResult<T>, fallback: T): T {
   return result.status === "fulfilled" ? result.value : fallback;
 }
 
-// ── Cached data fetcher ────────────────────────────────────────────────────────
-// Queries Snowflake at most once per hour per unique filter combination.
-// Auth check stays outside the cache — only the heavy Snowflake work is cached.
+// ── Core query executor (not cached — called by the two cached wrappers) ───────
 
-const fetchKPIData = unstable_cache(
-  async (plant: string, startDate: string, endDate: string, period: string) => {
-    const filters = { plant, startDate, endDate, period: period || undefined };
-    const prev = { ...filters, ...prevPeriod(startDate, endDate), period: undefined };
+async function runKPIQueries(
+  plant: string,
+  startDate: string,
+  endDate: string,
+  period?: string,
+) {
+  const filters = { plant, startDate, endDate, period };
+  const prev    = { plant, ...prevPeriod(startDate, endDate), period: undefined };
 
-    const [
-      leadTimeRes, yieldRes, rftRes, outputRes,
-      e2eRes, upstreamRes, downstreamRes, oeeRes,
-      prevLeadTimeRes, prevYieldRes, prevRftRes, prevE2ERes, prevOeeRes,
-      ltByPosRes, oeeWeeklyRes, e2eWeeklyRes,
-      prevOutputRes, productivityDetailsRes,
-    ] = await Promise.allSettled([
-      getLeadTimeKPI(filters),
-      getYieldKPI(filters),
-      getRightFirstTime(filters),
-      getOutputKPI(filters),
-      getE2EProductivity(filters),
-      getUpstreamProductivity(filters),
-      getDownstreamProductivity(filters),
-      getOEEByPlant(filters),
-      getLeadTimeKPI(prev),
-      getYieldKPI(prev),
-      getRightFirstTime(prev),
-      getE2EProductivity(prev),
-      getOEEByPlant(prev),
-      getLeadTimeByPosition(filters),
-      getOEEWeekly(filters),
-      getE2EWeekly(filters),
-      getOutputKPI(prev),
-      getProductivityDetails(filters),
-    ]);
+  const [
+    leadTimeRes, yieldRes, rftRes, outputRes,
+    e2eRes, upstreamRes, downstreamRes, oeeRes,
+    prevLeadTimeRes, prevYieldRes, prevRftRes, prevE2ERes, prevOeeRes,
+    ltByPosRes, oeeWeeklyRes, e2eWeeklyRes,
+    prevOutputRes, productivityDetailsRes,
+  ] = await Promise.allSettled([
+    getLeadTimeKPI(filters),
+    getYieldKPI(filters),
+    getRightFirstTime(filters),
+    getOutputKPI(filters),
+    getE2EProductivity(filters),
+    getUpstreamProductivity(filters),
+    getDownstreamProductivity(filters),
+    getOEEByPlant(filters),
+    getLeadTimeKPI(prev),
+    getYieldKPI(prev),
+    getRightFirstTime(prev),
+    getE2EProductivity(prev),
+    getOEEByPlant(prev),
+    getLeadTimeByPosition(filters),
+    getOEEWeekly(filters),
+    getE2EWeekly(filters),
+    getOutputKPI(prev),
+    getProductivityDetails(filters),
+  ]);
 
-    const failures = [
-      ["leadTime", leadTimeRes], ["yield", yieldRes], ["rft", rftRes],
-      ["output", outputRes], ["e2e", e2eRes], ["upstream", upstreamRes],
-      ["downstream", downstreamRes], ["oee", oeeRes],
-    ].filter(([, r]) => (r as PromiseSettledResult<unknown>).status === "rejected");
-    if (failures.length > 0) {
-      console.error("KPI partial failures:", failures.map(([name, r]) =>
-        `${name}: ${(r as PromiseRejectedResult).reason?.message ?? r}`
-      ));
-    }
+  const failures = [
+    ["leadTime", leadTimeRes], ["yield", yieldRes], ["rft", rftRes],
+    ["output", outputRes], ["e2e", e2eRes], ["upstream", upstreamRes],
+    ["downstream", downstreamRes], ["oee", oeeRes],
+  ].filter(([, r]) => (r as PromiseSettledResult<unknown>).status === "rejected");
+  if (failures.length > 0) {
+    console.error("KPI partial failures:", failures.map(([name, r]) =>
+      `${name}: ${(r as PromiseRejectedResult).reason?.message ?? r}`
+    ));
+  }
 
-    const leadTime = val(leadTimeRes, { AVG_LEADTIME: 0, AVG_GROSS_LEADTIME: 0, AVG_NETT_LEADTIME: 0 });
-    const yield_ = val(yieldRes, { bulkLossPct: 0, packLossPct: 0, bulkLossKg: 0 });
-    const rft = val(rftRes, { rftPct: 0 });
-    const output = val(outputRes, { acceptedBulkKg: 0, releasedFgPcs: 0 });
-    const e2e = val(e2eRes, { avgE2EProd: 0 });
-    const upstream = val(upstreamRes, { avgUpstreamProd: 0 });
-    const downstream = val(downstreamRes, { avgDownstreamProd: 0 });
-    const oeeByPlant = val(oeeRes, [] as { PLANT: string; OEE: number }[]);
-    const ltByPos = val(ltByPosRes, { nett: [] as { POSITION: string; AVG_HOURS: number }[], gross: [] as { POSITION: string; AVG_HOURS: number }[] });
-    const oeeWeekly        = val(oeeWeeklyRes,          [] as { WEEK: string; OEE: number }[]);
-    const e2eWeekly        = val(e2eWeeklyRes,          [] as { WEEK: string; AVG_PROD: number }[]);
-    const prevOutput       = val(prevOutputRes,          { acceptedBulkKg: 0, releasedFgPcs: 0 });
-    const productivityDets = val(productivityDetailsRes, { totalManhours: 0, avgOperators: 0 });
+  const leadTime       = val(leadTimeRes,          { AVG_LEADTIME: 0, AVG_GROSS_LEADTIME: 0, AVG_NETT_LEADTIME: 0 });
+  const yield_         = val(yieldRes,             { bulkLossPct: 0, packLossPct: 0, bulkLossKg: 0 });
+  const rft            = val(rftRes,               { rftPct: 0 });
+  const output         = val(outputRes,            { acceptedBulkKg: 0, releasedFgPcs: 0 });
+  const e2e            = val(e2eRes,               { avgE2EProd: 0 });
+  const upstream       = val(upstreamRes,          { avgUpstreamProd: 0 });
+  const downstream     = val(downstreamRes,        { avgDownstreamProd: 0 });
+  const oeeByPlant     = val(oeeRes,               [] as { PLANT: string; OEE: number }[]);
+  const ltByPos        = val(ltByPosRes,           { nett: [] as { POSITION: string; AVG_HOURS: number }[], gross: [] as { POSITION: string; AVG_HOURS: number }[] });
+  const oeeWeekly      = val(oeeWeeklyRes,         [] as { WEEK: string; OEE: number }[]);
+  const e2eWeekly      = val(e2eWeeklyRes,         [] as { WEEK: string; AVG_PROD: number }[]);
+  const prevOutput     = val(prevOutputRes,        { acceptedBulkKg: 0, releasedFgPcs: 0 });
+  const productivityDets = val(productivityDetailsRes, { totalManhours: 0, avgOperators: 0 });
+  const prevLeadTime   = val(prevLeadTimeRes,      { AVG_LEADTIME: 0, AVG_GROSS_LEADTIME: 0, AVG_NETT_LEADTIME: 0 });
+  const prevYield      = val(prevYieldRes,         { bulkLossPct: 0, packLossPct: 0, bulkLossKg: 0 });
+  const prevRft        = val(prevRftRes,           { rftPct: 0 });
+  const prevE2E        = val(prevE2ERes,           { avgE2EProd: 0 });
+  const prevOee        = val(prevOeeRes,           [] as { PLANT: string; OEE: number }[]);
 
-    const prevLeadTime = val(prevLeadTimeRes, { AVG_LEADTIME: 0, AVG_GROSS_LEADTIME: 0, AVG_NETT_LEADTIME: 0 });
-    const prevYield = val(prevYieldRes, { bulkLossPct: 0, packLossPct: 0, bulkLossKg: 0 });
-    const prevRft = val(prevRftRes, { rftPct: 0 });
-    const prevE2E = val(prevE2ERes, { avgE2EProd: 0 });
-    const prevOee = val(prevOeeRes, [] as { PLANT: string; OEE: number }[]);
+  const avg = (arr: { OEE: number; QUALITY?: number; PERFORMANCE?: number }[], key: "OEE" | "QUALITY" | "PERFORMANCE") =>
+    arr.length > 0 ? arr.reduce((s, r) => s + (r[key] ?? 0), 0) / arr.length : 0;
 
-    const avg = (arr: { OEE: number; QUALITY?: number; PERFORMANCE?: number }[], key: "OEE" | "QUALITY" | "PERFORMANCE") =>
-      arr.length > 0 ? arr.reduce((s, r) => s + (r[key] ?? 0), 0) / arr.length : 0;
+  const avgOEE         = avg(oeeByPlant, "OEE");
+  const avgQuality     = avg(oeeByPlant, "QUALITY");
+  const avgPerformance = avg(oeeByPlant, "PERFORMANCE");
+  const prevAvgOEE     = avg(prevOee,    "OEE");
 
-    const avgOEE         = avg(oeeByPlant, "OEE");
-    const avgQuality     = avg(oeeByPlant, "QUALITY");
-    const avgPerformance = avg(oeeByPlant, "PERFORMANCE");
-    const prevAvgOEE     = avg(prevOee,    "OEE");
+  return {
+    leadTime: {
+      grossDays:      Number((leadTime.AVG_GROSS_LEADTIME ?? 0).toFixed(2)),
+      nettDays:       Number((leadTime.AVG_NETT_LEADTIME  ?? 0).toFixed(2)),
+      grossTrend:     delta(leadTime.AVG_GROSS_LEADTIME ?? 0, prevLeadTime.AVG_GROSS_LEADTIME ?? 0),
+      nettTrend:      delta(leadTime.AVG_NETT_LEADTIME  ?? 0, prevLeadTime.AVG_NETT_LEADTIME  ?? 0),
+      byPositionNett:  ltByPos.nett.map((r) => ({ position: r.POSITION, avgHours: Number(r.AVG_HOURS.toFixed(1)) })),
+      byPositionGross: ltByPos.gross.map((r) => ({ position: r.POSITION, avgHours: Number(r.AVG_HOURS.toFixed(1)) })),
+    },
+    yield: {
+      bulkLossPct:   yield_.bulkLossPct,
+      packLossPct:   yield_.packLossPct,
+      bulkLossKg:    yield_.bulkLossKg,
+      bulkLossTrend: delta(yield_.bulkLossPct, prevYield.bulkLossPct),
+      packLossTrend: delta(yield_.packLossPct, prevYield.packLossPct),
+    },
+    rightFirstTime: {
+      value: rft.rftPct,
+      trend: delta(rft.rftPct, prevRft.rftPct),
+    },
+    output: {
+      bulkQty:   output.acceptedBulkKg,
+      fgQty:     output.releasedFgPcs,
+      fgTrend:   delta(output.releasedFgPcs,  prevOutput.releasedFgPcs),
+      bulkTrend: delta(output.acceptedBulkKg, prevOutput.acceptedBulkKg),
+    },
+    oee: {
+      value:       Number(avgOEE.toFixed(1)),
+      quality:     Number(avgQuality.toFixed(1)),
+      performance: Number(avgPerformance.toFixed(1)),
+      byPlant:     oeeByPlant,
+      trend:       delta(avgOEE, prevAvgOEE),
+      sparkline:   oeeWeekly.map((r) => Number(r.OEE.toFixed(1))),
+    },
+    productivity: {
+      e2e:          e2e.avgE2EProd,
+      upstream:     upstream.avgUpstreamProd,
+      downstream:   downstream.avgDownstreamProd,
+      e2eTrend:     delta(e2e.avgE2EProd, prevE2E.avgE2EProd),
+      manhours:     productivityDets.totalManhours,
+      avgOperators: productivityDets.avgOperators,
+      byPlant:      oeeByPlant.map((p) => ({ PLANT: p.PLANT })),
+      sparkline:    e2eWeekly.map((r) => Number(r.AVG_PROD.toFixed(1))),
+    },
+    _errors: failures.length > 0 ? failures.map(([name]) => name) : undefined,
+  };
+}
 
-    return {
-      leadTime: {
-        grossDays: Number((leadTime.AVG_GROSS_LEADTIME ?? 0).toFixed(2)),
-        nettDays: Number((leadTime.AVG_NETT_LEADTIME ?? 0).toFixed(2)),
-        grossTrend: delta(leadTime.AVG_GROSS_LEADTIME ?? 0, prevLeadTime.AVG_GROSS_LEADTIME ?? 0),
-        nettTrend: delta(leadTime.AVG_NETT_LEADTIME ?? 0, prevLeadTime.AVG_NETT_LEADTIME ?? 0),
-        byPositionNett: ltByPos.nett.map((r) => ({ position: r.POSITION, avgHours: Number(r.AVG_HOURS.toFixed(1)) })),
-        byPositionGross: ltByPos.gross.map((r) => ({ position: r.POSITION, avgHours: Number(r.AVG_HOURS.toFixed(1)) })),
-      },
-      yield: {
-        bulkLossPct: yield_.bulkLossPct,
-        packLossPct: yield_.packLossPct,
-        bulkLossKg: yield_.bulkLossKg,
-        bulkLossTrend: delta(yield_.bulkLossPct, prevYield.bulkLossPct),
-        packLossTrend: delta(yield_.packLossPct, prevYield.packLossPct),
-      },
-      rightFirstTime: {
-        value: rft.rftPct,
-        trend: delta(rft.rftPct, prevRft.rftPct),
-      },
-      output: {
-        bulkQty:   output.acceptedBulkKg,
-        fgQty:     output.releasedFgPcs,
-        fgTrend:   delta(output.releasedFgPcs,  prevOutput.releasedFgPcs),
-        bulkTrend: delta(output.acceptedBulkKg, prevOutput.acceptedBulkKg),
-      },
-      oee: {
-        value:       Number(avgOEE.toFixed(1)),
-        quality:     Number(avgQuality.toFixed(1)),
-        performance: Number(avgPerformance.toFixed(1)),
-        byPlant:     oeeByPlant,
-        trend:       delta(avgOEE, prevAvgOEE),
-        sparkline:   oeeWeekly.map((r) => Number(r.OEE.toFixed(1))),
-      },
-      productivity: {
-        e2e:          e2e.avgE2EProd,
-        upstream:     upstream.avgUpstreamProd,
-        downstream:   downstream.avgDownstreamProd,
-        e2eTrend:     delta(e2e.avgE2EProd, prevE2E.avgE2EProd),
-        manhours:     productivityDets.totalManhours,
-        avgOperators: productivityDets.avgOperators,
-        byPlant:      oeeByPlant.map((p) => ({ PLANT: p.PLANT })),
-        sparkline:    e2eWeekly.map((r) => Number(r.AVG_PROD.toFixed(1))),
-      },
-      _errors: failures.length > 0 ? failures.map(([name]) => name) : undefined,
-    };
+// ── Cache layer ────────────────────────────────────────────────────────────────
+//
+// TWO separate cached functions with different key strategies:
+//
+// 1. Preset periods (YTD, 30D, 90D, 6M, Today)
+//    Cache key: [plant, period]  ← e.g. ["All Plant", "YTD"]
+//    All requests for the same plant+preset hit the same cache entry regardless
+//    of what dates the client sent. Snowflake already uses CURRENT_DATE() for
+//    presets via periodDateWhere(), so the client dates don't affect the result.
+//
+// 2. Custom date ranges
+//    Cache key: [plant, startDate, endDate]
+//    Cache hit only when multiple requests use the exact same date range.
+//    Acceptable — custom ranges are rare; the user explicitly opted out of presets.
+
+const fetchByPeriod = unstable_cache(
+  async (plant: string, period: string) => {
+    // Resolve dates server-side — needed for prevPeriod() comparison window.
+    const { startDate, endDate } = resolvePeriodDates(period);
+    return runKPIQueries(plant, startDate, endDate, period);
   },
-  ["kpi-dashboard"],
+  ["kpi-by-period"],
   { revalidate: 3600, tags: ["kpi"] }
 );
+
+const fetchByDates = unstable_cache(
+  async (plant: string, startDate: string, endDate: string) => {
+    return runKPIQueries(plant, startDate, endDate, undefined);
+  },
+  ["kpi-by-dates"],
+  { revalidate: 3600, tags: ["kpi"] }
+);
+
+// ── Route handler ──────────────────────────────────────────────────────────────
+
+const KNOWN_PERIODS = new Set(["Today", "YTD", "30D", "90D", "6M"]);
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -174,6 +231,10 @@ export async function GET(req: NextRequest) {
   const endDate   = searchParams.get("endDate")   ?? new Date().toISOString().split("T")[0];
   const period    = searchParams.get("period")    ?? "";
 
-  const data = await fetchKPIData(plant, startDate, endDate, period);
+  // Route to the appropriate cache function based on whether a known preset was used.
+  const data = KNOWN_PERIODS.has(period)
+    ? await fetchByPeriod(plant, period)
+    : await fetchByDates(plant, startDate, endDate);
+
   return NextResponse.json(data);
 }
