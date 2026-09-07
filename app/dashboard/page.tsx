@@ -186,6 +186,13 @@ export default function DashboardPage() {
     if (status === "authenticated") fetchData(filters);
   }, [status, fetchData, filters]);
 
+  const handleRefresh = useCallback(async () => {
+    try {
+      await fetch("/api/cache/revalidate", { method: "POST" });
+    } catch {/* silent */}
+    fetchData(filters);
+  }, [filters, fetchData]);
+
   const handleFilterChange = (newFilters: Filters) => {
     setFilters(newFilters);
     try { localStorage.setItem("ct-filters", JSON.stringify(newFilters)); } catch { /* ignore */ }
@@ -235,7 +242,7 @@ export default function DashboardPage() {
           onFilterChange={handleFilterChange}
           activeView={activeView}
           onViewChange={setActiveView}
-          onRefresh={() => fetchData(filters)}
+          onRefresh={handleRefresh}
           isLoading={loading}
           lastUpdated={lastUpdated}
           alertCount={visibleAlerts.length}
