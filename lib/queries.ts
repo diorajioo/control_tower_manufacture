@@ -47,7 +47,7 @@ function periodDateWhere(
 }
 
 // Lead Time → CT_MANUF_LEADTIME
-// Gross: DATEDIFF(PO_CREATED, PO_FG_DONE_DATE) per PO — full cycle, same as Tableau
+// Gross: DATEDIFF(PO activity start → PO_FG_DONE_DATE) per PO — full manufacturing cycle
 // Nett:  SUM(NET_LEADTIME) for ACTUAL rows where LINE_CATEGORY IS NOT NULL per PO
 export async function getLeadTimeKPI(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
@@ -59,12 +59,15 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
       FROM (
         SELECT
           PROCESS_ORDER_FG,
-          DATEDIFF('minute', MIN(PO_CREATED), MIN(PO_FG_DONE_DATE)) AS gross_minutes
+          DATEDIFF('minute',
+            MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
+            MIN(PO_FG_DONE_DATE)
+          ) AS gross_minutes
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
         WHERE ${datePred}
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG
-        HAVING MIN(PO_CREATED) IS NOT NULL
+        HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
           AND MIN(PO_FG_DONE_DATE) IS NOT NULL
       ) sub
     `, dateBinds),
@@ -89,10 +92,6 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
   };
 }
 
-// Position breakdown:
-// Nett  = SUM(NET_LEADTIME) for ACTUAL rows per position per PO
-// Gross = SUM(NET_LEADTIME) for ACTUAL+WAITING+WIP rows per position per PO (Tableau-consistent)
-//         Excludes 'WIP AFTER RECEIVE NDC' which Tableau also excludes
 export async function getLeadTimeByPosition(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const plantFilter = plantWhere(filters.plant);
@@ -116,11 +115,9 @@ export async function getLeadTimeByPosition(filters: QueryFilters) {
       SELECT POSITION, AVG(pos_minutes) / 60.0 AS AVG_HOURS
       FROM (
         SELECT PROCESS_ORDER_FG, POSITION,
-          SUM(NET_LEADTIME) AS pos_minutes
+          DATEDIFF('minute', MIN(ACTIVITY_START), MAX(ACTIVITY_STOP)) AS pos_minutes
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
         WHERE ${datePred}
-          AND ACTIVITY_TYPE IN ('ACTUAL', 'WAITING', 'WIP')
-          AND ACTIVITY != 'WIP AFTER RECEIVE NDC'
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG, POSITION
       ) sub
