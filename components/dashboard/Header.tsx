@@ -86,8 +86,8 @@ export function Header({
     setStartDate(start); setEndDate(end); setPeriod(key); push({ startDate: start, endDate: end, period: key });
   };
   const handleDataLevel = (v: string) => { setDataLevel(v); push({ dataLevel: v }); };
-  const handleStart     = (v: string) => { setStartDate(v); push({ startDate: v }); };
-  const handleEnd       = (v: string) => { setEndDate(v);   push({ endDate: v }); };
+  const handleStart     = (v: string) => { setStartDate(v); setPeriod(""); push({ startDate: v, period: "" }); };
+  const handleEnd       = (v: string) => { setEndDate(v);   setPeriod(""); push({ endDate: v,   period: "" }); };
 
   const initials = session?.user?.name
     ? session.user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
