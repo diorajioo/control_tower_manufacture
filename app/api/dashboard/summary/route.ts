@@ -59,22 +59,21 @@ export async function POST(req: NextRequest) {
   const { kpi, filters } = body;
 
   const trendText = [
-    kpi.leadTime?.trend != null ? `Lead Time MoM: ${kpi.leadTime.trend > 0 ? "+" : ""}${kpi.leadTime.trend}%` : null,
-    kpi.rightFirstTime?.trend != null ? `RFT MoM: ${kpi.rightFirstTime.trend > 0 ? "+" : ""}${kpi.rightFirstTime.trend}%` : null,
-    kpi.oee?.trend != null ? `OEE MoM: ${kpi.oee.trend > 0 ? "+" : ""}${kpi.oee.trend}%` : null,
-    kpi.yield?.bulkLossTrend != null ? `Bulk Loss MoM: ${kpi.yield.bulkLossTrend > 0 ? "+" : ""}${kpi.yield.bulkLossTrend}%` : null,
+    kpi.leadTime?.grossTrend   != null ? `Lead Time MoM: ${kpi.leadTime.grossTrend > 0 ? "+" : ""}${kpi.leadTime.grossTrend}%`           : null,
+    kpi.rightFirstTime?.trend  != null ? `RFT MoM: ${kpi.rightFirstTime.trend > 0 ? "+" : ""}${kpi.rightFirstTime.trend}%`               : null,
+    kpi.oee?.trend             != null ? `OEE MoM: ${kpi.oee.trend > 0 ? "+" : ""}${kpi.oee.trend}%`                                     : null,
+    kpi.yield?.bulkLossTrend   != null ? `Bulk Loss MoM: ${kpi.yield.bulkLossTrend > 0 ? "+" : ""}${kpi.yield.bulkLossTrend}%`           : null,
   ].filter(Boolean).join(", ");
 
   const userMessage = `Data KPI periode ${filters.startDate} s/d ${filters.endDate}, Plant: ${filters.plant || "Semua Plant"}:
 
-Lead Time: ${kpi.leadTime?.value} hari (upstream: ${kpi.leadTime?.upstream}d, downstream: ${kpi.leadTime?.downstream}d)
-Bulk Loss: ${kpi.yield?.bulkLossPct}% (~${(kpi.yield?.bulkLossKg ?? 0).toLocaleString()} kg)
-Pack Loss: ${kpi.yield?.packLossPct}%
-Right First Time: ${kpi.rightFirstTime?.value}%
-Output Bulk Accepted: ${(kpi.output?.acceptedBulkKg ?? 0).toLocaleString()} kg
-Released FG: ${(kpi.output?.releasedFgPcs ?? 0).toLocaleString()} pcs
-OEE: ${kpi.oee?.value}%
-Productivity: ${kpi.productivity?.value} pcs/manhour${trendText ? `\nPerubahan vs periode sebelumnya: ${trendText}` : ""}
+Lead Time Gross: ${kpi.leadTime?.grossDays ?? "—"} hari | Nett: ${kpi.leadTime?.nettDays ?? "—"} hari
+Bulk Loss: ${kpi.yield?.bulkLossPct ?? "—"}% (~${(kpi.yield?.bulkLossKg ?? 0).toLocaleString()} kg)
+Pack Loss: ${kpi.yield?.packLossPct ?? "—"}%
+Right First Time: ${kpi.rightFirstTime?.value ?? "—"}%
+Output Bulk: ${(kpi.output?.bulkQty ?? 0).toLocaleString()} kg | Released FG: ${(kpi.output?.fgQty ?? 0).toLocaleString()} pcs
+OEE: ${kpi.oee?.value ?? "—"}%
+Produktivitas E2E: ${kpi.productivity?.e2e ?? "—"} pcs/manhour${trendText ? `\nPerubahan vs periode sebelumnya: ${trendText}` : ""}
 
 Buat ringkasan eksekutif singkat:`;
 
@@ -88,9 +87,10 @@ Buat ringkasan eksekutif singkat:`;
     const stream = await createStreamWithFallback(groq, messages);
 
     const encoder = new TextEncoder();
-    // Sentinel appended at end of a successful stream so the client can
-    // distinguish a complete response from a mid-stream network cut.
-    const DONE_SENTINEL = "\x00DONE\x00";
+    // Plain-text sentinel — appended only when the model finishes cleanly.
+    // The client strips this before display and uses it to detect truncation.
+    // Must not contain null bytes (filtered by some HTTP proxies/edges).
+    const DONE_SENTINEL = "\n​[DONE]​";
 
     const readable = new ReadableStream({
       async start(controller) {
@@ -101,7 +101,7 @@ Buat ringkasan eksekutif singkat:`;
           }
           controller.enqueue(encoder.encode(DONE_SENTINEL));
         } catch {
-          // Stream error — don't enqueue sentinel so client knows it was cut
+          // Stream error — omit sentinel so client knows it was cut
         } finally {
           controller.close();
         }

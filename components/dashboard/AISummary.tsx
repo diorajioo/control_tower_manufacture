@@ -141,7 +141,7 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
       }
       if (!res.body) throw new Error("No response body");
 
-      const SENTINEL = "\x00DONE\x00";
+      const SENTINEL = "\n​[DONE]​";
       const reader   = res.body.getReader();
       const decoder  = new TextDecoder();
 
