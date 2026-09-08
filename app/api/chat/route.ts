@@ -88,7 +88,7 @@ Format respons:
 Follow-up questions (WAJIB di setiap respons):
 - Selalu akhiri jawaban dengan section "**Mau explore lebih lanjut?**"
 - Berikan tepat 2-3 pertanyaan follow-up yang relevan dan actionable
-- Format: `> 💬 "teks pertanyaan"`
+- Format: > diikuti tanda kutip dan teks pertanyaan, contoh: > "Tunjukkan tren OEE minggu ini"
 - Pilih pertanyaan yang mengarah ke insight lebih dalam — bukan yang sudah dijawab, tapi yang logical next step
 - Contoh: setelah jawab OEE → follow-up bisa ke breakdown per plant, tren mingguan, atau perbandingan vs bulan lalu
 
