@@ -47,7 +47,7 @@ function periodDateWhere(
 }
 
 // Lead Time → CT_MANUF_LEADTIME
-// Gross: DATEDIFF(PO activity start → PO_FG_DONE_DATE) per PO — full manufacturing cycle
+// Gross: DATEDIFF(PO activity start → RECEIVE NDC stop) per PO
 // Nett:  SUM(NET_LEADTIME) for ACTUAL rows where LINE_CATEGORY IS NOT NULL per PO
 export async function getLeadTimeKPI(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
@@ -61,14 +61,14 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
           PROCESS_ORDER_FG,
           DATEDIFF('minute',
             MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
-            MIN(PO_FG_DONE_DATE)
+            MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
           ) AS gross_minutes
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
         WHERE ${datePred}
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG
         HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
-          AND MIN(PO_FG_DONE_DATE) IS NOT NULL
+          AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
       ) sub
     `, dateBinds),
     executeQuery<{ AVG_NETT: number }>(`

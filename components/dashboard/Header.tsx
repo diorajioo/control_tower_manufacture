@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, Bell, LayoutGrid, Calendar, ChevronDown, Check } from "lucide-react";
+import { RefreshCw, Bell, LayoutGrid, Calendar, ChevronDown, Check, Send, Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,8 @@ export function Header({
   const [startDate, setStartDate] = useState(`${new Date().getFullYear()}-01-01`);
   const [endDate,   setEndDate]   = useState(today());
   const [dataLevel, setDataLevel] = useState("Daily");
-  const [plantOpen, setPlantOpen] = useState(false);
+  const [plantOpen,      setPlantOpen]      = useState(false);
+  const [teamsTestState, setTeamsTestState] = useState<"idle"|"sending"|"ok"|"err">("idle");
   const plantRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -215,8 +216,36 @@ export function Header({
         ))}
       </div>
 
-      {/* Right: bell + live + avatar */}
+      {/* Right: Teams test + bell + live + avatar */}
       <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={async () => {
+            setTeamsTestState("sending");
+            try {
+              const res = await fetch("/api/notifications/teams/test", { method: "POST" });
+              const d = await res.json() as { ok?: boolean; error?: string };
+              setTeamsTestState(d.ok ? "ok" : "err");
+            } catch { setTeamsTestState("err"); }
+            setTimeout(() => setTeamsTestState("idle"), 3500);
+          }}
+          disabled={teamsTestState === "sending"}
+          title={
+            teamsTestState === "ok"  ? "Pesan test terkirim ke Teams!" :
+            teamsTestState === "err" ? "Gagal — cek TEAMS_WEBHOOK_URL" :
+            "Test koneksi Teams"
+          }
+          className={cn(
+            "p-1.5 rounded-xl transition-colors",
+            teamsTestState === "idle"    && "text-gray-400 hover:text-[#464eb8] hover:bg-indigo-50",
+            teamsTestState === "sending" && "text-gray-300 cursor-wait",
+            teamsTestState === "ok"      && "text-emerald-500 bg-emerald-50",
+            teamsTestState === "err"     && "text-red-400 bg-red-50",
+          )}>
+          {teamsTestState === "sending"
+            ? <Loader2 size={14} className="animate-spin" />
+            : <Send size={14} />}
+        </button>
+
         <button onClick={onBellClick}
           className="relative p-1.5 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
           <Bell size={15} />

@@ -182,9 +182,11 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // Initial load only — filter changes go through handleFilterChange which calls fetchData directly
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (status === "authenticated") fetchData(filters);
-  }, [status, fetchData, filters]);
+  }, [status]);
 
   const handleRefresh = useCallback(async () => {
     try {
