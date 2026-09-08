@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
+
+// Allow up to 60 s on Vercel — needed when Snowflake warehouse auto-resumes from suspension.
+export const maxDuration = 60;
 import {
   getLeadTimeKPI,
   getLeadTimeByPosition,

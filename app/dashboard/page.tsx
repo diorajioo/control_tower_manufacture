@@ -94,6 +94,7 @@ export default function DashboardPage() {
   const [leadTimeUnit,  setLeadTimeUnit]  = useState<"days" | "hours">("days");
   const [leadTimeType,  setLeadTimeType]  = useState<"gross" | "nett">("gross");
   const [kpiType,       setKpiType]       = useState("leadtime");
+  const [fetchError,    setFetchError]    = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(() => {
     const defaults: Filters = {
       plant:     "All Plant",
@@ -136,6 +137,7 @@ export default function DashboardPage() {
   const fetchData = useCallback(async (f: Filters) => {
     setLoading(true);
     setKpi(null);
+    setFetchError(null);
     const params = new URLSearchParams({
       plant:     f.plant,
       startDate: f.startDate,
@@ -177,6 +179,9 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error("Dashboard fetch error:", err);
+      setFetchError(
+        err instanceof Error ? err.message : "Gagal memuat data — coba refresh"
+      );
     } finally {
       setLoading(false);
     }
@@ -252,6 +257,12 @@ export default function DashboardPage() {
         />
 
         <main className="flex-1 p-4 overflow-y-auto min-h-0" onClick={() => setHighlightedKpi(null)}>
+          {fetchError && (
+            <div className="mb-3 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between gap-3">
+              <span className="text-[12px] text-red-600 font-medium">{fetchError}</span>
+              <button onClick={() => setFetchError(null)} className="text-red-400 hover:text-red-600 text-xs shrink-0">✕</button>
+            </div>
+          )}
           <AISummary kpi={kpi} filters={filters} ready={!loading && kpi !== null} />
 
           {(alertPanelOpen || visibleAlerts.some((a) => a.severity === "critical")) && (
