@@ -1,4 +1,5 @@
 import { NextAuthOptions } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import AzureADProvider from "next-auth/providers/azure-ad";
 
 // Delegated Graph scopes for Teams DM notifications.
@@ -6,7 +7,7 @@ import AzureADProvider from "next-auth/providers/azure-ad";
 // offline_access gives us a refresh_token so sessions outlast the 1-hour access token.
 const GRAPH_SCOPES = "Chat.Create ChatMessage.Send offline_access";
 
-async function refreshAccessToken(token: Record<string, unknown>) {
+async function refreshAccessToken(token: JWT): Promise<JWT> {
   try {
     const res = await fetch(
       `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/oauth2/v2.0/token`,
@@ -34,9 +35,9 @@ async function refreshAccessToken(token: Record<string, unknown>) {
       refreshToken: data.refresh_token ?? token.refreshToken,
       expiresAt:    Math.floor(Date.now() / 1000 + (data.expires_in ?? 3600)),
       error:        undefined,
-    };
+    } as JWT;
   } catch {
-    return { ...token, error: "RefreshAccessTokenError" as const };
+    return { ...token, error: "RefreshAccessTokenError" as const } as JWT;
   }
 }
 
@@ -71,14 +72,14 @@ export const authOptions: NextAuthOptions = {
         return token;
       }
       // Silently refresh
-      return refreshAccessToken(token as Record<string, unknown>);
+      return refreshAccessToken(token);
     },
     async session({ session, token }) {
       if (session.user && token.sub) {
         (session.user as typeof session.user & { id: string }).id = token.sub;
       }
-      (session as Record<string, unknown>).accessToken = token.accessToken;
-      (session as Record<string, unknown>).error       = token.error;
+      (session as unknown as Record<string, unknown>).accessToken = token.accessToken;
+      (session as unknown as Record<string, unknown>).error       = token.error;
       return session;
     },
   },
