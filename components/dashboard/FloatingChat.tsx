@@ -61,6 +61,22 @@ function formatInline(text: string, onKpiClick?: (kpi: string) => void): React.R
   );
 }
 
+// Extract follow-up questions from the AI response tail
+function splitFollowUps(text: string): { main: string; followUps: string[] } {
+  const headerRe = /\*{0,2}[Mm]au\s+explore\s+lebih\s+lanjut\??\*{0,2}/;
+  const idx = text.search(headerRe);
+  if (idx === -1) return { main: text, followUps: [] };
+
+  const main = text.slice(0, idx).trimEnd();
+  const followUps: string[] = [];
+  for (const line of text.slice(idx).split("\n")) {
+    if (headerRe.test(line)) continue;
+    const m = line.match(/^[\s>*-]*"?([^"<>]{8,160})"?\s*$/);
+    if (m) followUps.push(m[1].trim().replace(/^["']|["']$/g, ""));
+  }
+  return { main, followUps: followUps.slice(0, 3) };
+}
+
 // Block renderer: paragraphs + bullet lists
 function MarkdownContent({ text, onKpiClick }: { text: string; onKpiClick?: (kpi: string) => void }) {
   const lines = text.split("\n");
@@ -227,8 +243,8 @@ export function FloatingChat({ filters }: FloatingChatProps) {
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
       {open && (
         <div
-          className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[22rem] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200"
-          style={{ height: "540px" }}
+          className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[30rem] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200"
+          style={{ height: "640px" }}
         >
           {/* Header */}
           <div className="bg-brand-800 text-white shrink-0">
@@ -324,25 +340,46 @@ export function FloatingChat({ filters }: FloatingChatProps) {
             )}
 
             {/* Completed messages */}
-            {messages.map((msg, i) => (
-              <div key={i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
-                {msg.role === "user" ? (
-                  <div className="max-w-[82%] bg-brand-800 text-white text-[13px] leading-relaxed rounded-2xl rounded-br-sm px-3.5 py-2.5">
-                    {msg.content}
+            {messages.map((msg, i) => {
+              const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
+              const { main, followUps } = msg.role === "assistant"
+                ? splitFollowUps(msg.content)
+                : { main: msg.content, followUps: [] };
+              return (
+                <div key={i} className={cn("flex flex-col", msg.role === "user" ? "items-end" : "items-start")}>
+                  <div className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+                    {msg.role === "user" ? (
+                      <div className="max-w-[82%] bg-brand-800 text-white text-[13px] leading-relaxed rounded-2xl rounded-br-sm px-3.5 py-2.5">
+                        {msg.content}
+                      </div>
+                    ) : (
+                      <div className="max-w-[92%] bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
+                        <MarkdownContent text={main} onKpiClick={handleKpiHighlight} />
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="max-w-[92%] bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
-                    <MarkdownContent text={msg.content} onKpiClick={handleKpiHighlight} />
-                  </div>
-                )}
-              </div>
-            ))}
+                  {isLastAssistant && followUps.length > 0 && !loading && !streaming && (
+                    <div className="flex flex-col gap-1.5 mt-2 w-[92%]">
+                      {followUps.map((q, j) => (
+                        <button
+                          key={j}
+                          onClick={() => sendMessage(q)}
+                          className="text-[12px] text-left bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 hover:border-indigo-200 text-indigo-700 px-3 py-2 rounded-xl transition-colors leading-snug"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             {/* Streaming message (typing animation) */}
             {streaming && (
               <div className="flex justify-start">
                 <div className="max-w-[92%] bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
-                  <MarkdownContent text={typed} onKpiClick={handleKpiHighlight} />
+                  <MarkdownContent text={splitFollowUps(typed).main} onKpiClick={handleKpiHighlight} />
                   <span className="inline-block w-0.5 h-3.5 bg-gray-400 ml-0.5 animate-pulse align-middle" />
                 </div>
               </div>
