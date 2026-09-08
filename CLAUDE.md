@@ -5,19 +5,26 @@ An internal web dashboard built by the Data team and deployed to an
 on-premises Kubernetes cluster by the DAI Platform team. It runs as a
 container. Treat every rule below as non-negotiable.
 
-  
+The rules below are a summary of the Web Dashboard Deployment Workbook:
+https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQCKOkUYBmkZRailNr6rKZFVAZjE4jkc7_GlH8EjsOYQ3sU?e=HSlZ7L
+(Company sign-in required. If a rule here is ambiguous, the workbook wins.)
 
 ## The Container Contract -- always follow these
 
-1. The app must listen on 0.0.0.0, never on 127.0.0.1 or localhost.
-   Serve everything on ONE port. Default to 8080, read from the PORT
-   environment variable. Any port above 1024 is acceptable, but the
-   port the app listens on and the EXPOSE line must be the same
-   number, and you must tell me if you change it. Never use a port
-   below 1024: those need root, which rule 9 of this file forbids.
+1. Each container listens on 0.0.0.0, never on 127.0.0.1 or localhost,
+   and serves on ONE port. This is per container, not per application:
+   if this app is a frontend plus a backend, that is two containers with
+   two ports, and that is fine.
+   Any port above 1024 is acceptable -- 8080 is a convention here, not a
+   requirement, and 3000 or 3061 or 8501 are all equally fine. What
+   matters is that the port the process listens on, the EXPOSE line in
+   its Dockerfile, and what you tell me all agree. Read it from an
+   environment variable where the framework allows it.
+   Never use a port below 1024: those require root.
 
 2. Expose a GET /healthz endpoint returning HTTP 200 with a small body.
-   It must be cheap: never query a database or an external service in it. 
+   It must be cheap: never query a database or an external service in it.
+   (Streamlit already provides /_stcore/health -- use that instead.)
 
 3. Never hardcode hostnames, usernames, passwords, tokens, API keys,
    account identifiers, IP addresses or absolute file paths. Read them
@@ -37,16 +44,19 @@ container. Treat every rule below as non-negotiable.
 
 7. Log to stdout/stderr only. Never write to a log file.
 
-8. Pin every dependency to an exact version in requirements.txt or
-   package.json. No version ranges, no unpinned packages.
-
-  
+8. Pin every dependency to an exact version, in whatever file your
+   chosen stack uses. All of these are equally acceptable:
+     - requirements.txt with == on every line
+     - pyproject.toml with a committed uv.lock or poetry.lock
+     - package.json with a committed package-lock.json or pnpm-lock.yaml
+     - go.mod and go.sum, Cargo.toml and Cargo.lock
+   No version ranges, no unpinned packages, and commit the lockfile.
 
 9. CREATE and maintain a Dockerfile at the repository root. This
    repository deliberately ships without one, because a Dockerfile
    depends on this app's real entrypoint, dependencies and system
    packages. Write it alongside the app, and update it whenever the
-   start command or the dependencies change. It must:
+   app's start command or dependencies change. It must:
      - build with a single `docker build .` from a clean checkout
      - use a slim, version-pinned base image (never :latest)
      - install dependencies BEFORE copying application source
@@ -54,7 +64,7 @@ container. Treat every rule below as non-negotiable.
      - EXPOSE the port the app listens on (above 1024)
      - start the app with exec so it receives SIGTERM
    The DAI Platform team reviews the Dockerfile before the first
-   deployment and may adjust it.  
+   deployment and may adjust it. Do not be surprised if it changes.
 
 10. Maintain a .dockerignore excluding .env, .git, data files,
     notebooks, virtual environments and node_modules.
@@ -62,19 +72,45 @@ container. Treat every rule below as non-negotiable.
 11. Maintain a .gitignore excluding .env, .venv/, __pycache__/,
     node_modules/, *.csv, *.parquet, *.xlsx and data/.
 
-12. Start quickly and stop cleanly. Do not load large datasets at
-    import time -- load them inside a cached function so the app can
-    answer its health check immediately. Start the app with exec in
-    the Dockerfile CMD (for example: CMD ["sh","-c","exec streamlit
-    run app.py ..."]) so the app, not the shell, receives SIGTERM.  
+12. Start quickly and stop cleanly. Do not load large datasets at import
+    time -- load them inside a cached function so the app can answer its
+    health check immediately. Start the app with exec in the Dockerfile
+    CMD (CMD ["sh","-c","exec streamlit run app.py ..."]) so the app,
+    not the shell, receives SIGTERM.
+
+
+## Microsoft SSO -- mandatory for every app
+
+13. This app must sign users in with Microsoft Entra ID. Never build a
+    username-and-password login, and never leave the app open.
+      - read the client ID, tenant ID and client secret from
+        configuration. Never hardcode any of them.
+      - NEVER put any SSO setting behind a NEXT_PUBLIC_ or VITE_ prefix.
+        Those are compiled into the browser bundle and readable by
+        anyone with developer tools open. This is the most expensive
+        mistake available in this project.
+      - the login must run server-side. The browser never holds the
+        client secret.
+      - add every SSO setting to .env.example, marking the sensitive
+        ones __SECRET__replace_me.
+      - when you implement or change it, TELL ME the exact OAuth
+        callback path, because it has to be registered with IT and it
+        is matched character for character.
+      - for Streamlit, use the built-in st.login() support. It needs
+        streamlit>=1.42 and Authlib>=1.3.2, both pinned, and it reads
+        .streamlit/secrets.toml rather than environment variables. That
+        file must be git-ignored -- never commit it. The callback path
+        is /oauth2callback.
 
 ## Performance rules
-- Do aggregation in SQL in the warehouse, not in pandas in the app.
-- Cache query results (for example @st.cache_data with a TTL).
+- Do the aggregation in SQL in the warehouse, not in the application.
+- Cache query results with a sensible TTL, using whatever caching your
+  chosen framework provides.
 - Never load a full table into memory. Always filter and limit in SQL.
 
 ## Project specifics
-- Stack: [FILL IN -- e.g. Streamlit 1.4x, Python 3.12]
+- Stack: [not decided yet -- fill this in once it is, and see
+  "Choosing the stack" above]
 - Data sources: [FILL IN -- e.g. Snowflake DB_SALES.ANALYTICS]
 
 ## When I ask for a change

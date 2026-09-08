@@ -1,5 +1,6 @@
 # Secrets -- the most important lines in this file
 .env
+.streamlit/secrets.toml
 .env.*
 !.env.example
 *.pem
@@ -21,6 +22,18 @@ node_modules/
 dist/
 build/
 .npm/
+
+# Go
+vendor/
+*.test
+
+# Rust
+target/
+
+# Java / JVM
+target/
+build/
+*.class
 
 # Data -- never commit data to a code repository
 data/

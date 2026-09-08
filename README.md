@@ -20,22 +20,52 @@ decision does it support?
 |---|---|---|
 | Snowflake | `DB_X.SCHEMA_Y.TABLE_Z` | Hourly |
 
+## What is in this repository, and what is not
+
+This repository is **scaffolding**, not a starter app. The DAI Platform Team
+owns the files that protect you; you own the application and its Dockerfile.
+
+| Already here (do not delete) | Owner |
+|---|---|
+| `.gitignore` | Platform Team — stops `.env` and data files reaching Git |
+| `.dockerignore` | Platform Team — stops them reaching the image |
+| `.gitlab-ci.yml` | Platform Team — includes the shared pipeline |
+| `CLAUDE.md` | Platform Team (the rules) + you (project details) |
+| `.env.example` | Seeded by us, **extended by you** |
+| `CODEOWNERS` | Platform Team |
+
+| You create this | Notes |
+|---|---|
+| Your application code | Whatever your app needs |
+| `requirements.txt` / `package.json` | Exact pinned versions |
+| **`Dockerfile`** | **Written alongside your app**, by you or Claude Code. We deliberately do not ship one — a Dockerfile depends on your real entrypoint, your dependencies and any system packages you need, so a generic one would be wrong for most apps. We review it before the first deployment and may adjust it; after that we help maintain it. |
+| `README.md` content | Replace this file with your own |
+
 ## Run locally
+
+> Replace this block with the real commands once the stack is chosen. It is
+> left generic on purpose — this repository does not assume a language.
 
 ```bash
 cp .env.example .env        # then fill in the real values
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
+# ... install dependencies for your stack
+# ... start the app
 ```
 
 ### Run it the way production runs it
 
+Whatever the stack, this is the test that matters, because it is what the
+pipeline does:
+
 ```bash
 docker build -t myapp:test .
-docker run --rm -p 8080:8080 --env-file .env -e PORT=8080 myapp:test
-curl -i http://localhost:8080/_stcore/health   # must return 200
+docker run --rm -p 8080:8080 --env-file .env myapp:test
+curl -i http://localhost:8080/<your-health-path>   # must return 200
 ```
+
+Substitute your own port and health path. Neither has to be 8080 or
+`/healthz` — they only have to match what your Dockerfile and your app
+actually use.
 
 ## Before requesting a deployment
 
@@ -53,8 +83,40 @@ curl -i http://localhost:8080/_stcore/health   # must return 200
 
 Both live on the Data Engineering SharePoint site and need your company sign-in.
 
+## Moving in an app you already built
+
+Normal case, not an exception. Do not merge your old Git history into this
+repository — copy the files across instead.
+
+```bash
+# from inside this repository
+cp ~/projects/my-old-folder/app.py           .
+cp ~/projects/my-old-folder/requirements.txt .
+cp ~/projects/my-old-folder/.env             .   # copied, never committed
+git checkout -b staging
+git add -A && git status      # read the list before committing
+git commit -m "Move dashboard in from local development"
+git push -u origin staging
+```
+
+**Bring your `Dockerfile` with you** if you already have one — it belongs with
+your app. If you do not have one yet, ask Claude Code to write it (see the
+rules in `CLAUDE.md`).
+
+**Keep the files already in this repository** — `.gitignore`, `.dockerignore`,
+`CLAUDE.md` and `.gitlab-ci.yml`. Do not overwrite them with your old versions.
+**Leave behind** your `.venv/` or `node_modules/`, any data files, notebooks,
+and your old `.git` folder.
+
+Easiest route: paste the migration prompt from section 2.2 of the workbook
+into Claude Code and let it do the copying and the readiness check.
+
+The pipeline will then tell you exactly what still needs fixing. Two or three
+failures on the first push is normal for an app built before reading the
+contract.
+
 ## Files you should not delete
 
-`.gitignore`, `.dockerignore` and the platform rules section of `CLAUDE.md`
-are your protection against committing a credential or shipping an image
-that will not deploy. Extend them if you need to; do not remove them.
+`.gitignore`, `.dockerignore`, `.gitlab-ci.yml` and the platform rules section
+of `CLAUDE.md` are your protection against committing a credential or shipping
+an image that will not deploy. Extend them if you need to; do not remove them.
