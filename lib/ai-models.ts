@@ -86,7 +86,8 @@ export const GROQ_MODELS: AIModelConfig[] = [
  */
 export const SUMMARY_MODEL_PRIORITY: string[] = [
   "openai/gpt-oss-120b",
-  "qwen/qwen3.6-27b",
+  "groq/compound",
+  "qwen/qwen3.8-27b",
 ];
 
 /** Default model for interactive chat (speed > quality) */

@@ -35,7 +35,7 @@ async function createStreamWithFallback(
     try {
       return await groq.chat.completions.create({
         model,
-        max_tokens: 220,
+        max_tokens: 400,
         stream: true as const,
         messages,
       });

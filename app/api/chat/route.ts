@@ -49,7 +49,7 @@ const TOOLS: Groq.Chat.ChatCompletionTool[] = [
         properties: {
           kpi_type: {
             type: "string",
-            enum: ["leadtime", "upstream", "downstream", "e2e", "output", "batch"],
+            enum: ["leadtime", "upstream", "downstream", "e2e", "oee", "rft", "output", "batch"],
             description: "Jenis KPI untuk tren",
           },
           start_date: { type: "string", description: "Format YYYY-MM-DD" },
@@ -331,6 +331,30 @@ async function executeGetWeeklyTrend(args: {
         WHERE OLAH_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
         GROUP BY NOMO, WEEK, PLANT
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
+    downstream: `
+      SELECT WEEK, PLANT, AVG(po_prod) AS KPI_VALUE FROM (
+        SELECT PROCESS_ORDER_FG, PLANT, DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
+          SUM(QTY_FG_GOOD)/NULLIF(SUM(LEADTIME_IN_MINUTE)/60.0,0)/NULLIF(MAX(OPERATOR_COUNT),0) AS po_prod
+        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
+        WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}'
+          AND LEADTIME_IN_MINUTE>0 AND OPERATOR_COUNT>0 ${plantFilter}
+        GROUP BY PROCESS_ORDER_FG, PLANT, WEEK
+      ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
+    oee: `
+      SELECT DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK, PLANT,
+        AVG(
+          (CASE WHEN QTY_TOTAL>0 THEN QTY_FG_GOOD::FLOAT/QTY_TOTAL ELSE 0 END) *
+          (CASE WHEN ACTIVITY_PRODUCTIVITY_STD>0 THEN LEAST(PRODUCTIVITY::FLOAT/ACTIVITY_PRODUCTIVITY_STD,1.0) ELSE 0 END)
+        )*100 AS KPI_VALUE
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
+      WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+      GROUP BY WEEK, PLANT ORDER BY WEEK`,
+    rft: `
+      SELECT DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
+        COUNT(CASE WHEN ACTIVITY<>'ADJUST' THEN 1 END)*100.0/NULLIF(COUNT(*),0) AS KPI_VALUE
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE PO_FG_DONE_DATE::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+      GROUP BY WEEK, PLANT ORDER BY WEEK`,
   };
 
   const sql = queryMap[args.kpi_type];
