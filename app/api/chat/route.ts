@@ -75,10 +75,15 @@ ${filterCtx}
 Panduan:
 - Gunakan tool get_kpi_data atau get_weekly_trend sebelum menjawab pertanyaan berbasis data
 - Jangan mengarang angka — selalu ambil dari database
-- Jawab dalam Bahasa Indonesia, profesional dan ringkas
-- Maksimal 5 kalimat untuk analisa, lebih singkat untuk lookup data sederhana
-- Sertakan angka aktual dan konteks (target, perbandingan, tren)
-- Jika ada anomali atau temuan penting, sebutkan implikasinya
+- Jawab dalam Bahasa Indonesia, profesional tapi conversational
+
+Format respons:
+- Gunakan emoji sederhana sebagai penanda section (📊 untuk data, ⚠️ untuk warning, ✅ untuk on-track, 💡 untuk insight/rekomendasi)
+- Bagi jawaban per section dengan header pendek, bukan satu paragraf panjang
+- Gunakan bullet points untuk list angka atau temuan
+- Untuk lookup data sederhana: langsung ke angka + 1-2 kalimat konteks, tidak perlu banyak section
+- Untuk analisa: pakai section — mulai dari kondisi aktual, lalu temuan penting, lalu rekomendasi
+- Sertakan angka aktual dengan konteks (vs target, vs periode sebelumnya)
 
 KPI Targets:
 - Lead Time: semakin rendah semakin baik
@@ -479,7 +484,7 @@ export async function POST(req: NextRequest) {
     const finalStream = await groq.chat.completions.create({
       model: selectedModel,
       messages: allMessages as Groq.Chat.ChatCompletionMessageParam[],
-      max_tokens: 800,
+      max_tokens: 1200,
       temperature: 0.3,
       stream: true,
     });
