@@ -105,7 +105,7 @@ export function Header({
       {/* Title */}
       <div className="shrink-0">
         <p className="text-[13px] font-bold text-slate-800 leading-none tracking-tight">Manufacturing Overview</p>
-        <p className="text-[11px] text-gray-400 leading-none mt-0.5">KPI Control Tower</p>
+        <p className="text-[11px] text-gray-500 leading-none mt-0.5">KPI Control Tower</p>
       </div>
 
       <div className="w-px h-6 bg-gray-100 shrink-0 mx-0.5" />

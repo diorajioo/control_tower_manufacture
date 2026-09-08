@@ -79,7 +79,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
   }
 
   return (
-    <div className="mb-4 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+    <div className="mb-4 rounded-xl border border-gray-200 bg-white overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
         <button

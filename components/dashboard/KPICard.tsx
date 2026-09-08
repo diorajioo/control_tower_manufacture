@@ -175,7 +175,7 @@ export function KPICard({
     <div
       className={cn(
         "relative bg-white rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300",
-        "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]",
+        "hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-shadow duration-200",
         alert
           ? "border border-red-200 ring-1 ring-red-100/50"
           : "border border-gray-100/80",
@@ -242,8 +242,8 @@ export function KPICard({
         </div>
       )}
 
-      {subtitle && <p className="text-[11px] text-gray-400 -mt-2">{subtitle}</p>}
-      {trendLabel && <p className="text-[11px] text-gray-400 -mt-2">{trendLabel}</p>}
+      {subtitle && <p className="text-[12px] text-gray-500 -mt-2">{subtitle}</p>}
+      {trendLabel && <p className="text-[12px] text-gray-500 -mt-2">{trendLabel}</p>}
 
       {children}
     </div>
@@ -363,7 +363,7 @@ export function MiniStat({ label, value, unit, positive, negative, trend }: Mini
           </span>
         )}
       </div>
-      <span className="text-[11px] text-gray-400 leading-none">{label}</span>
+      <span className="text-[12px] text-gray-500 leading-none">{label}</span>
     </div>
   );
 }
