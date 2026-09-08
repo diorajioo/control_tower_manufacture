@@ -31,11 +31,30 @@ Real-time visibility langsung dari Snowflake: data tidak melewati proses manual,
 - Lead Time, Yield/Loss, Right First Time (RFT), Output (baris 1)
 - OEE, OPE, Productivity (baris 2)
 
+**AI Features:**
+- AI Summary: ringkasan eksekutif otomatis 3 kalimat di atas dashboard, di-cache 5 jam, powered by Groq (primary: openai/gpt-oss-120b, fallback: groq/compound → qwen/qwen3.8-27b)
+- AI Analyst chatbot (floating UI): query Snowflake via tool use, format respons per-section dengan emoji, selalu menyertakan follow-up questions untuk guided insight discovery
+- Chatbot tools: `get_kpi_data` (7 KPI types) + `get_weekly_trend` (8 trend types: leadtime, upstream, downstream, e2e, oee, rft, output, batch)
+- Agent routing: kompleksitas pertanyaan menentukan model yang dipakai
+
+**Alert System:**
+- KPI alerts otomatis berdasarkan threshold (OEE < 65%, Bulk Loss > 3%, Pack Loss > 1%, RFT < 95%)
+- Severity: critical / warning
+- Auto-kirim alert critical ke Microsoft Teams via Graph API (delegated, tanpa admin consent)
+- Alert panel di dashboard dengan dismiss + undo (5 detik)
+- Tidak re-send alert yang sama dalam satu sesi
+
+**Notifikasi:**
+- Microsoft Teams: DM personal via Graph API (Chat.Create + ChatMessage.Send)
+- Fallback: Power Automate webhook (legacy, jika TEAMS_RECIPIENTS tidak di-set)
+- Email: via Resend API
+
 **Constraints teknis:**
 - Recharts dipertahankan sebagai library chart; hanya styling yang boleh diubah
 - Brand color indigo (#4f46e5 / brand-600) dipertahankan
 - Semua UI copy tetap Bahasa Indonesia
 - Autentikasi via Azure AD (NextAuth.js)
+- Vercel deployment dari branch `main`; branch `dev` untuk staging lokal
 
 ## Brand Commitments
 
@@ -47,9 +66,10 @@ Real-time visibility langsung dari Snowflake: data tidak melewati proses manual,
 
 ## Evidence on Hand
 
-- Kode Next.js 14 lengkap di repositori
-- Snowflake tables: CT_MANUF_LEADTIME, CT_MANUF_KEMAS, CT_MANUF_OLAH, DATAMART_PRODUCTION_OUTPUT_OLAH, DATAMART_PRODUCTION_OUTPUT_FG
-- Versi produk: v1.0
+- Kode Next.js 14 lengkap di repositori (github.com/diorajioo/control_tower_manufacture)
+- Snowflake tables: CT_MANUF_LEADTIME, CT_MANUF_KEMAS, CT_MANUF_OLAH, CT_MANUF_E2E, CT_MANUF_TRENDS, DATAMART_PRODUCTION_OUTPUT_OLAH, DATAMART_PRODUCTION_OUTPUT_FG
+- Vercel deployment: control-tower-manufacture.vercel.app (branch main)
+- Versi produk: v1.1
 
 ## Product Principles
 
