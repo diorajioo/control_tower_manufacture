@@ -4,15 +4,18 @@ import { authOptions } from "@/lib/auth";
 import Groq from "groq-sdk";
 import { GROQ_MODEL_PRIORITY, isGroqModelUnavailable } from "@/lib/ai-provider";
 
+export const maxDuration = 60;
+
 const SYSTEM_PROMPT = `Kamu adalah analis senior di divisi Manufacturing Intelligence untuk perusahaan farmasi berskala besar.
 Tugasmu adalah membuat ringkasan eksekutif yang tajam, ringkas, dan berbasis data dari dashboard Control Tower Manufaktur.
 
 Panduan penulisan:
 - Gunakan Bahasa Indonesia yang profesional dan mudah dipahami
-- Maksimal 4 kalimat pendek yang padat
+- TEPAT 3 kalimat — tidak boleh lebih, tidak boleh kurang
+- Kalimat harus SELALU diakhiri dengan tanda titik (.)
 - Soroti angka paling kritis (baik maupun buruk) dengan konteks yang jelas
 - Jika ada tren naik/turun, sebutkan arahnya dan implikasinya
-- Akhiri dengan satu rekomendasi aksi prioritas jika ada anomali
+- Akhiri kalimat ketiga dengan satu rekomendasi aksi prioritas jika ada anomali
 - Format output: paragraf biasa, bukan bullet points, tanpa heading
 
 Konteks sistem:
@@ -32,7 +35,7 @@ async function createStreamWithFallback(
     try {
       return await groq.chat.completions.create({
         model,
-        max_tokens: 400,
+        max_tokens: 220,
         stream: true as const,
         messages,
       });
@@ -85,13 +88,23 @@ Buat ringkasan eksekutif singkat:`;
     const stream = await createStreamWithFallback(groq, messages);
 
     const encoder = new TextEncoder();
+    // Sentinel appended at end of a successful stream so the client can
+    // distinguish a complete response from a mid-stream network cut.
+    const DONE_SENTINEL = "\x00DONE\x00";
+
     const readable = new ReadableStream({
       async start(controller) {
-        for await (const chunk of stream) {
-          const text = chunk.choices[0]?.delta?.content ?? "";
-          if (text) controller.enqueue(encoder.encode(text));
+        try {
+          for await (const chunk of stream) {
+            const text = chunk.choices[0]?.delta?.content ?? "";
+            if (text) controller.enqueue(encoder.encode(text));
+          }
+          controller.enqueue(encoder.encode(DONE_SENTINEL));
+        } catch {
+          // Stream error — don't enqueue sentinel so client knows it was cut
+        } finally {
+          controller.close();
         }
-        controller.close();
       },
     });
 

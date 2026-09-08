@@ -94,14 +94,15 @@ const CACHE_TIME = "ai_summary_time";
 const TTL_MS    = 5 * 60 * 60 * 1000; // 5 hours
 
 export function AISummary({ kpi, filters, ready }: AISummaryProps) {
-  const [summary,  setSummary]  = useState(() =>
+  const [summary,   setSummary]   = useState(() =>
     typeof window !== "undefined" ? (localStorage.getItem(CACHE_TEXT) ?? "") : ""
   );
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const abortRef   = useRef<AbortController | null>(null);
-  const accumRef   = useRef("");
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState(false);
+  const [errorMsg,  setErrorMsg]  = useState("");
+  const [truncated, setTruncated] = useState(false);
+  const abortRef    = useRef<AbortController | null>(null);
+  const accumRef    = useRef("");
 
   const fetchSummary = async (force = false) => {
     if (!kpi || !ready) return;
@@ -122,6 +123,7 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
     accumRef.current = "";
     setError(false);
     setErrorMsg("");
+    setTruncated(false);
 
     try {
       const res = await fetch("/api/dashboard/summary", {
@@ -139,20 +141,32 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
       }
       if (!res.body) throw new Error("No response body");
 
-      const reader  = res.body.getReader();
-      const decoder = new TextDecoder();
+      const SENTINEL = "\x00DONE\x00";
+      const reader   = res.body.getReader();
+      const decoder  = new TextDecoder();
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const text = decoder.decode(value, { stream: true });
         accumRef.current += text;
-        setSummary((prev) => prev + text);
+        // Strip the sentinel before displaying so it never shows in the UI
+        const display = accumRef.current.replace(SENTINEL, "");
+        setSummary(display);
       }
 
-      // Persist to cache only on success
-      localStorage.setItem(CACHE_TEXT, accumRef.current);
-      localStorage.setItem(CACHE_TIME, String(Date.now()));
+      const complete = accumRef.current.includes(SENTINEL);
+      const clean    = accumRef.current.replace(SENTINEL, "").trim();
+
+      if (complete) {
+        localStorage.setItem(CACHE_TEXT, clean);
+        localStorage.setItem(CACHE_TIME, String(Date.now()));
+        setSummary(clean);
+      } else {
+        // Stream was cut — show what arrived but do NOT cache so next load retries
+        setSummary(clean);
+        setTruncated(true);
+      }
     } catch (err: unknown) {
       if (err instanceof Error && err.name !== "AbortError") setError(true);
     } finally {
@@ -195,6 +209,9 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
             <p className="text-xs text-blue-50 leading-relaxed">
               <SummaryText text={summary} />
               {loading && <span className="inline-block w-0.5 h-3 bg-blue-300 ml-0.5 animate-pulse align-middle" />}
+              {truncated && !loading && (
+                <span className="ml-1.5 text-yellow-300/80 text-[10px]">— terpotong, klik Refresh</span>
+              )}
             </p>
           )}
           {error && (
