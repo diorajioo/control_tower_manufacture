@@ -1,7 +1,7 @@
 # Data Security Framework
 
 > Reusable across all Control Tower dashboards (Manufacturing, Supply Chain, Finance, etc.)
-> Last updated: 2026-09-04
+> Last updated: 2026-09-09
 
 ---
 
@@ -32,10 +32,10 @@
   ```ts
   function sanitizePlant(p?: string): string {
     if (!p || p === "All Plant") return "";
-    return p.replace(/['"\\;]/g, "");
+    return p.replace(/[^A-Za-z0-9 \-]/g, "").trim().slice(0, 64);
   }
   ```
-- All Snowflake queries use **parameterized bindings** (`?` placeholders) — never string interpolation for user-supplied values.
+- All Snowflake queries use **parameterized bindings** (`?` placeholders) — never string interpolation for user-supplied values. **Implemented** in `app/api/chat/route.ts` (40+ queries).
 
 ### Role mapping (future)
 
@@ -55,28 +55,45 @@ Always validate date formats before passing to Snowflake:
 ```ts
 function validateDate(d?: string): string | undefined {
   if (!d) return undefined;
-  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return undefined;
+  const ts = Date.parse(d);
+  if (isNaN(ts)) return undefined;
+  const date = new Date(ts);
+  if (date > new Date() || date.getFullYear() < 2020) return undefined;
+  return d;
 }
 ```
 
-### Rate limiting (deploy)
+### Rate limiting — **Implemented** (`middleware.ts`)
 
-Add Next.js middleware or an edge-function rate limiter before dashboard routes.
-Recommended limits:
-- `/api/dashboard/*`: 60 req/min per session
-- `/api/chat`: 20 req/min per session (Groq cost protection)
-- `/api/dashboard/kpi`: effectively rate-limited by the 1-hour cache
+- `/api/chat`: 30 req/menit per IP (Groq + Snowflake cost protection)
+- `/api/dashboard/summary`: 10 req/menit per IP
+- `/api/*` lainnya: 120 req/menit per IP
+- `/api/debug/*` diblokir sepenuhnya di `NODE_ENV=production`
 
-### Response headers
+### Response headers — **Implemented** (`next.config.mjs`)
 
-Add to `next.config.mjs` for all API routes:
-```js
-headers: [
-  { key: "X-Content-Type-Options", value: "nosniff" },
-  { key: "X-Frame-Options",        value: "DENY" },
-  { key: "Referrer-Policy",        value: "strict-origin-when-cross-origin" },
-]
-```
+Active on all routes (`/:path*`):
+- `Content-Security-Policy` — allowlist resource origins
+- `X-Frame-Options: DENY` — anti-clickjacking
+- `X-Content-Type-Options: nosniff`
+- `Strict-Transport-Security` — max-age 1 tahun + preload
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy` — kamera/mikrofon/geolokasi diblokir
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Cross-Origin-Resource-Policy: same-origin`
+
+### Error disclosure — **Implemented**
+
+API responses ke client hanya mengembalikan pesan generik. Detail error (pesan Snowflake, stack trace) hanya ditulis ke server log dengan prefix `[module]`.
+
+### Session expiry on auth failure — **Implemented** (`lib/auth.ts` + `middleware.ts`)
+
+Jika refresh token Azure AD gagal, `session.expires` di-set ke epoch 0. Middleware mendeteksi ini dan redirect ke `/login?error=SessionExpired`.
+
+### Teams HTML injection — **Implemented** (`lib/graph/teams.ts`)
+
+Semua konten alert (kpi name, message, URL, recommendation) dilewatkan `escHtml()` sebelum diembed ke body HTML Teams message.
 
 ---
 
