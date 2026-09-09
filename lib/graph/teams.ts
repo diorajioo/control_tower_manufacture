@@ -191,6 +191,65 @@ export function buildAlertHtml(
   ].join("");
 }
 
+// ── Per-recipient routing ─────────────────────────────────────────────────────
+
+const KPI_LABEL_TO_KEY: Record<string, string> = {
+  "Lead Time":        "leadTime",
+  "Bulk Loss":        "bulkLoss",
+  "Pack Loss":        "packLoss",
+  "Right First Time": "rft",
+  "OEE":              "oee",
+};
+
+export interface TeamsRecipientConfig {
+  email: string;
+  kpis: Record<string, boolean>;
+}
+
+/**
+ * Send alerts to explicit UI-configured recipients, filtered per their KPI subscription.
+ * Each recipient only receives a message if at least one of their subscribed KPIs triggered.
+ */
+export async function sendGraphAlertsRouted(
+  alerts: KPIAlert[],
+  recipients: TeamsRecipientConfig[],
+  opts: SendGraphAlertsOptions = {}
+): Promise<{ ok: boolean; sent: number; errors: string[] }> {
+  if (alerts.length === 0 || recipients.length === 0) return { ok: true, sent: 0, errors: [] };
+
+  const token = await resolveToken(opts.accessToken);
+  if (!token) {
+    return {
+      ok:     false,
+      sent:   0,
+      errors: ["No token available — user must sign out and sign back in to grant Teams permissions"],
+    };
+  }
+
+  const errors: string[] = [];
+  let sent = 0;
+
+  for (const recipient of recipients) {
+    const filtered = alerts.filter((a) => {
+      const key = KPI_LABEL_TO_KEY[a.kpi];
+      return !key || recipient.kpis[key] !== false;
+    });
+    if (filtered.length === 0) continue;
+
+    const chatId = await findOrCreateChat(token, recipient.email);
+    if (!chatId) {
+      errors.push(`${recipient.email}: could not find or create chat`);
+      continue;
+    }
+    const html = buildAlertHtml(filtered, opts);
+    const ok = await sendMessageToChat(token, chatId, html);
+    if (ok) sent++;
+    else errors.push(`${recipient.email}: message delivery failed`);
+  }
+
+  return { ok: sent > 0, sent, errors };
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 export interface SendGraphAlertsOptions {

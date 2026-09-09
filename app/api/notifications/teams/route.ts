@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { sendTeamsAlerts } from "@/lib/alerts/teams";
-import { sendGraphAlerts } from "@/lib/graph/teams";
+import { sendGraphAlerts, sendGraphAlertsRouted, type TeamsRecipientConfig } from "@/lib/graph/teams";
 import type { KPIAlert } from "@/lib/alerts";
 
 export async function POST(req: NextRequest) {
@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
     plant?:              string;
     period?:             string;
     withRecommendation?: boolean;
+    recipients?:         TeamsRecipientConfig[];
   };
 
   if (!Array.isArray(body.alerts) || body.alerts.length === 0) {
@@ -28,9 +29,26 @@ export async function POST(req: NextRequest) {
     dashboardUrl:       process.env.NEXTAUTH_URL,
   };
 
-  // ── Graph API path (preferred) ─────────────────────────────────────────────
-  // Used when TEAMS_RECIPIENTS is configured.
-  // Sends personal DMs directly to each recipient via Microsoft Graph.
+  // ── UI-configured per-recipient routing (preferred) ────────────────────────
+  // When the dashboard settings page has configured Teams recipients, each
+  // person only receives alerts for KPIs they've subscribed to.
+  if (Array.isArray(body.recipients) && body.recipients.length > 0) {
+    const jwt    = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    const result = await sendGraphAlertsRouted(body.alerts, body.recipients, {
+      ...opts,
+      accessToken: jwt?.accessToken,
+    });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.errors.join("; "), sent: result.sent },
+        { status: result.sent > 0 ? 207 : 502 }
+      );
+    }
+    return NextResponse.json({ ok: true, sent: result.sent });
+  }
+
+  // ── Env-var recipients fallback (all alerts → all recipients) ─────────────
+  // Used when TEAMS_RECIPIENTS is configured but no UI routing is set up.
   if (process.env.TEAMS_RECIPIENTS) {
     const jwt        = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     const result     = await sendGraphAlerts(body.alerts, {

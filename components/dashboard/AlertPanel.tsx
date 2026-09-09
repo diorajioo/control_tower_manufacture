@@ -52,6 +52,15 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
     setSendState("sending");
     setSendError(null);
     try {
+      let recipients: Array<{ email: string; kpis: Record<string, boolean> }> | undefined;
+      try {
+        const raw = localStorage.getItem("ct-teams-settings");
+        if (raw) {
+          const cfg = JSON.parse(raw) as { enabled?: boolean; recipients?: typeof recipients };
+          if (cfg.enabled && cfg.recipients?.length) recipients = cfg.recipients;
+        }
+      } catch { /* ignore */ }
+
       const res = await fetch("/api/notifications/teams", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,6 +69,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
           plant,
           period,
           withRecommendation: criticalCount > 0,
+          ...(recipients ? { recipients } : {}),
         }),
       });
       const data = await res.json() as { ok?: boolean; error?: string };

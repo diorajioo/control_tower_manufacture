@@ -166,6 +166,14 @@ export default function DashboardPage() {
       );
       if (newCritical.length > 0) {
         newCritical.forEach((a) => sentAlertIds.current.add(a.id));
+        let teamsRecipients: Array<{ email: string; kpis: Record<string, boolean> }> | undefined;
+        try {
+          const raw = localStorage.getItem("ct-teams-settings");
+          if (raw) {
+            const cfg = JSON.parse(raw) as { enabled?: boolean; recipients?: typeof teamsRecipients };
+            if (cfg.enabled && cfg.recipients?.length) teamsRecipients = cfg.recipients;
+          }
+        } catch { /* ignore */ }
         fetch("/api/notifications/teams", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -174,6 +182,7 @@ export default function DashboardPage() {
             plant: f.plant,
             period: f.period,
             withRecommendation: true,
+            ...(teamsRecipients ? { recipients: teamsRecipients } : {}),
           }),
         }).catch(() => {/* silent — Teams is optional */});
       }

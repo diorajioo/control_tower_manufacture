@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
-import { sendGraphAlerts } from "@/lib/graph/teams";
+import { sendGraphAlerts, sendGraphAlertsRouted, type TeamsRecipientConfig } from "@/lib/graph/teams";
 import { sendTeamsAlerts } from "@/lib/alerts/teams";
 
 const TEST_ALERT = {
@@ -19,13 +19,33 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const body = await req.json().catch(() => ({})) as { recipients?: TeamsRecipientConfig[] };
+
   const opts = {
     plant:        session.user?.name ?? "Dashboard",
     period:       "Test",
     dashboardUrl: process.env.NEXTAUTH_URL,
   };
 
-  // ── Graph API path ──────────────────────────────────────────────────────────
+  // ── UI-configured recipients path ────────────────────────────────────────────
+  if (Array.isArray(body.recipients) && body.recipients.length > 0) {
+    const jwt    = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    // For test: send to all configured recipients regardless of KPI filter
+    const allOn  = body.recipients.map((r) => ({ ...r, kpis: Object.fromEntries(Object.keys(r.kpis).map((k) => [k, true])) }));
+    const result = await sendGraphAlertsRouted([TEST_ALERT], allOn, {
+      ...opts,
+      accessToken: jwt?.accessToken,
+    });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: result.errors.join("; "), hint: result.errors[0]?.includes("token") ? "sign-out-signin" : undefined },
+        { status: 502 }
+      );
+    }
+    return NextResponse.json({ ok: true, sent: result.sent, mode: "graph-routed" });
+  }
+
+  // ── Env-var path ────────────────────────────────────────────────────────────
   if (process.env.TEAMS_RECIPIENTS) {
     const jwt    = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     const result = await sendGraphAlerts([TEST_ALERT], {

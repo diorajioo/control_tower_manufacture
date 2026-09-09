@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { Session } from "next-auth";
 import {
   User, Monitor, Bell, SlidersHorizontal, Database,
-  Plus, X, RotateCcw, Send, Check, Loader2, Mail,
+  Plus, X, RotateCcw, Send, Check, Loader2, Mail, MessageSquare,
   Clock, AlertCircle, Lock, Shield,
 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
@@ -27,6 +27,11 @@ interface NotifSettings {
   recipients: RecipientConfig[];
   mode: "immediate" | "daily_digest";
   digestTime: string;
+}
+
+interface TeamsNotifSettings {
+  enabled: boolean;
+  recipients: RecipientConfig[];
 }
 
 interface ThresholdSettings {
@@ -65,6 +70,11 @@ const DEFAULT_NOTIF: NotifSettings = {
   digestTime: "07:00",
 };
 
+const DEFAULT_TEAMS_NOTIF: TeamsNotifSettings = {
+  enabled: false,
+  recipients: [],
+};
+
 const DEFAULT_THRESHOLDS: ThresholdSettings = {
   leadTime: { warning: 5, critical: 15 },
   bulkLoss: { absWarning: 3, absCritical: 5 },
@@ -95,6 +105,18 @@ function loadNotif(): NotifSettings {
     const { kpis: _kpis, recipients: _r, ...rest } = p;
     return { ...DEFAULT_NOTIF, ...rest, recipients };
   } catch { return DEFAULT_NOTIF; }
+}
+
+function loadTeamsNotif(): TeamsNotifSettings {
+  try {
+    const raw = localStorage.getItem("ct-teams-settings");
+    if (!raw) return DEFAULT_TEAMS_NOTIF;
+    const p = JSON.parse(raw) as Partial<TeamsNotifSettings & { recipients: (string | RecipientConfig)[] }>;
+    const recipients: RecipientConfig[] = (p.recipients ?? []).map((r) =>
+      typeof r === "string" ? { email: r, kpis: { ...ALL_KPIS_ON } } : r
+    );
+    return { ...DEFAULT_TEAMS_NOTIF, enabled: p.enabled ?? false, recipients };
+  } catch { return DEFAULT_TEAMS_NOTIF; }
 }
 
 function loadThresholds(): ThresholdSettings {
@@ -176,6 +198,7 @@ function SettingsShell() {
   const { t, setLang } = useI18n();
 
   const [notif, setNotif] = useState<NotifSettings>(DEFAULT_NOTIF);
+  const [teamsNotif, setTeamsNotif] = useState<TeamsNotifSettings>(DEFAULT_TEAMS_NOTIF);
   const [thresholds, setThresholds] = useState<ThresholdSettings>(DEFAULT_THRESHOLDS);
   const [display, setDisplay] = useState<DisplaySettings>(DEFAULT_DISPLAY);
   const [jabatan, setJabatan] = useState("");
@@ -183,6 +206,7 @@ function SettingsShell() {
 
   useEffect(() => {
     setNotif(loadNotif());
+    setTeamsNotif(loadTeamsNotif());
     setThresholds(loadThresholds());
     setDisplay(loadDisplay());
     setJabatan(localStorage.getItem("ct-user-jabatan") ?? "");
@@ -258,6 +282,9 @@ function SettingsShell() {
                 notif={notif}
                 setNotif={setNotif}
                 onSave={() => localStorage.setItem("ct-notification-settings", JSON.stringify(notif))}
+                teamsNotif={teamsNotif}
+                setTeamsNotif={setTeamsNotif}
+                onSaveTeams={() => localStorage.setItem("ct-teams-settings", JSON.stringify(teamsNotif))}
               />
             ) : (
               <AdminOnly title="Notifikasi" />
@@ -727,9 +754,52 @@ function AdminSection({
 // ── Notifikasi ────────────────────────────────────────────────────────────────
 
 function NotifikasiSection({
-  notif,
-  setNotif,
-  onSave,
+  notif, setNotif, onSave,
+  teamsNotif, setTeamsNotif, onSaveTeams,
+}: {
+  notif: NotifSettings;
+  setNotif: (n: NotifSettings) => void;
+  onSave: () => void;
+  teamsNotif: TeamsNotifSettings;
+  setTeamsNotif: (n: TeamsNotifSettings) => void;
+  onSaveTeams: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<"email" | "teams">("email");
+  return (
+    <div className="space-y-5">
+      <SectionTitle title="Notifikasi" description="Konfigurasi pengiriman notifikasi saat alert terjadi" />
+      <div className="flex rounded-lg border border-gray-100 bg-gray-50 p-1 gap-1">
+        {(["email", "teams"] as const).map((tab) => {
+          const Icon = tab === "email" ? Mail : MessageSquare;
+          const label = tab === "email" ? "Email" : "Microsoft Teams";
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-md transition-colors",
+                activeTab === tab
+                  ? "bg-white text-gray-800 shadow-sm border border-gray-100"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <Icon size={13} />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      {activeTab === "email" ? (
+        <EmailTab notif={notif} setNotif={setNotif} onSave={onSave} />
+      ) : (
+        <TeamsTab teamsNotif={teamsNotif} setTeamsNotif={setTeamsNotif} onSave={onSaveTeams} />
+      )}
+    </div>
+  );
+}
+
+function EmailTab({
+  notif, setNotif, onSave,
 }: {
   notif: NotifSettings;
   setNotif: (n: NotifSettings) => void;
@@ -790,24 +860,18 @@ function NotifikasiSection({
   };
 
   return (
-    <div className="space-y-5">
-      <SectionTitle title="Notifikasi" description="Konfigurasi pengiriman email saat alert terjadi" />
-
-      {/* Master toggle */}
+    <div className="space-y-4">
       <Card>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold text-gray-800">Aktifkan Notifikasi Email</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Kirim email saat ada alert atau metrik bermasalah
-            </p>
+            <p className="text-xs text-gray-500 mt-0.5">Kirim email saat ada alert atau metrik bermasalah</p>
           </div>
           <Toggle checked={notif.enabled} onChange={(v) => set({ enabled: v })} />
         </div>
       </Card>
 
       <div className={cn("space-y-4", !notif.enabled && "opacity-40 pointer-events-none")}>
-        {/* Recipients with per-recipient KPI chips */}
         <Card title="Penerima Email">
           <div className="space-y-3">
             <div className="flex gap-2">
@@ -831,7 +895,6 @@ function NotifikasiSection({
               </button>
             </div>
             {emailError && <p className="text-xs text-red-500">{emailError}</p>}
-
             {notif.recipients.length > 0 ? (
               <ul className="space-y-2">
                 {notif.recipients.map((recipient) => (
@@ -871,7 +934,6 @@ function NotifikasiSection({
           </div>
         </Card>
 
-        {/* Mode */}
         <Card title="Mode Pengiriman">
           <div className="grid grid-cols-2 gap-3">
             {[
@@ -893,7 +955,6 @@ function NotifikasiSection({
               </button>
             ))}
           </div>
-
           {notif.mode === "daily_digest" && (
             <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-100">
               <Clock size={14} className="text-gray-400 shrink-0" />
@@ -908,7 +969,6 @@ function NotifikasiSection({
           )}
         </Card>
 
-        {/* Test status messages */}
         {testState === "error" && (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
             <AlertCircle size={15} className="shrink-0 mt-0.5" />
@@ -923,7 +983,6 @@ function NotifikasiSection({
         )}
       </div>
 
-      {/* Action bar */}
       <div className="flex items-center justify-between pt-5 border-t border-gray-100">
         <button
           onClick={handleTest}
@@ -941,6 +1000,195 @@ function NotifikasiSection({
             <><Loader2 size={14} className="animate-spin" />Mengirim...</>
           ) : (
             <><Send size={14} />Kirim Test Email</>
+          )}
+        </button>
+        <SaveButton onSave={onSave} />
+      </div>
+    </div>
+  );
+}
+
+function TeamsTab({
+  teamsNotif, setTeamsNotif, onSave,
+}: {
+  teamsNotif: TeamsNotifSettings;
+  setTeamsNotif: (n: TeamsNotifSettings) => void;
+  onSave: () => void;
+}) {
+  const set = (patch: Partial<TeamsNotifSettings>) => setTeamsNotif({ ...teamsNotif, ...patch });
+  const [emailInput, setEmailInput] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [testState, setTestState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [testMsg, setTestMsg] = useState("");
+
+  const addEmail = () => {
+    const t = emailInput.trim().toLowerCase();
+    if (!t) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) {
+      setEmailError("Format email tidak valid");
+      return;
+    }
+    if (teamsNotif.recipients.some((r) => r.email === t)) {
+      setEmailError("Email sudah ditambahkan");
+      return;
+    }
+    set({ recipients: [...teamsNotif.recipients, { email: t, kpis: { ...ALL_KPIS_ON } }] });
+    setEmailInput("");
+    setEmailError("");
+  };
+
+  const removeRecipient = (email: string) =>
+    set({ recipients: teamsNotif.recipients.filter((r) => r.email !== email) });
+
+  const toggleKpi = (email: string, kpi: KpiKey) =>
+    set({
+      recipients: teamsNotif.recipients.map((r) =>
+        r.email === email ? { ...r, kpis: { ...r.kpis, [kpi]: !r.kpis[kpi] } } : r
+      ),
+    });
+
+  const handleTest = async () => {
+    if (testState === "loading") return;
+    setTestState("loading");
+    setTestMsg("");
+    try {
+      const recipients = teamsNotif.recipients.length > 0 ? teamsNotif.recipients : undefined;
+      const res = await fetch("/api/notifications/teams/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipients }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string; hint?: string; sent?: number };
+      if (!res.ok) {
+        const hint = data.hint === "sign-out-signin"
+          ? " Coba sign out dan sign in ulang untuk memperbarui izin Teams."
+          : "";
+        throw new Error((data.error ?? "Gagal mengirim") + hint);
+      }
+      const count = data.sent ?? teamsNotif.recipients.length;
+      setTestState("success");
+      setTestMsg(`Pesan test terkirim ke ${count} penerima`);
+      setTimeout(() => setTestState("idle"), 3500);
+    } catch (err) {
+      setTestMsg(err instanceof Error ? err.message : "Gagal mengirim");
+      setTestState("error");
+      setTimeout(() => setTestState("idle"), 6000);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-gray-800">Aktifkan Notifikasi Teams</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Kirim DM ke Teams saat alert terjadi, sesuai metrik yang dipilih tiap penerima
+            </p>
+          </div>
+          <Toggle checked={teamsNotif.enabled} onChange={(v) => set({ enabled: v })} />
+        </div>
+      </Card>
+
+      <div className={cn("space-y-4", !teamsNotif.enabled && "opacity-40 pointer-events-none")}>
+        <Card title="Penerima Teams">
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <MessageSquare size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  placeholder="nama@paracorpgroup.com"
+                  value={emailInput}
+                  onChange={(e) => { setEmailInput(e.target.value); setEmailError(""); }}
+                  onKeyDown={(e) => e.key === "Enter" && addEmail()}
+                  className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={addEmail}
+                className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors"
+              >
+                <Plus size={14} />
+                Tambah
+              </button>
+            </div>
+            {emailError && <p className="text-xs text-red-500">{emailError}</p>}
+            {teamsNotif.recipients.length > 0 ? (
+              <ul className="space-y-2">
+                {teamsNotif.recipients.map((recipient) => (
+                  <li key={recipient.email} className="bg-gray-50 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-sm font-medium text-gray-700">{recipient.email}</span>
+                      <button
+                        onClick={() => removeRecipient(recipient.email)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                        aria-label={`Hapus ${recipient.email}`}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(Object.keys(KPI_CHIPS) as KpiKey[]).map((kpi) => (
+                        <button
+                          key={kpi}
+                          onClick={() => toggleKpi(recipient.email, kpi)}
+                          className={cn(
+                            "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                            recipient.kpis[kpi]
+                              ? "bg-brand-50 text-brand-700 border-brand-200"
+                              : "bg-white text-gray-400 border-gray-200 line-through"
+                          )}
+                        >
+                          {KPI_CHIPS[kpi]}
+                        </button>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-1">Belum ada penerima</p>
+            )}
+          </div>
+        </Card>
+
+        <div className="flex items-start gap-2.5 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+          <MessageSquare size={14} className="text-indigo-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-indigo-700 leading-relaxed">
+            Alert dikirim langsung saat terjadi. Setiap penerima hanya mendapat DM untuk metrik yang mereka pilih.
+          </p>
+        </div>
+
+        {testState === "error" && (
+          <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+            <AlertCircle size={15} className="shrink-0 mt-0.5" />
+            <span>{testMsg || "Gagal mengirim. Pastikan TEAMS_REFRESH_TOKEN sudah dikonfigurasi di Vercel."}</span>
+          </div>
+        )}
+        {testState === "success" && (
+          <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+            <Check size={15} className="shrink-0" />
+            <span>{testMsg}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between pt-5 border-t border-gray-100">
+        <button
+          onClick={handleTest}
+          disabled={testState === "loading"}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-all",
+            testState === "loading"
+              ? "border-gray-200 text-gray-500 cursor-wait"
+              : "border-gray-300 text-gray-700 hover:bg-gray-50"
+          )}
+        >
+          {testState === "loading" ? (
+            <><Loader2 size={14} className="animate-spin" />Mengirim...</>
+          ) : (
+            <><Send size={14} />Kirim Test Teams</>
           )}
         </button>
         <SaveButton onSave={onSave} />
