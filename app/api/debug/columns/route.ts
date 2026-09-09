@@ -29,6 +29,7 @@ export async function GET() {
 
     return NextResponse.json(results);
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
+    console.error("[debug/columns] query failed:", err);
+    return NextResponse.json({ error: "Query gagal" }, { status: 500 });
   }
 }

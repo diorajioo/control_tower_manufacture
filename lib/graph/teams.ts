@@ -152,6 +152,11 @@ export async function sendMessageToChat(token: string, chatId: string, html: str
 
 // ── Message builder ────────────────────────────────────────────────────────────
 
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
 export function buildAlertHtml(
   alerts: KPIAlert[],
   opts: { plant?: string; period?: string; dashboardUrl?: string; recommendation?: string }
@@ -166,15 +171,15 @@ export function buildAlertHtml(
       const trend = a.trend != null
         ? ` <span style="color:${a.trend < 0 ? "#dc2626" : "#16a34a"}">(${a.trend > 0 ? "+" : ""}${a.trend.toFixed(1)}%)</span>`
         : "";
-      return `<li>${icon} <b>${a.kpi}</b>: ${a.message}${trend}</li>`;
+      return `<li>${icon} <b>${escHtml(a.kpi)}</b>: ${escHtml(a.message)}${trend}</li>`;
     })
     .join("");
 
   const rec  = opts.recommendation
-    ? `<p>💡 <b>Rekomendasi AI:</b> ${opts.recommendation}</p>`
+    ? `<p>💡 <b>Rekomendasi AI:</b> ${escHtml(opts.recommendation)}</p>`
     : "";
   const link = opts.dashboardUrl
-    ? `<p><a href="${opts.dashboardUrl}">Buka Dashboard →</a></p>`
+    ? `<p><a href="${escHtml(opts.dashboardUrl)}">Buka Dashboard →</a></p>`
     : "";
 
   return [

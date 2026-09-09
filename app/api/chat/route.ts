@@ -107,12 +107,19 @@ Gunakan tag HANYA saat menyebut nilai angka aktual KPI tersebut, bukan saat memb
 
 function validateDate(d?: string): string | undefined {
   if (!d) return undefined;
-  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return undefined;
+  const ts = Date.parse(d);
+  if (isNaN(ts)) return undefined;
+  // Reject future dates and dates before 2020 (outside business data range)
+  const date = new Date(ts);
+  if (date > new Date() || date.getFullYear() < 2020) return undefined;
+  return d;
 }
 
 function sanitizePlant(p?: string): string {
   if (!p || p === "All Plant") return "";
-  return p.replace(/['"\\;]/g, "");
+  // Strip any character that isn't alphanumeric, space, or hyphen
+  return p.replace(/[^A-Za-z0-9 \-]/g, "").trim().slice(0, 64);
 }
 
 async function executeGetKpiData(args: {
@@ -124,7 +131,11 @@ async function executeGetKpiData(args: {
   const startDate = validateDate(args.start_date) ?? `${new Date().getFullYear()}-01-01`;
   const endDate = validateDate(args.end_date) ?? new Date().toISOString().split("T")[0];
   const plant = sanitizePlant(args.plant);
-  const plantFilter = plant ? `AND PLANT = '${plant}'` : "";
+
+  // Parameterized helpers — dates always go first, plant appended when present
+  const dateBinds = [startDate, endDate] as unknown[];
+  const withPlant = plant ? [...dateBinds, plant] : dateBinds;
+  const pf = plant ? "AND PLANT = ?" : "";  // parameterized plant filter
 
   try {
     let rows: unknown[];
@@ -139,12 +150,12 @@ async function executeGetKpiData(args: {
                 MAX(CASE WHEN ACTIVITY='RECEIVE NDC' THEN ACTIVITY_STOP END)) AS gross_minutes,
               SUM(CASE WHEN ACTIVITY_TYPE='ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME ELSE 0 END) AS nett_minutes
             FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-            WHERE PO_FG_DONE_DATE::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+            WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
             GROUP BY PROCESS_ORDER_FG
             HAVING MIN(CASE WHEN ACTIVITY='PO' THEN ACTIVITY_START END) IS NOT NULL
               AND MAX(CASE WHEN ACTIVITY='RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
           ) sub
-        `);
+        `, withPlant);
         break;
       }
       case "bulk_loss": {
@@ -153,8 +164,8 @@ async function executeGetKpiData(args: {
             SUM(THEORETICAL_QUANTITY) AS THEORETICAL_KG,
             SUM(BULK_LOSS_QUANTITY)/NULLIF(SUM(THEORETICAL_QUANTITY),0)*100 AS BULK_LOSS_PCT
           FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
-          WHERE CORRECTION_DATE BETWEEN '${startDate}' AND '${endDate}'
-        `);
+          WHERE CORRECTION_DATE BETWEEN ? AND ?
+        `, dateBinds);
         break;
       }
       case "pack_loss": {
@@ -163,8 +174,8 @@ async function executeGetKpiData(args: {
             SUM(QTY_TOTAL) AS TOTAL_QTY,
             SUM(QTY_FG_RETUR)/NULLIF(SUM(QTY_TOTAL),0)*100 AS PACK_LOSS_PCT
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
-        `);
+          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
+        `, withPlant);
         break;
       }
       case "rft": {
@@ -172,24 +183,24 @@ async function executeGetKpiData(args: {
           SELECT COUNT(CASE WHEN ACTIVITY<>'ADJUST' THEN 1 END)*100.0/NULLIF(COUNT(*),0) AS RFT_PCT,
             COUNT(*) AS TOTAL_ROWS
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-          WHERE PO_FG_DONE_DATE::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
-        `);
+          WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
+        `, withPlant);
         break;
       }
       case "output_bulk": {
         rows = await executeQuery(`
           SELECT SUM(REALIZATION_QUANTITY) AS TOTAL_BULK_KG
           FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
-          WHERE CORRECTION_DATE BETWEEN '${startDate}' AND '${endDate}'
-        `);
+          WHERE CORRECTION_DATE BETWEEN ? AND ?
+        `, dateBinds);
         break;
       }
       case "output_fg": {
         rows = await executeQuery(`
           SELECT SUM(QUANTITY) AS TOTAL_FG_PCS
           FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_FG
-          WHERE CORRECTION_DATE BETWEEN '${startDate}' AND '${endDate}'
-        `);
+          WHERE CORRECTION_DATE BETWEEN ? AND ?
+        `, dateBinds);
         break;
       }
       case "oee": {
@@ -198,16 +209,16 @@ async function executeGetKpiData(args: {
             AVG((CASE WHEN QTY_TOTAL>0 THEN QTY_FG_GOOD::FLOAT/QTY_TOTAL ELSE 0 END)*
               (CASE WHEN ACTIVITY_PRODUCTIVITY_STD>0 THEN LEAST(PRODUCTIVITY::FLOAT/ACTIVITY_PRODUCTIVITY_STD,1.0) ELSE 0 END))*100 AS OEE_PCT
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
           GROUP BY PLANT ORDER BY OEE_PCT DESC
-        `);
+        `, withPlant);
         break;
       }
       case "productivity_e2e": {
         rows = await executeQuery(`
           SELECT AVG(E2E_PRODUCTIVITY) AS AVG_E2E_PROD FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
-        `);
+          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
+        `, withPlant);
         break;
       }
       case "productivity_upstream": {
@@ -219,7 +230,7 @@ async function executeGetKpiData(args: {
               MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN LEADTIME_IN_MINUTE END) AS leadtime_per_act,
               MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN OPERATOR_COUNT END)     AS operator_per_act
             FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-            WHERE OLAH_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+            WHERE OLAH_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
             GROUP BY PROCESS_ORDER_SFG, POSITION, ACTIVITY, ACTIVITY_ID
           ),
           position_lvl AS (
@@ -241,7 +252,7 @@ async function executeGetKpiData(args: {
             THEN max_release_bulk / (total_leadtime_min / 60.0) / total_operators END
           ) AS AVG_UPSTREAM_PROD
           FROM sfg_lvl WHERE max_release_bulk > 0
-        `);
+        `, withPlant);
         break;
       }
       case "productivity_downstream": {
@@ -251,11 +262,11 @@ async function executeGetKpiData(args: {
             SELECT PROCESS_ORDER_FG,
               SUM(QTY_FG_GOOD)/NULLIF(SUM(LEADTIME_IN_MINUTE)/60.0,0)/NULLIF(MAX(OPERATOR_COUNT),0) AS PO_PROD
             FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-            WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}'
-              AND LEADTIME_IN_MINUTE>0 AND OPERATOR_COUNT>0 ${plantFilter}
+            WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ?
+              AND LEADTIME_IN_MINUTE>0 AND OPERATOR_COUNT>0 ${pf}
             GROUP BY PROCESS_ORDER_FG
           ) sub
-        `);
+        `, withPlant);
         break;
       }
       default:
@@ -264,7 +275,8 @@ async function executeGetKpiData(args: {
 
     return JSON.stringify({ kpi: args.kpi_type, period: `${startDate} to ${endDate}`, plant: plant || "All Plant", data: rows });
   } catch (err) {
-    return JSON.stringify({ error: "Query gagal", detail: String(err) });
+    console.error("[chat] get_kpi_data query failed:", err);
+    return JSON.stringify({ error: "Query gagal. Silakan coba lagi." });
   }
 }
 
@@ -277,7 +289,9 @@ async function executeGetWeeklyTrend(args: {
   const startDate = validateDate(args.start_date) ?? `${new Date().getFullYear()}-01-01`;
   const endDate = validateDate(args.end_date) ?? new Date().toISOString().split("T")[0];
   const plant = sanitizePlant(args.plant);
-  const plantFilter = plant ? `AND PLANT = '${plant}'` : "";
+  const pf = plant ? "AND PLANT = ?" : "";
+  // All weekly-trend queries share the same bind order: [startDate, endDate, plant?]
+  const binds: unknown[] = [startDate, endDate, ...(plant ? [plant] : [])];
 
   const queryMap: Record<string, string> = {
     leadtime: `
@@ -286,7 +300,7 @@ async function executeGetWeeklyTrend(args: {
           DATEDIFF('minute', MIN(CASE WHEN ACTIVITY='PO' THEN ACTIVITY_START END),
             MAX(CASE WHEN ACTIVITY='RECEIVE NDC' THEN ACTIVITY_STOP END))/1440.0 AS po_days
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-        WHERE PO_FG_DONE_DATE::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+        WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
         GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
         HAVING MIN(CASE WHEN ACTIVITY='PO' THEN ACTIVITY_START END) IS NOT NULL
           AND MAX(CASE WHEN ACTIVITY='RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
@@ -299,7 +313,7 @@ async function executeGetWeeklyTrend(args: {
           MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN LEADTIME_IN_MINUTE END) AS leadtime_per_act,
           MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN OPERATOR_COUNT END)     AS operator_per_act
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-        WHERE OLAH_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+        WHERE OLAH_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
         GROUP BY PROCESS_ORDER_SFG, PLANT, WEEK, POSITION, ACTIVITY, ACTIVITY_ID
       ),
       position_lvl AS (
@@ -326,21 +340,21 @@ async function executeGetWeeklyTrend(args: {
       SELECT WEEK, PLANT, AVG(po_prod) AS KPI_VALUE FROM (
         SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK, PLANT, AVG(E2E_PRODUCTIVITY) AS po_prod
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-        WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+        WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
         GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     output: `
       SELECT WEEK, PLANT, SUM(po_fg) AS KPI_VALUE FROM (
         SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT, SUM(RELEASE_FG) AS po_fg
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_TRENDS
-        WHERE PO_FG_DONE_DATE::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+        WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
         GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     batch: `
       SELECT WEEK, PLANT, SUM(nomo_batch) AS KPI_VALUE FROM (
         SELECT NOMO, DATE_TRUNC('week', OLAH_COMPLETED_AT::DATE) AS WEEK, PLANT, MAX(BESAR_BATCH) AS nomo_batch
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-        WHERE OLAH_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+        WHERE OLAH_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
         GROUP BY NOMO, WEEK, PLANT
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     downstream: `
@@ -348,8 +362,8 @@ async function executeGetWeeklyTrend(args: {
         SELECT PROCESS_ORDER_FG, PLANT, DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
           SUM(QTY_FG_GOOD)/NULLIF(SUM(LEADTIME_IN_MINUTE)/60.0,0)/NULLIF(MAX(OPERATOR_COUNT),0) AS po_prod
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-        WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}'
-          AND LEADTIME_IN_MINUTE>0 AND OPERATOR_COUNT>0 ${plantFilter}
+        WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ?
+          AND LEADTIME_IN_MINUTE>0 AND OPERATOR_COUNT>0 ${pf}
         GROUP BY PROCESS_ORDER_FG, PLANT, WEEK
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     oee: `
@@ -359,13 +373,13 @@ async function executeGetWeeklyTrend(args: {
           (CASE WHEN ACTIVITY_PRODUCTIVITY_STD>0 THEN LEAST(PRODUCTIVITY::FLOAT/ACTIVITY_PRODUCTIVITY_STD,1.0) ELSE 0 END)
         )*100 AS KPI_VALUE
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-      WHERE KEMAS_COMPLETED_AT::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+      WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
       GROUP BY WEEK, PLANT ORDER BY WEEK`,
     rft: `
       SELECT DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
         COUNT(CASE WHEN ACTIVITY<>'ADJUST' THEN 1 END)*100.0/NULLIF(COUNT(*),0) AS KPI_VALUE
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-      WHERE PO_FG_DONE_DATE::DATE BETWEEN '${startDate}' AND '${endDate}' ${plantFilter}
+      WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
       GROUP BY WEEK, PLANT ORDER BY WEEK`,
   };
 
@@ -373,10 +387,11 @@ async function executeGetWeeklyTrend(args: {
   if (!sql) return JSON.stringify({ error: "kpi_type tren tidak dikenali" });
 
   try {
-    const rows = await executeQuery(sql);
+    const rows = await executeQuery(sql, binds);
     return JSON.stringify({ kpi: args.kpi_type, period: `${startDate} to ${endDate}`, plant: plant || "All Plant", trend: rows });
   } catch (err) {
-    return JSON.stringify({ error: "Query tren gagal", detail: String(err) });
+    console.error("[chat] get_weekly_trend query failed:", err);
+    return JSON.stringify({ error: "Query tren gagal. Silakan coba lagi." });
   }
 }
 
@@ -515,7 +530,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err) {
-    console.error("Chat API error:", err);
-    return NextResponse.json({ error: "AI chat gagal", detail: String(err) }, { status: 500 });
+    console.error("[chat] POST handler error:", err);
+    return NextResponse.json({ error: "AI chat gagal. Silakan coba lagi." }, { status: 500 });
   }
 }

@@ -112,8 +112,7 @@ Buat ringkasan eksekutif singkat:`;
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   } catch (err) {
-    console.error("AI summary error:", err);
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[summary] AI summary error:", err);
+    return NextResponse.json({ error: "Gagal menghasilkan ringkasan" }, { status: 500 });
   }
 }

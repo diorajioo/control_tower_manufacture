@@ -80,6 +80,10 @@ export const authOptions: NextAuthOptions = {
       }
       (session as unknown as Record<string, unknown>).accessToken = token.accessToken;
       (session as unknown as Record<string, unknown>).error       = token.error;
+      // Expire the session immediately so middleware redirects to re-login
+      if (token.error === "RefreshAccessTokenError") {
+        (session as unknown as Record<string, unknown>).expires = new Date(0).toISOString();
+      }
       return session;
     },
   },
