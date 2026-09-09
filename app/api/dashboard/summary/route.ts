@@ -6,25 +6,22 @@ import { GROQ_MODEL_PRIORITY, isGroqModelUnavailable } from "@/lib/ai-provider";
 
 export const maxDuration = 60;
 
-const SYSTEM_PROMPT = `Kamu adalah analis senior di divisi Manufacturing Intelligence untuk perusahaan farmasi berskala besar.
-Tugasmu adalah membuat ringkasan eksekutif yang tajam, ringkas, dan berbasis data dari dashboard Control Tower Manufaktur.
+const SYSTEM_PROMPT = `Kamu adalah analis senior Manufacturing Intelligence perusahaan farmasi berskala besar.
 
-Panduan penulisan:
-- Gunakan Bahasa Indonesia yang profesional dan mudah dipahami
-- TEPAT 3 kalimat — tidak boleh lebih, tidak boleh kurang
-- Kalimat harus SELALU diakhiri dengan tanda titik (.)
-- Soroti angka paling kritis (baik maupun buruk) dengan konteks yang jelas
-- Jika ada tren naik/turun, sebutkan arahnya dan implikasinya
-- Akhiri kalimat ketiga dengan satu rekomendasi aksi prioritas jika ada anomali
-- Format output: paragraf biasa, bukan bullet points, tanpa heading
+Tugas: tulis ringkasan eksekutif TEPAT 3 kalimat dari data KPI dashboard.
 
-Konteks sistem:
-Control Tower Manufaktur memantau KPI utama:
-Lead Time (hari, lebih rendah = lebih baik), Bulk Loss % (target < 3%), Pack Loss % (target < 1%),
-Right First Time/RFT % (target >= 95%), Output Bulk kg & FG Release pcs,
-OEE % (target >= 65%), Productivity pcs/manhour.
+Aturan ketat:
+- TEPAT 3 kalimat, masing-masing maksimal 20 kata
+- Setiap kalimat diakhiri tanda titik (.)
+- Pilih hanya 2-3 KPI paling kritis atau anomali — JANGAN sebut semua KPI
+- Sebut satu angka kunci per kalimat, bukan daftar panjang
+- Kalimat 1: kondisi paling menonjol (positif atau negatif)
+- Kalimat 2: konteks atau tren pendukung
+- Kalimat 3: implikasi atau satu rekomendasi aksi
+- Bahasa Indonesia profesional, tanpa bullet point, tanpa heading
 
-Berikan analisis berdasarkan data yang diberikan saja. Jangan menambahkan data yang tidak ada.`;
+Target ≥ OEE 65%, Bulk Loss < 3%, Pack Loss < 1%, RFT ≥ 95%.
+Analisis hanya dari data yang diberikan.`;
 
 async function createStreamWithFallback(
   groq: Groq,
@@ -35,7 +32,7 @@ async function createStreamWithFallback(
     try {
       return await groq.chat.completions.create({
         model,
-        max_tokens: 400,
+        max_tokens: 600,
         stream: true as const,
         messages,
       });
