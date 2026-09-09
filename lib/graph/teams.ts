@@ -119,18 +119,18 @@ async function gPost<T>(token: string, path: string, body: unknown): Promise<{ d
  * Find or create a 1:1 chat between the authenticated user and a recipient.
  * Teams automatically deduplicates — calling POST /chats with the same two
  * members returns the existing chat rather than creating a duplicate.
+ *
+ * Uses UPN (email) directly in user@odata.bind — no separate user lookup needed,
+ * so User.ReadBasic.All scope is not required.
  */
 export async function findOrCreateChat(token: string, recipientEmail: string): Promise<string | null> {
-  const user = await gGet<{ id?: string }>(token, `/users/${encodeURIComponent(recipientEmail)}`);
-  if (!user?.id) return null;
-
   const { data: chat } = await gPost<{ id?: string }>(token, "/chats", {
     chatType: "oneOnOne",
     members: [
       {
         "@odata.type": "#microsoft.graph.aadUserConversationMember",
         roles: ["owner"],
-        "user@odata.bind": `https://graph.microsoft.com/v1.0/users/${user.id}`,
+        "user@odata.bind": `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(recipientEmail)}`,
       },
       {
         "@odata.type": "#microsoft.graph.aadUserConversationMember",
