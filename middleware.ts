@@ -24,9 +24,9 @@ function rateLimit(key: string, limit: number): boolean {
 // Clean up stale entries periodically to prevent memory leak
 setInterval(() => {
   const cutoff = Date.now() - WINDOW_MS * 2;
-  for (const [k, v] of store.entries()) {
+  store.forEach((v, k) => {
     if (v.windowStart < cutoff) store.delete(k);
-  }
+  });
 }, WINDOW_MS);
 
 // ── Middleware ─────────────────────────────────────────────────────────────────
