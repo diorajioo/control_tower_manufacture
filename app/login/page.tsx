@@ -3,12 +3,12 @@
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Factory } from "lucide-react";
+import { Factory, BarChart2, Clock, Shield, Zap, Package, Activity, Gauge, TrendingUp, AlertTriangle } from "lucide-react";
 
 const REMEMBER_KEY     = "ct_remember_email";
 const REMEMBER_PENDING = "ct_remember_pending";
 
-const ROTATING_LINES = [
+const PHRASES = [
   "One screen.",
   "In the palm of your hand.",
   "Zero reports.",
@@ -16,12 +16,42 @@ const ROTATING_LINES = [
   "Every plant, at a glance.",
 ];
 
-const SHOWCASE_KPIS = [
-  { label: "OEE",             value: "71.3", unit: "%",   trend: "+2.1%",      trendUp: true,  bar: 71, color: "#6366f1", pos: { top: 0,   left: 0   } },
-  { label: "Lead Time",       value: "12.4", unit: "days",trend: "−1.2 days",  trendUp: true,  bar: 62, color: "#4f46e5", pos: { top: 28,  left: 200 } },
-  { label: "Right First Time",value: "96.2", unit: "%",   trend: "On target",  trendUp: true,  bar: 96, color: "#10b981", pos: { top: 120, left: 60  } },
-  { label: "Bulk Loss",       value: "3.8",  unit: "%",   trend: "Above limit",trendUp: false, bar: 76, color: "#ef4444", pos: { top: 108, left: 240 } },
+const FLOAT_ICONS = [
+  { Icon: BarChart2,     top: "8%",  left: "5%",   delay: 0,    size: 16 },
+  { Icon: Clock,         top: "14%", left: "40%",  delay: -2,   size: 15 },
+  { Icon: Shield,        top: "7%",  left: "68%",  delay: -4,   size: 15 },
+  { Icon: Zap,           top: "70%", left: "7%",   delay: -1,   size: 15 },
+  { Icon: Package,       top: "82%", left: "35%",  delay: -3,   size: 16 },
+  { Icon: Activity,      top: "88%", left: "62%",  delay: -5,   size: 15 },
+  { Icon: Gauge,         top: "52%", left: "2%",   delay: -2.5, size: 15 },
+  { Icon: TrendingUp,    top: "38%", left: "44%",  delay: -1.5, size: 15 },
+  { Icon: AlertTriangle, top: "20%", left: "84%",  delay: -3.5, size: 14 },
+  { Icon: Factory,       top: "66%", left: "80%",  delay: -0.5, size: 16 },
 ];
+
+function useTypewriter(phrases: string[]) {
+  const [text, setText] = useState("");
+  const [idx,  setIdx]  = useState(0);
+  const [del,  setDel]  = useState(false);
+
+  useEffect(() => {
+    const phrase = phrases[idx];
+    let t: ReturnType<typeof setTimeout>;
+    if (!del && text === phrase) {
+      t = setTimeout(() => setDel(true), 1800);
+    } else if (del && text === "") {
+      setDel(false);
+      setIdx((i) => (i + 1) % phrases.length);
+    } else if (del) {
+      t = setTimeout(() => setText((s) => s.slice(0, -1)), 40);
+    } else {
+      t = setTimeout(() => setText((s) => phrase.slice(0, s.length + 1)), 75);
+    }
+    return () => clearTimeout(t);
+  }, [text, idx, del, phrases]);
+
+  return text;
+}
 
 export default function LoginPage() {
   const { data: session, status } = useSession();
@@ -29,8 +59,7 @@ export default function LoginPage() {
   const [loading,    setLoading]    = useState(false);
   const [remember,   setRemember]   = useState(false);
   const [savedEmail, setSavedEmail] = useState<string | null>(null);
-  const [lineIdx,    setLineIdx]    = useState(0);
-  const [visible,    setVisible]    = useState(true);
+  const typedText = useTypewriter(PHRASES);
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -45,17 +74,6 @@ export default function LoginPage() {
   useEffect(() => {
     const stored = localStorage.getItem(REMEMBER_KEY);
     if (stored) { setSavedEmail(stored); setRemember(true); }
-  }, []);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setVisible(false);
-      setTimeout(() => {
-        setLineIdx((i) => (i + 1) % ROTATING_LINES.length);
-        setVisible(true);
-      }, 350);
-    }, 2800);
-    return () => clearInterval(id);
   }, []);
 
   const handleSignIn = async () => {
@@ -74,56 +92,50 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex overflow-hidden" style={{ background: "linear-gradient(160deg,#1e1b6e 0%,#131055 45%,#0d0b38 100%)" }}>
+    <div className="min-h-screen relative flex items-center justify-center overflow-hidden px-8"
+      style={{ background: "linear-gradient(160deg,#1e1b6e 0%,#131055 45%,#0d0b38 100%)" }}>
 
-      {/* ── LEFT: Showcase ───────────────────────────────────────────────── */}
-      <div className="flex-1 relative flex flex-col items-center justify-center px-10 py-16 overflow-hidden min-w-0">
-        {/* Aurora blobs */}
-        <div className="aurora-root">
-          <div className="aurora-blob" style={{ width:620,height:520,background:"radial-gradient(ellipse,#6366f1,transparent)",top:"-12%",left:"-5%" }} />
-          <div className="aurora-blob" style={{ width:500,height:420,background:"radial-gradient(ellipse,#8b5cf6,transparent)",bottom:"-5%",right:"5%",animationDelay:"-5s",animationDuration:"10s" }} />
-          <div className="aurora-blob" style={{ width:400,height:340,background:"radial-gradient(ellipse,#3b82f6,transparent)",bottom:"25%",left:"35%",animationDelay:"-9s",animationDuration:"17s" }} />
+      {/* Aurora blobs */}
+      <div className="aurora-root">
+        <div className="aurora-blob" style={{ width:700,height:580,background:"radial-gradient(ellipse,#6366f1,transparent)",top:"-15%",left:"-8%" }} />
+        <div className="aurora-blob" style={{ width:560,height:460,background:"radial-gradient(ellipse,#8b5cf6,transparent)",bottom:"-10%",right:"-5%",animationDelay:"-5s",animationDuration:"11s" }} />
+        <div className="aurora-blob" style={{ width:440,height:380,background:"radial-gradient(ellipse,#3b82f6,transparent)",bottom:"25%",left:"32%",animationDelay:"-9s",animationDuration:"17s" }} />
+      </div>
+
+      {/* Grid */}
+      <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage:"linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px)",backgroundSize:"48px 48px" }} />
+
+      {/* Floating icon circles */}
+      {FLOAT_ICONS.map(({ Icon, top, left, delay, size }, i) => (
+        <div key={i} className="float-icon absolute flex items-center justify-center rounded-full pointer-events-none"
+          style={{ top, left, width:44, height:44, animationDelay:`${delay}s`, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", backdropFilter:"blur(8px)" }}>
+          <Icon size={size} style={{ color:"rgba(165,180,252,0.5)" }} strokeWidth={1.5} />
         </div>
-        {/* Grid */}
-        <div className="absolute inset-0" style={{ backgroundImage:"linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px)",backgroundSize:"44px 44px" }} />
+      ))}
 
-        <div className="relative z-10 w-full max-w-[580px]">
-          {/* Live badge */}
-          <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-8 text-[11px] font-semibold" style={{ background:"rgba(99,102,241,0.22)",border:"1px solid rgba(129,140,248,0.4)",color:"#c7d2fe" }}>
+      {/* Center container */}
+      <div className="relative z-10 w-full max-w-[1040px] flex items-center gap-20">
+
+        {/* ── LEFT: Branding ─────────────────────────────────────── */}
+        <div className="flex-1 min-w-0">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-9 text-[11px] font-semibold"
+            style={{ background:"rgba(99,102,241,0.22)",border:"1px solid rgba(129,140,248,0.4)",color:"#c7d2fe" }}>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Live · Snowflake
           </div>
 
-          {/* Headline with rotating second line */}
-          <h1 className="mb-4" style={{ fontFamily:"'Space Grotesk',sans-serif",fontSize:44,fontWeight:700,color:"white",letterSpacing:"-0.04em",lineHeight:1.1 }}>
-            Every KPI.<br />
-            <span style={{ color:"#a5b4fc",display:"inline-block",minHeight:"1.15em",opacity:visible?1:0,transform:visible?"translateY(0)":"translateY(6px)",transition:"opacity 0.35s ease, transform 0.35s ease" }}>
-              {ROTATING_LINES[lineIdx]}
-            </span>
-          </h1>
-          <p className="text-[14px] leading-relaxed mb-10" style={{ color:"rgba(199,210,254,0.6)" }}>
+          {/* Headline + typewriter */}
+          <div className="mb-5" style={{ fontFamily:"'Space Grotesk',sans-serif",letterSpacing:"-0.04em",lineHeight:1.05 }}>
+            <div className="font-bold text-white" style={{ fontSize:58 }}>Every KPI.</div>
+            <div className="font-bold" style={{ fontSize:58, color:"#a5b4fc", minHeight:"1.1em" }}>
+              {typedText}<span className="cursor-blink">|</span>
+            </div>
+          </div>
+
+          <p className="text-[14px] leading-relaxed mb-10" style={{ color:"rgba(199,210,254,0.58)", maxWidth:400 }}>
             Real-time production visibility across every plant.<br />No reports. No waiting.
           </p>
-
-          {/* Floating KPI cards — wider spread */}
-          <div className="relative mb-12" style={{ height:220 }}>
-            {SHOWCASE_KPIS.map((kpi, i) => (
-              <div key={kpi.label} className="kpi-float absolute rounded-2xl px-4 py-3.5"
-                style={{ minWidth:158,...kpi.pos,animationDuration:`${[6,7,5.5,8][i]}s`,animationDelay:`${[0,-2,-4,-1][i]}s` }}>
-                <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color:"rgba(199,210,254,0.7)" }}>{kpi.label}</div>
-                <div className="font-bold leading-none mb-2" style={{ fontFamily:"'Space Grotesk',sans-serif",fontSize:23,color:kpi.trendUp?"white":"#f87171",letterSpacing:"-0.03em" }}>
-                  {kpi.value}<span className="text-xs font-medium ml-1" style={{ color:"rgba(199,210,254,0.55)" }}>{kpi.unit}</span>
-                </div>
-                <div className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold mb-2.5"
-                  style={{ background:kpi.trendUp?"rgba(16,185,129,0.18)":"rgba(239,68,68,0.18)",color:kpi.trendUp?"#34d399":"#f87171" }}>
-                  {kpi.trendUp ? "▲" : "▼"} {kpi.trend}
-                </div>
-                <div className="h-0.5 rounded-full overflow-hidden" style={{ background:"rgba(255,255,255,0.12)" }}>
-                  <div className="h-full rounded-full" style={{ width:`${kpi.bar}%`,background:`linear-gradient(90deg,${kpi.color},${kpi.color}88)` }} />
-                </div>
-              </div>
-            ))}
-          </div>
 
           {/* Feature bullets */}
           <div className="flex flex-col gap-3">
@@ -132,8 +144,9 @@ export default function LoginPage() {
               { icon:"ai",   text:"AI summaries & analyst chat, powered by Snowflake" },
               { icon:"bell", text:"Instant Teams alerts, routed per recipient" },
             ].map((f) => (
-              <div key={f.icon} className="flex items-center gap-3 text-[13px] font-medium" style={{ color:"rgba(199,210,254,0.75)" }}>
-                <div className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0" style={{ background:"rgba(99,102,241,0.2)",border:"1px solid rgba(129,140,248,0.3)" }}>
+              <div key={f.icon} className="flex items-center gap-3 text-[13px] font-medium" style={{ color:"rgba(199,210,254,0.72)" }}>
+                <div className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0"
+                  style={{ background:"rgba(99,102,241,0.2)",border:"1px solid rgba(129,140,248,0.28)" }}>
                   <FeatureIcon type={f.icon} />
                 </div>
                 {f.text}
@@ -141,73 +154,79 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-      </div>
 
-      {/* ── RIGHT: Login form ─────────────────────────────────────────────── */}
-      <div className="w-[400px] shrink-0 flex items-center justify-center px-8 py-10" style={{ background:"rgba(255,255,255,0.05)",borderLeft:"1px solid rgba(255,255,255,0.09)" }}>
-        <div className="w-full">
-          <div className="w-full rounded-[20px] p-8" style={{ background:"rgba(255,255,255,0.11)",border:"1px solid rgba(255,255,255,0.18)",boxShadow:"0 24px 56px rgba(0,0,0,0.35),inset 0 0 0 1px rgba(255,255,255,0.07)" }}>
-            {/* Logo */}
-            <div className="w-12 h-12 rounded-[14px] mx-auto mb-5 flex items-center justify-center" style={{ background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)",boxShadow:"0 8px 24px rgba(79,70,229,0.4)" }}>
-              <Factory size={22} className="text-white" />
+        {/* ── RIGHT: Login card ──────────────────────────────────── */}
+        <div className="shrink-0 w-[360px]">
+          <div className="w-full rounded-[22px] p-7"
+            style={{ background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.16)",boxShadow:"0 32px 72px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,255,255,0.1)",backdropFilter:"blur(28px)" }}>
+
+            {/* Logo + title */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-[11px] flex items-center justify-center shrink-0"
+                style={{ background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)",boxShadow:"0 6px 20px rgba(79,70,229,0.45)" }}>
+                <Factory size={18} className="text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-white leading-none" style={{ fontFamily:"'Space Grotesk',sans-serif",fontSize:15,letterSpacing:"-0.02em" }}>Control Tower</p>
+                <p className="text-[10px] mt-0.5" style={{ color:"rgba(165,180,252,0.45)" }}>PT Paracorp Group</p>
+              </div>
             </div>
-            <h2 className="text-xl font-bold text-white text-center mb-1" style={{ fontFamily:"'Space Grotesk',sans-serif",letterSpacing:"-0.03em" }}>Control Tower</h2>
-            <p className="text-[11px] text-center mb-6" style={{ color:"rgba(165,180,252,0.45)" }}>Manufacturing Dashboard · PT Paracorp Group</p>
-            <div className="h-px mb-5" style={{ background:"rgba(255,255,255,0.09)" }} />
+
+            <div className="h-px mb-5" style={{ background:"rgba(255,255,255,0.08)" }} />
+
+            <p className="font-semibold text-white mb-0.5" style={{ fontSize:13 }}>Sign in</p>
+            <p className="text-[11px] mb-5" style={{ color:"rgba(165,180,252,0.5)" }}>Internal access only.</p>
 
             {savedEmail && (
-              <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 mb-4" style={{ background:"rgba(99,102,241,0.16)",border:"1px solid rgba(99,102,241,0.32)" }}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-[12px]" style={{ background:"linear-gradient(135deg,#4f46e5,#7c3aed)",fontFamily:"'Space Grotesk',sans-serif" }}>
+              <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 mb-4"
+                style={{ background:"rgba(99,102,241,0.16)",border:"1px solid rgba(99,102,241,0.32)" }}>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-[11px]"
+                  style={{ background:"linear-gradient(135deg,#4f46e5,#7c3aed)" }}>
                   {savedEmail.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-semibold truncate" style={{ color:"rgba(255,255,255,0.9)" }}>{savedEmail}</p>
+                  <p className="text-[11px] font-semibold truncate" style={{ color:"rgba(255,255,255,0.9)" }}>{savedEmail}</p>
                   <p className="text-[10px]" style={{ color:"rgba(129,140,248,0.55)" }}>Saved account</p>
                 </div>
                 <button onClick={() => { localStorage.removeItem(REMEMBER_KEY); setSavedEmail(null); setRemember(false); }}
-                  className="text-[10px] transition-colors shrink-0 hover:text-white" style={{ color:"rgba(129,140,248,0.45)" }}>
+                  className="text-[10px] transition-colors hover:text-white shrink-0" style={{ color:"rgba(129,140,248,0.4)" }}>
                   Remove
                 </button>
               </div>
             )}
 
-            <p className="text-[12px] text-center mb-3.5" style={{ color:"rgba(165,180,252,0.5)" }}>
-              {savedEmail ? "Continue with saved account" : "Sign in with your company account"}
-            </p>
-
             <button onClick={handleSignIn} disabled={loading}
-              className="w-full relative flex items-center justify-center rounded-xl py-3 font-semibold text-[14px] text-gray-800 bg-white transition-all hover:bg-gray-50 disabled:opacity-60"
-              style={{ boxShadow:"0 4px 16px rgba(0,0,0,0.3)" }}>
-              <span className="absolute left-4">
-                <MicrosoftLogo />
-              </span>
-              {loading ? "Signing in…" : savedEmail ? `Sign in as ${savedEmail.split("@")[0]}` : "Sign in with Microsoft"}
+              className="w-full relative flex items-center justify-center rounded-xl py-3 font-semibold text-gray-800 bg-white transition-all hover:bg-gray-50 disabled:opacity-60 mb-3"
+              style={{ fontSize:14, boxShadow:"0 4px 20px rgba(0,0,0,0.3)" }}>
+              <span className="absolute left-4"><MicrosoftLogo /></span>
+              {loading ? "Signing in…" : savedEmail ? `Sign in as ${savedEmail.split("@")[0]}` : "Continue with Microsoft"}
             </button>
 
-            <label className="flex items-center gap-2 mt-3.5 cursor-pointer select-none">
+            <p className="text-[11px] leading-relaxed mb-5" style={{ color:"rgba(165,180,252,0.42)" }}>
+              Use your Paracorp work account. Access is limited to the Paracorp directory.
+            </p>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none">
               <div onClick={() => setRemember(!remember)}
                 className="w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all"
-                style={{ background:remember?"rgba(99,102,241,0.38)":"rgba(99,102,241,0.14)",border:`1.5px solid ${remember?"rgba(129,140,248,0.65)":"rgba(99,102,241,0.3)"}` }}>
+                style={{ background:remember?"rgba(99,102,241,0.38)":"rgba(99,102,241,0.14)",border:`1.5px solid ${remember?"rgba(129,140,248,0.65)":"rgba(99,102,241,0.28)"}` }}>
                 {remember && (
                   <svg width="9" height="8" viewBox="0 0 10 8" fill="none">
-                    <path d="M1 4L3.5 6.5L9 1" stroke="#a5b4fc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M1 4L3.5 6.5L9 1" stroke="#a5b4fc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 )}
               </div>
-              <span onClick={() => setRemember(!remember)} className="text-[11px]" style={{ color:"rgba(165,180,252,0.55)" }}>
+              <span onClick={() => setRemember(!remember)} className="text-[11px]" style={{ color:"rgba(165,180,252,0.5)" }}>
                 Remember me on this device
               </span>
             </label>
-
-            <p className="mt-6 text-[10px] text-center leading-relaxed" style={{ color:"rgba(165,180,252,0.4)" }}>
-              Authorized personnel only.<br />Use your corporate Microsoft account.
-            </p>
           </div>
 
           <div className="flex justify-center mt-4">
-            <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1" style={{ background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)" }}>
+            <div className="inline-flex items-center gap-1.5 rounded-full px-3 py-1"
+              style={{ background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)" }}>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span className="text-[10px]" style={{ color:"rgba(255,255,255,0.4)" }}>Control Tower v1.1 · System active</span>
+              <span className="text-[10px]" style={{ color:"rgba(255,255,255,0.38)" }}>Control Tower v1.1 · System active</span>
             </div>
           </div>
         </div>
@@ -215,10 +234,12 @@ export default function LoginPage() {
 
       <style>{`
         .aurora-root { position:absolute;inset:0;pointer-events:none; }
-        .aurora-blob { position:absolute;border-radius:50%;filter:blur(80px);opacity:0.45;animation:drift 14s ease-in-out infinite alternate; }
-        @keyframes drift { 0%{transform:translate(0,0) scale(1)} 50%{transform:translate(24px,-18px) scale(1.04)} 100%{transform:translate(-18px,26px) scale(0.97)} }
-        .kpi-float { background:rgba(255,255,255,0.11);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.18);box-shadow:0 8px 24px rgba(0,0,0,0.25);animation:floatCard 6s ease-in-out infinite alternate; }
-        @keyframes floatCard { 0%{transform:translateY(0)} 100%{transform:translateY(-10px)} }
+        .aurora-blob { position:absolute;border-radius:50%;filter:blur(90px);opacity:0.4;animation:drift 14s ease-in-out infinite alternate; }
+        @keyframes drift { 0%{transform:translate(0,0) scale(1)} 50%{transform:translate(28px,-20px) scale(1.05)} 100%{transform:translate(-20px,30px) scale(0.96)} }
+        .float-icon { animation:floatIcon 8s ease-in-out infinite alternate; }
+        @keyframes floatIcon { 0%{transform:translateY(0) scale(1)} 100%{transform:translateY(-14px) scale(1.04)} }
+        .cursor-blink { display:inline-block;color:#a5b4fc;font-weight:200;margin-left:2px;animation:blink 1s step-end infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
       `}</style>
     </div>
   );
