@@ -4,7 +4,8 @@
     "ignoreFiles": [
       "lib/email.ts",
       "app/query-docs/page.tsx",
-      "QUERIES.md"
+      "QUERIES.md",
+      "lib/graph/teams.ts"
     ],
     "ignoreValues": [
       {

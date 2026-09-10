@@ -103,14 +103,19 @@ async function gGet<T>(token: string, path: string): Promise<T | null> {
   return res.json() as Promise<T>;
 }
 
-async function gPost<T>(token: string, path: string, body: unknown): Promise<{ data: T | null; status: number }> {
+async function gPost<T>(token: string, path: string, body: unknown): Promise<{ data: T | null; status: number; errorBody?: unknown }> {
   const res = await fetch(`${GRAPH}${path}`, {
     method:  "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body:    JSON.stringify(body),
   });
-  const data = res.ok ? await res.json() as T : null;
-  return { data, status: res.status };
+  let parsed: unknown;
+  try { parsed = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) {
+    console.error(`[teams] POST ${path} → ${res.status}`, JSON.stringify(parsed));
+    return { data: null, status: res.status, errorBody: parsed };
+  }
+  return { data: parsed as T, status: res.status };
 }
 
 // ── Chat helpers ──────────────────────────────────────────────────────────────
@@ -123,14 +128,18 @@ async function gPost<T>(token: string, path: string, body: unknown): Promise<{ d
  * Uses UPN (email) directly in user@odata.bind — no separate user lookup needed,
  * so User.ReadBasic.All scope is not required.
  */
-export async function findOrCreateChat(token: string, recipientEmail: string): Promise<string | null> {
-  const { data: chat } = await gPost<{ id?: string }>(token, "/chats", {
+export async function findOrCreateChat(
+  token: string,
+  recipientEmail: string
+): Promise<{ chatId: string | null; graphError?: unknown }> {
+  // Use OData parentheses syntax so the @ in the UPN is not ambiguous in the URL.
+  const { data: chat, errorBody } = await gPost<{ id?: string }>(token, "/chats", {
     chatType: "oneOnOne",
     members: [
       {
         "@odata.type": "#microsoft.graph.aadUserConversationMember",
         roles: ["owner"],
-        "user@odata.bind": `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(recipientEmail)}`,
+        "user@odata.bind": `https://graph.microsoft.com/v1.0/users('${recipientEmail}')`,
       },
       {
         "@odata.type": "#microsoft.graph.aadUserConversationMember",
@@ -139,7 +148,7 @@ export async function findOrCreateChat(token: string, recipientEmail: string): P
       },
     ],
   });
-  return chat?.id ?? null;
+  return { chatId: chat?.id ?? null, graphError: errorBody };
 }
 
 /** Send an HTML message to an existing chat. */
@@ -236,9 +245,10 @@ export async function sendGraphAlertsRouted(
     });
     if (filtered.length === 0) continue;
 
-    const chatId = await findOrCreateChat(token, recipient.email);
+    const { chatId, graphError } = await findOrCreateChat(token, recipient.email);
     if (!chatId) {
-      errors.push(`${recipient.email}: could not find or create chat`);
+      const detail = graphError ? ` — ${JSON.stringify(graphError)}` : "";
+      errors.push(`${recipient.email}: could not find or create chat${detail}`);
       continue;
     }
     const html = buildAlertHtml(filtered, opts);
@@ -294,9 +304,10 @@ export async function sendGraphAlerts(
   let sent = 0;
 
   for (const email of recipients) {
-    const chatId = await findOrCreateChat(token, email);
+    const { chatId, graphError } = await findOrCreateChat(token, email);
     if (!chatId) {
-      errors.push(`${email}: could not find or create chat`);
+      const detail = graphError ? ` — ${JSON.stringify(graphError)}` : "";
+      errors.push(`${email}: could not find or create chat${detail}`);
       continue;
     }
     const ok = await sendMessageToChat(token, chatId, html);
