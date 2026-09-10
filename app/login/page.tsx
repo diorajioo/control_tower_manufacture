@@ -10,7 +10,7 @@ const REMEMBER_PENDING = "ct_remember_pending";
 
 const PHRASES = [
   "One screen.",
-  "In the palm of your hand.",
+  "No blind spots.",
   "Zero reports.",
   "Always on.",
   "Every plant, at a glance.",
@@ -161,21 +161,19 @@ export default function LoginPage() {
             style={{ background:"rgba(255,255,255,0.09)",border:"1px solid rgba(255,255,255,0.16)",boxShadow:"0 32px 72px rgba(0,0,0,0.45),inset 0 1px 0 rgba(255,255,255,0.1)",backdropFilter:"blur(28px)" }}>
 
             {/* Logo + title */}
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-[11px] flex items-center justify-center shrink-0"
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="w-12 h-12 rounded-[14px] flex items-center justify-center mb-4"
                 style={{ background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)",boxShadow:"0 6px 20px rgba(79,70,229,0.45)" }}>
-                <Factory size={18} className="text-white" />
+                <Factory size={20} className="text-white" />
               </div>
-              <div>
-                <p className="font-bold text-white leading-none" style={{ fontFamily:"'Space Grotesk',sans-serif",fontSize:15,letterSpacing:"-0.02em" }}>Control Tower</p>
-                <p className="text-[10px] mt-0.5" style={{ color:"rgba(165,180,252,0.45)" }}>PT Paracorp Group</p>
-              </div>
+              <p className="font-bold text-white leading-none" style={{ fontFamily:"'Space Grotesk',sans-serif",fontSize:16,letterSpacing:"-0.02em" }}>Control Tower</p>
+              <p className="text-[10px] mt-1" style={{ color:"rgba(165,180,252,0.45)" }}>PT Paracorp Group</p>
             </div>
 
             <div className="h-px mb-5" style={{ background:"rgba(255,255,255,0.08)" }} />
 
-            <p className="font-semibold text-white mb-0.5" style={{ fontSize:13 }}>Sign in</p>
-            <p className="text-[11px] mb-5" style={{ color:"rgba(165,180,252,0.5)" }}>Internal access only.</p>
+            <p className="font-semibold text-white text-center mb-0.5" style={{ fontSize:13 }}>Sign in</p>
+            <p className="text-[11px] text-center mb-5" style={{ color:"rgba(165,180,252,0.5)" }}>Internal access only.</p>
 
             {savedEmail && (
               <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 mb-4"
@@ -202,11 +200,11 @@ export default function LoginPage() {
               {loading ? "Signing in…" : savedEmail ? `Sign in as ${savedEmail.split("@")[0]}` : "Continue with Microsoft"}
             </button>
 
-            <p className="text-[11px] leading-relaxed mb-5" style={{ color:"rgba(165,180,252,0.42)" }}>
+            <p className="text-[11px] leading-relaxed text-center mb-5" style={{ color:"rgba(165,180,252,0.42)" }}>
               Use your Paracorp work account. Access is limited to the Paracorp directory.
             </p>
 
-            <label className="flex items-center gap-2 cursor-pointer select-none">
+            <label className="flex items-center justify-center gap-2 cursor-pointer select-none">
               <div onClick={() => setRemember(!remember)}
                 className="w-4 h-4 rounded flex items-center justify-center shrink-0 transition-all"
                 style={{ background:remember?"rgba(99,102,241,0.38)":"rgba(99,102,241,0.14)",border:`1.5px solid ${remember?"rgba(129,140,248,0.65)":"rgba(99,102,241,0.28)"}` }}>
