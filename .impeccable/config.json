@@ -5,7 +5,8 @@
       "lib/email.ts",
       "app/query-docs/page.tsx",
       "QUERIES.md",
-      "lib/graph/teams.ts"
+      "lib/graph/teams.ts",
+      "design-draft.html"
     ],
     "ignoreValues": [
       {
@@ -72,7 +73,7 @@
         "rule": "design-system-color",
         "value": "#f87171",
         "createdAt": "2026-08-31T04:49:42.933Z",
-        "reason": "Nivo tooltip UCL/LCL highlight (red-400); inline style in tooltip render prop"
+        "reason": "Red-300 used in login showcase fixture for demo down-trend value text — acceptable softer step from status-bad"
       },
       {
         "rule": "design-system-font-size",
@@ -91,6 +92,72 @@
         "value": "space grotesk",
         "createdAt": "2026-08-31T08:00:08.298Z",
         "reason": "PRODUCT.md declares Space Grotesk as brand display font"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#1e1b6e",
+        "createdAt": "2026-09-10T04:00:32.519Z",
+        "reason": "Login page dark background gradient — intentional Persuade surface, distinct from dashboard Operate theme"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#131055",
+        "createdAt": "2026-09-10T04:00:39.346Z",
+        "reason": "Login page dark background gradient — intentional Persuade surface, distinct from dashboard Operate theme"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#0d0b38",
+        "createdAt": "2026-09-10T04:00:39.551Z",
+        "reason": "Login page dark background gradient — intentional Persuade surface, distinct from dashboard Operate theme"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#7c3aed",
+        "createdAt": "2026-09-10T04:00:39.769Z",
+        "reason": "Logo gradient violet step, brand-adjacent tonal extension on dark login surface"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#a5b4fc",
+        "createdAt": "2026-09-10T04:00:40.165Z",
+        "reason": "Indigo-300 tonal text on dark login surface — coherent brand tonal step, Persuade surface only"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#c7d2fe",
+        "createdAt": "2026-09-10T04:00:40.478Z",
+        "reason": "Indigo-200 tonal text on dark login surface — coherent brand tonal step, Persuade surface only"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f25022",
+        "createdAt": "2026-09-10T04:00:46.337Z",
+        "reason": "Microsoft brand color for OAuth button logo — third-party identity, non-negotiable"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#7fba00",
+        "createdAt": "2026-09-10T04:00:46.534Z",
+        "reason": "Microsoft brand color for OAuth button logo — third-party identity, non-negotiable"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#00a4ef",
+        "createdAt": "2026-09-10T04:00:46.710Z",
+        "reason": "Microsoft brand color for OAuth button logo — third-party identity, non-negotiable"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#ffb900",
+        "createdAt": "2026-09-10T04:00:46.902Z",
+        "reason": "Microsoft brand color for OAuth button logo — third-party identity, non-negotiable"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#34d399",
+        "createdAt": "2026-09-10T04:00:52.256Z",
+        "reason": "Emerald-400 used in login showcase fixture for demo trend data — acceptable tonal step from status-good"
       }
     ]
   }

@@ -38,7 +38,7 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-56 h-screen bg-[#0e0c1e] flex flex-col shrink-0 border-r border-white/[0.04] overflow-hidden">
+    <aside className="w-56 h-screen bg-[#1a1760] flex flex-col shrink-0 border-r border-white/[0.06] overflow-hidden">
       {/* Logo */}
       <div className="px-5 pt-6 pb-5">
         <div className="flex items-center gap-3">
@@ -47,13 +47,13 @@ export function Sidebar() {
           </div>
           <div className="min-w-0">
             <p className="text-[13px] font-bold text-white leading-none tracking-tight">Control Tower</p>
-            <p className="text-[11px] text-indigo-300/50 leading-none mt-0.5 tracking-wide">Manufacture</p>
+            <p className="text-[11px] leading-none mt-0.5 tracking-wide" style={{ color: "rgba(199,210,254,0.45)" }}>Manufacture</p>
           </div>
         </div>
       </div>
 
       {/* Divider */}
-      <div className="mx-5 h-px bg-white/[0.06] mb-4" />
+      <div className="mx-5 h-px bg-white/[0.12] mb-4" />
 
       {/* Nav */}
       <nav className="px-3 flex flex-col gap-0.5 flex-1">
@@ -70,7 +70,7 @@ export function Sidebar() {
 
       {/* Bottom */}
       <div className="px-3 pb-5">
-        <div className="h-px bg-white/[0.06] mb-3" />
+        <div className="h-px bg-white/[0.12] mb-3" />
         <NavItem
           icon={Settings}
           label={t("nav_settings")}
@@ -79,7 +79,7 @@ export function Sidebar() {
         />
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="mt-0.5 flex items-center gap-2.5 px-3 py-2 rounded-xl text-white/25 hover:text-red-300 hover:bg-red-500/[0.08] transition-all duration-150 w-full text-left"
+          className="mt-0.5 flex items-center gap-2.5 px-3 py-2 rounded-xl text-white/40 hover:text-red-300 hover:bg-red-500/[0.10] transition-all duration-150 w-full text-left"
         >
           <LogOut size={14} strokeWidth={1.75} />
           <span className="text-[13px] font-medium">{t("nav_signout")}</span>
@@ -106,8 +106,8 @@ function NavItem({
       className={cn(
         "relative flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-150 w-full group",
         active
-          ? "bg-white/[0.09] text-white"
-          : "text-white/35 hover:text-white/65 hover:bg-white/[0.05]"
+          ? "bg-white/[0.14] text-white"
+          : "text-white/50 hover:text-white/80 hover:bg-white/[0.08]"
       )}
     >
       <Icon
@@ -119,7 +119,7 @@ function NavItem({
         {label}
       </span>
       {active && (
-        <span className="w-1 h-4 rounded-full bg-indigo-400/70 shrink-0" />
+        <span className="w-1 h-4 rounded-full bg-indigo-200/70 shrink-0" />
       )}
     </Link>
   );

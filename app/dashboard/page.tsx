@@ -263,6 +263,8 @@ export default function DashboardPage() {
           lastUpdated={lastUpdated}
           alertCount={visibleAlerts.length}
           onBellClick={() => setAlertPanelOpen(!alertPanelOpen)}
+          alerts={visibleAlerts}
+          onDismiss={handleDismissAlert}
         />
 
         <main className="flex-1 p-4 overflow-y-auto min-h-0" onClick={() => setHighlightedKpi(null)}>
