@@ -42,7 +42,7 @@ export async function getTokenFromRefresh(refreshToken: string): Promise<string 
       client_id:     process.env.AZURE_AD_CLIENT_ID!,
       client_secret: process.env.AZURE_AD_CLIENT_SECRET!,
       refresh_token: refreshToken,
-      scope:         "openid profile email Chat.Create ChatMessage.Send offline_access",
+      scope:         "openid profile email User.Read User.ReadBasic.All Chat.Create ChatMessage.Send offline_access",
     }),
   });
   if (!res.ok) return null;

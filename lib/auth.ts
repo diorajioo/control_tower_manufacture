@@ -5,7 +5,7 @@ import AzureADProvider from "next-auth/providers/azure-ad";
 // Delegated Graph scopes for Teams DM notifications.
 // Chat.Create + ChatMessage.Send do NOT require admin consent.
 // offline_access gives us a refresh_token so sessions outlast the 1-hour access token.
-const GRAPH_SCOPES = "Chat.Create ChatMessage.Send offline_access";
+const GRAPH_SCOPES = "User.Read User.ReadBasic.All Chat.Create ChatMessage.Send offline_access";
 
 async function refreshAccessToken(token: JWT): Promise<JWT> {
   try {
