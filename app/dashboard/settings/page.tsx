@@ -806,6 +806,13 @@ function EmailTab({
   onSave: () => void;
 }) {
   const set = (patch: Partial<NotifSettings>) => setNotif({ ...notif, ...patch });
+
+  // Auto-persist the enabled toggle immediately so it survives page refresh
+  const setEnabled = (v: boolean) => {
+    const updated = { ...notif, enabled: v };
+    setNotif(updated);
+    localStorage.setItem("ct-notification-settings", JSON.stringify(updated));
+  };
   const [emailInput, setEmailInput] = useState("");
   const [emailError, setEmailError] = useState("");
   const [testState, setTestState] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -867,7 +874,7 @@ function EmailTab({
             <p className="text-sm font-semibold text-gray-800">Aktifkan Notifikasi Email</p>
             <p className="text-xs text-gray-500 mt-0.5">Kirim email saat ada alert atau metrik bermasalah</p>
           </div>
-          <Toggle checked={notif.enabled} onChange={(v) => set({ enabled: v })} />
+          <Toggle checked={notif.enabled} onChange={setEnabled} />
         </div>
       </Card>
 
@@ -1016,6 +1023,13 @@ function TeamsTab({
   onSave: () => void;
 }) {
   const set = (patch: Partial<TeamsNotifSettings>) => setTeamsNotif({ ...teamsNotif, ...patch });
+
+  // Auto-persist the enabled toggle immediately so it survives page refresh
+  const setEnabled = (v: boolean) => {
+    const updated = { ...teamsNotif, enabled: v };
+    setTeamsNotif(updated);
+    localStorage.setItem("ct-teams-settings", JSON.stringify(updated));
+  };
   const [emailInput, setEmailInput] = useState("");
   const [emailError, setEmailError] = useState("");
   const [testState, setTestState] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -1086,7 +1100,7 @@ function TeamsTab({
               Kirim DM ke Teams saat alert terjadi, sesuai metrik yang dipilih tiap penerima
             </p>
           </div>
-          <Toggle checked={teamsNotif.enabled} onChange={(v) => set({ enabled: v })} />
+          <Toggle checked={teamsNotif.enabled} onChange={setEnabled} />
         </div>
       </Card>
 

@@ -125,26 +125,43 @@ async function gPost<T>(token: string, path: string, body: unknown): Promise<{ d
  * Teams automatically deduplicates — calling POST /chats with the same two
  * members returns the existing chat rather than creating a duplicate.
  *
- * Uses UPN (email) directly in user@odata.bind — no separate user lookup needed,
- * so User.ReadBasic.All scope is not required.
+ * Requires: Chat.Create + User.ReadBasic.All (delegated).
+ * User.ReadBasic.All is needed to resolve the recipient's object ID.
+ * The sender's ID is resolved via GET /me (always available).
  */
 export async function findOrCreateChat(
   token: string,
   recipientEmail: string
 ): Promise<{ chatId: string | null; graphError?: unknown }> {
-  // Use OData parentheses syntax so the @ in the UPN is not ambiguous in the URL.
+  // Resolve sender GUID from /me (User.Read — always available)
+  const me = await gGet<{ id?: string }>(token, "/me");
+  if (!me?.id) {
+    return { chatId: null, graphError: { message: "Could not resolve sender identity from /me" } };
+  }
+
+  // Resolve recipient GUID (requires User.ReadBasic.All delegated permission)
+  const recipientUser = await gGet<{ id?: string }>(token, `/users/${recipientEmail}`);
+  if (!recipientUser?.id) {
+    return {
+      chatId: null,
+      graphError: {
+        message: `User ${recipientEmail} tidak ditemukan. Tambahkan izin User.ReadBasic.All (Delegated) di Azure AD app registration, lalu login ulang untuk generate token baru.`,
+      },
+    };
+  }
+
   const { data: chat, errorBody } = await gPost<{ id?: string }>(token, "/chats", {
     chatType: "oneOnOne",
     members: [
       {
         "@odata.type": "#microsoft.graph.aadUserConversationMember",
         roles: ["owner"],
-        "user@odata.bind": `https://graph.microsoft.com/v1.0/users('${recipientEmail}')`,
+        "user@odata.bind": `https://graph.microsoft.com/v1.0/users('${recipientUser.id}')`,
       },
       {
         "@odata.type": "#microsoft.graph.aadUserConversationMember",
         roles: ["owner"],
-        "user@odata.bind": "https://graph.microsoft.com/v1.0/me",
+        "user@odata.bind": `https://graph.microsoft.com/v1.0/users('${me.id}')`,
       },
     ],
   });
