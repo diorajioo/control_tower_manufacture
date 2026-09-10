@@ -158,6 +158,14 @@
         "value": "#34d399",
         "createdAt": "2026-09-10T04:00:52.256Z",
         "reason": "Emerald-400 used in login showcase fixture for demo trend data — acceptable tonal step from status-good"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "*",
+        "files": [
+          "app/login/page.tsx"
+        ],
+        "createdAt": "2026-09-10T04:22:01.642Z"
       }
     ]
   }
