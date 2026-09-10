@@ -8,11 +8,19 @@ import { Factory } from "lucide-react";
 const REMEMBER_KEY     = "ct_remember_email";
 const REMEMBER_PENDING = "ct_remember_pending";
 
+const ROTATING_LINES = [
+  "One screen.",
+  "In the palm of your hand.",
+  "Zero reports.",
+  "Always on.",
+  "Every plant, at a glance.",
+];
+
 const SHOWCASE_KPIS = [
   { label: "OEE",             value: "71.3", unit: "%",   trend: "+2.1%",      trendUp: true,  bar: 71, color: "#6366f1", pos: { top: 0,   left: 0   } },
-  { label: "Lead Time",       value: "12.4", unit: "days",trend: "−1.2 days",  trendUp: true,  bar: 62, color: "#4f46e5", pos: { top: 22,  left: 190 } },
-  { label: "Right First Time",value: "96.2", unit: "%",   trend: "On target",  trendUp: true,  bar: 96, color: "#10b981", pos: { top: 112, left: 50  } },
-  { label: "Bulk Loss",       value: "3.8",  unit: "%",   trend: "Above limit",trendUp: false, bar: 76, color: "#ef4444", pos: { top: 100, left: 218 } },
+  { label: "Lead Time",       value: "12.4", unit: "days",trend: "−1.2 days",  trendUp: true,  bar: 62, color: "#4f46e5", pos: { top: 28,  left: 200 } },
+  { label: "Right First Time",value: "96.2", unit: "%",   trend: "On target",  trendUp: true,  bar: 96, color: "#10b981", pos: { top: 120, left: 60  } },
+  { label: "Bulk Loss",       value: "3.8",  unit: "%",   trend: "Above limit",trendUp: false, bar: 76, color: "#ef4444", pos: { top: 108, left: 240 } },
 ];
 
 export default function LoginPage() {
@@ -21,6 +29,8 @@ export default function LoginPage() {
   const [loading,    setLoading]    = useState(false);
   const [remember,   setRemember]   = useState(false);
   const [savedEmail, setSavedEmail] = useState<string | null>(null);
+  const [lineIdx,    setLineIdx]    = useState(0);
+  const [visible,    setVisible]    = useState(true);
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -35,6 +45,17 @@ export default function LoginPage() {
   useEffect(() => {
     const stored = localStorage.getItem(REMEMBER_KEY);
     if (stored) { setSavedEmail(stored); setRemember(true); }
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setLineIdx((i) => (i + 1) % ROTATING_LINES.length);
+        setVisible(true);
+      }, 350);
+    }, 2800);
+    return () => clearInterval(id);
   }, []);
 
   const handleSignIn = async () => {
@@ -55,39 +76,42 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex overflow-hidden" style={{ background: "linear-gradient(160deg,#1e1b6e 0%,#131055 45%,#0d0b38 100%)" }}>
 
-      {/* ── LEFT: Showcase ───────────────────────────────────────────── */}
-      <div className="flex-1 relative flex flex-col justify-center px-16 py-16 overflow-hidden min-w-0">
+      {/* ── LEFT: Showcase ───────────────────────────────────────────────── */}
+      <div className="flex-1 relative flex flex-col items-center justify-center px-10 py-16 overflow-hidden min-w-0">
         {/* Aurora blobs */}
         <div className="aurora-root">
-          <div className="aurora-blob" style={{ width:560,height:460,background:"radial-gradient(ellipse,#6366f1,transparent)",top:"-10%",left:"-8%" }} />
-          <div className="aurora-blob" style={{ width:460,height:380,background:"radial-gradient(ellipse,#8b5cf6,transparent)",bottom:0,right:"-5%",animationDelay:"-5s",animationDuration:"10s" }} />
-          <div className="aurora-blob" style={{ width:360,height:300,background:"radial-gradient(ellipse,#3b82f6,transparent)",bottom:"20%",left:"30%",animationDelay:"-9s",animationDuration:"17s" }} />
+          <div className="aurora-blob" style={{ width:620,height:520,background:"radial-gradient(ellipse,#6366f1,transparent)",top:"-12%",left:"-5%" }} />
+          <div className="aurora-blob" style={{ width:500,height:420,background:"radial-gradient(ellipse,#8b5cf6,transparent)",bottom:"-5%",right:"5%",animationDelay:"-5s",animationDuration:"10s" }} />
+          <div className="aurora-blob" style={{ width:400,height:340,background:"radial-gradient(ellipse,#3b82f6,transparent)",bottom:"25%",left:"35%",animationDelay:"-9s",animationDuration:"17s" }} />
         </div>
-        {/* Grid overlay */}
-        <div className="absolute inset-0" style={{ backgroundImage:"linear-gradient(rgba(255,255,255,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.035) 1px,transparent 1px)",backgroundSize:"44px 44px" }} />
+        {/* Grid */}
+        <div className="absolute inset-0" style={{ backgroundImage:"linear-gradient(rgba(255,255,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.03) 1px,transparent 1px)",backgroundSize:"44px 44px" }} />
 
-        <div className="relative z-10 max-w-[480px]">
+        <div className="relative z-10 w-full max-w-[580px]">
           {/* Live badge */}
           <div className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 mb-8 text-[11px] font-semibold" style={{ background:"rgba(99,102,241,0.22)",border:"1px solid rgba(129,140,248,0.4)",color:"#c7d2fe" }}>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Live · Snowflake
           </div>
 
-          <h1 className="mb-4 leading-[1.1]" style={{ fontFamily:"'Space Grotesk',sans-serif",fontSize:40,fontWeight:700,color:"white",letterSpacing:"-0.04em" }}>
+          {/* Headline with rotating second line */}
+          <h1 className="mb-4" style={{ fontFamily:"'Space Grotesk',sans-serif",fontSize:44,fontWeight:700,color:"white",letterSpacing:"-0.04em",lineHeight:1.1 }}>
             Every KPI.<br />
-            <span style={{ color:"#a5b4fc" }}>One screen.</span>
+            <span style={{ color:"#a5b4fc",display:"inline-block",minHeight:"1.15em",opacity:visible?1:0,transform:visible?"translateY(0)":"translateY(6px)",transition:"opacity 0.35s ease, transform 0.35s ease" }}>
+              {ROTATING_LINES[lineIdx]}
+            </span>
           </h1>
-          <p className="text-[14px] leading-relaxed mb-10" style={{ color:"rgba(199,210,254,0.65)" }}>
+          <p className="text-[14px] leading-relaxed mb-10" style={{ color:"rgba(199,210,254,0.6)" }}>
             Real-time production visibility across every plant.<br />No reports. No waiting.
           </p>
 
-          {/* Floating KPI cards */}
-          <div className="relative mb-12" style={{ height:210 }}>
+          {/* Floating KPI cards — wider spread */}
+          <div className="relative mb-12" style={{ height:220 }}>
             {SHOWCASE_KPIS.map((kpi, i) => (
               <div key={kpi.label} className="kpi-float absolute rounded-2xl px-4 py-3.5"
-                style={{ minWidth:152,...kpi.pos,animationDuration:`${[6,7,5.5,8][i]}s`,animationDelay:`${[0,-2,-4,-1][i]}s` }}>
+                style={{ minWidth:158,...kpi.pos,animationDuration:`${[6,7,5.5,8][i]}s`,animationDelay:`${[0,-2,-4,-1][i]}s` }}>
                 <div className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color:"rgba(199,210,254,0.7)" }}>{kpi.label}</div>
-                <div className="font-bold leading-none mb-2" style={{ fontFamily:"'Space Grotesk',sans-serif",fontSize:22,color:kpi.trendUp?"white":"#f87171",letterSpacing:"-0.03em" }}>
+                <div className="font-bold leading-none mb-2" style={{ fontFamily:"'Space Grotesk',sans-serif",fontSize:23,color:kpi.trendUp?"white":"#f87171",letterSpacing:"-0.03em" }}>
                   {kpi.value}<span className="text-xs font-medium ml-1" style={{ color:"rgba(199,210,254,0.55)" }}>{kpi.unit}</span>
                 </div>
                 <div className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold mb-2.5"
@@ -119,7 +143,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ── RIGHT: Login form ─────────────────────────────────────────── */}
+      {/* ── RIGHT: Login form ─────────────────────────────────────────────── */}
       <div className="w-[400px] shrink-0 flex items-center justify-center px-8 py-10" style={{ background:"rgba(255,255,255,0.05)",borderLeft:"1px solid rgba(255,255,255,0.09)" }}>
         <div className="w-full">
           <div className="w-full rounded-[20px] p-8" style={{ background:"rgba(255,255,255,0.11)",border:"1px solid rgba(255,255,255,0.18)",boxShadow:"0 24px 56px rgba(0,0,0,0.35),inset 0 0 0 1px rgba(255,255,255,0.07)" }}>
@@ -127,13 +151,13 @@ export default function LoginPage() {
             <div className="w-12 h-12 rounded-[14px] mx-auto mb-5 flex items-center justify-center" style={{ background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)",boxShadow:"0 8px 24px rgba(79,70,229,0.4)" }}>
               <Factory size={22} className="text-white" />
             </div>
-            <h1 className="text-[19px] font-bold text-white text-center mb-1" style={{ fontFamily:"'Space Grotesk',sans-serif",letterSpacing:"-0.03em" }}>Control Tower</h1>
+            <h2 className="text-xl font-bold text-white text-center mb-1" style={{ fontFamily:"'Space Grotesk',sans-serif",letterSpacing:"-0.03em" }}>Control Tower</h2>
             <p className="text-[11px] text-center mb-6" style={{ color:"rgba(165,180,252,0.45)" }}>Manufacturing Dashboard · PT Paracorp Group</p>
             <div className="h-px mb-5" style={{ background:"rgba(255,255,255,0.09)" }} />
 
             {savedEmail && (
               <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 mb-4" style={{ background:"rgba(99,102,241,0.16)",border:"1px solid rgba(99,102,241,0.32)" }}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-[12px]" style={{ background:"linear-gradient(135deg,#4f46e5,#7c3aed)",boxShadow:"0 2px 8px rgba(79,70,229,0.4)",fontFamily:"'Space Grotesk',sans-serif" }}>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-[12px]" style={{ background:"linear-gradient(135deg,#4f46e5,#7c3aed)",fontFamily:"'Space Grotesk',sans-serif" }}>
                   {savedEmail.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
