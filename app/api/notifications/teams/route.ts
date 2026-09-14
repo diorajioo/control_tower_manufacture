@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { sendTeamsAlerts } from "@/lib/alerts/teams";
 import { sendGraphAlerts, sendGraphAlertsRouted, type TeamsRecipientConfig } from "@/lib/graph/teams";
 import type { KPIAlert } from "@/lib/alerts";
+import { getTeamsSettings, filterUnsentAlerts, markAlertsSent } from "@/lib/settings";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -15,7 +16,10 @@ export async function POST(req: NextRequest) {
     plant?:              string;
     period?:             string;
     withRecommendation?: boolean;
+    /** Recipients from UI settings (client-sent, used as fallback) */
     recipients?:         TeamsRecipientConfig[];
+    /** Set true to skip deduplication (e.g. manual "Send to Teams" button) */
+    force?:              boolean;
   };
 
   if (!Array.isArray(body.alerts) || body.alerts.length === 0) {
@@ -29,15 +33,39 @@ export async function POST(req: NextRequest) {
     dashboardUrl:       process.env.NEXTAUTH_URL,
   };
 
-  // ── UI-configured per-recipient routing (preferred) ────────────────────────
-  // When the dashboard settings page has configured Teams recipients, each
-  // person only receives alerts for KPIs they've subscribed to.
-  if (Array.isArray(body.recipients) && body.recipients.length > 0) {
-    const jwt    = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    const result = await sendGraphAlertsRouted(body.alerts, body.recipients, {
+  // ── Deduplication ─────────────────────────────────────────────────────────
+  // Skip for manual sends (force=true); enforce for auto-sends so multiple
+  // open sessions don't each trigger the same alert.
+  let alertsToSend = body.alerts;
+  if (!body.force) {
+    const unsentIds = await filterUnsentAlerts(body.alerts.map((a) => a.id));
+    if (unsentIds.length === 0) {
+      return NextResponse.json({ ok: true, sent: 0, skipped: body.alerts.length, reason: "dedup" });
+    }
+    alertsToSend = body.alerts.filter((a) => unsentIds.includes(a.id));
+  }
+
+  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+
+  // ── Resolve recipients: server settings > client-sent > env var ───────────
+  const serverSettings = await getTeamsSettings();
+  const recipients: TeamsRecipientConfig[] =
+    serverSettings.enabled && serverSettings.recipients.length > 0
+      ? serverSettings.recipients
+      : Array.isArray(body.recipients) && body.recipients.length > 0
+        ? body.recipients
+        : [];
+
+  // ── Send ──────────────────────────────────────────────────────────────────
+
+  if (recipients.length > 0) {
+    const result = await sendGraphAlertsRouted(alertsToSend, recipients, {
       ...opts,
-      accessToken: jwt?.accessToken,
+      accessToken: jwt?.accessToken as string | undefined,
     });
+
+    if (result.sent > 0) await markAlertsSent(alertsToSend.map((a) => a.id));
+
     if (!result.ok) {
       return NextResponse.json(
         { error: result.errors.join("; "), sent: result.sent },
@@ -47,14 +75,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: result.sent });
   }
 
-  // ── Env-var recipients fallback (all alerts → all recipients) ─────────────
-  // Used when TEAMS_RECIPIENTS is configured but no UI routing is set up.
+  // ── Env-var fallback (all alerts → all recipients) ────────────────────────
   if (process.env.TEAMS_RECIPIENTS) {
-    const jwt        = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    const result     = await sendGraphAlerts(body.alerts, {
+    const result = await sendGraphAlerts(alertsToSend, {
       ...opts,
-      accessToken: jwt?.accessToken,
+      accessToken: jwt?.accessToken as string | undefined,
     });
+
+    if (result.sent > 0) await markAlertsSent(alertsToSend.map((a) => a.id));
+
     if (!result.ok) {
       return NextResponse.json(
         { error: result.errors.join("; "), sent: result.sent },
@@ -64,18 +93,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: result.sent });
   }
 
-  // ── Webhook fallback (legacy) ──────────────────────────────────────────────
-  // Used when only TEAMS_WEBHOOK_URL is set (Incoming Webhook / Power Automate).
+  // ── Webhook fallback (legacy) ─────────────────────────────────────────────
   if (process.env.TEAMS_WEBHOOK_URL) {
-    const result = await sendTeamsAlerts(body.alerts, opts);
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: 502 });
-    }
-    return NextResponse.json({ ok: true, sent: body.alerts.length });
+    const result = await sendTeamsAlerts(alertsToSend, opts);
+    if (result.ok) await markAlertsSent(alertsToSend.map((a) => a.id));
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
+    return NextResponse.json({ ok: true, sent: alertsToSend.length });
   }
 
   return NextResponse.json(
-    { error: "Konfigurasi Teams belum ada. Set TEAMS_RECIPIENTS (Graph API) atau TEAMS_WEBHOOK_URL (webhook)." },
+    { error: "Konfigurasi Teams belum ada. Set TEAMS_RECIPIENTS atau konfigurasikan penerima di Settings." },
     { status: 503 }
   );
 }

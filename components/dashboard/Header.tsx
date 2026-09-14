@@ -123,6 +123,7 @@ export function Header({
           plant,
           period,
           withRecommendation: false,
+          force: true, // manual send — skip dedup
           ...(teamsRecipients ? { recipients: teamsRecipients } : {}),
         }),
       });
