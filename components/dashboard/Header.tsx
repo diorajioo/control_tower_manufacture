@@ -101,10 +101,19 @@ export function Header({
     setTeamsState("sending");
     try {
       let teamsRecipients: Array<{ email: string; kpis: Record<string, boolean> }> | undefined;
-      const raw = localStorage.getItem("ct-teams-settings");
-      if (raw) {
-        const cfg = JSON.parse(raw) as { enabled?: boolean; recipients?: typeof teamsRecipients };
-        if (cfg.enabled && cfg.recipients?.length) teamsRecipients = cfg.recipients;
+      // Prefer server settings for cross-device consistency, fall back to localStorage cache
+      try {
+        const settingsRes = await fetch("/api/settings/teams");
+        if (settingsRes.ok) {
+          const cfg = await settingsRes.json() as { enabled?: boolean; recipients?: typeof teamsRecipients };
+          if (cfg.enabled && cfg.recipients?.length) teamsRecipients = cfg.recipients;
+        }
+      } catch {
+        const raw = localStorage.getItem("ct-teams-settings");
+        if (raw) {
+          const cfg = JSON.parse(raw) as { enabled?: boolean; recipients?: typeof teamsRecipients };
+          if (cfg.enabled && cfg.recipients?.length) teamsRecipients = cfg.recipients;
+        }
       }
       const res = await fetch("/api/notifications/teams", {
         method: "POST",

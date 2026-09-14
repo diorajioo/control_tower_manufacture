@@ -206,10 +206,22 @@ function SettingsShell() {
 
   useEffect(() => {
     setNotif(loadNotif());
-    setTeamsNotif(loadTeamsNotif());
     setThresholds(loadThresholds());
     setDisplay(loadDisplay());
     setJabatan(localStorage.getItem("ct-user-jabatan") ?? "");
+
+    // Load Teams settings from server so all devices stay in sync
+    fetch("/api/settings/teams")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          setTeamsNotif(data);
+          localStorage.setItem("ct-teams-settings", JSON.stringify(data));
+        } else {
+          setTeamsNotif(loadTeamsNotif());
+        }
+      })
+      .catch(() => setTeamsNotif(loadTeamsNotif()));
   }, []);
 
   useEffect(() => {
@@ -284,7 +296,14 @@ function SettingsShell() {
                 onSave={() => localStorage.setItem("ct-notification-settings", JSON.stringify(notif))}
                 teamsNotif={teamsNotif}
                 setTeamsNotif={setTeamsNotif}
-                onSaveTeams={() => localStorage.setItem("ct-teams-settings", JSON.stringify(teamsNotif))}
+                onSaveTeams={() => {
+                  fetch("/api/settings/teams", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(teamsNotif),
+                  }).catch(() => {});
+                  localStorage.setItem("ct-teams-settings", JSON.stringify(teamsNotif));
+                }}
               />
             ) : (
               <AdminOnly title="Notifikasi" />
@@ -1024,11 +1043,16 @@ function TeamsTab({
 }) {
   const set = (patch: Partial<TeamsNotifSettings>) => setTeamsNotif({ ...teamsNotif, ...patch });
 
-  // Auto-persist the enabled toggle immediately so it survives page refresh
+  // Persist enabled toggle immediately to server + localStorage cache
   const setEnabled = (v: boolean) => {
     const updated = { ...teamsNotif, enabled: v };
     setTeamsNotif(updated);
     localStorage.setItem("ct-teams-settings", JSON.stringify(updated));
+    fetch("/api/settings/teams", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated),
+    }).catch(() => {});
   };
   const [emailInput, setEmailInput] = useState("");
   const [emailError, setEmailError] = useState("");

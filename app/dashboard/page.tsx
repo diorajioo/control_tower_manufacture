@@ -112,8 +112,8 @@ export default function DashboardPage() {
   const [refreshCount,  setRefreshCount]  = useState(0);
   const [undoId, setUndoId] = useState<string | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track alert IDs already auto-sent to Teams this session — prevents re-sending same alert every refresh
   const sentAlertIds = useRef<Set<string>>(new Set());
+  const teamsSettingsRef = useRef<{ enabled?: boolean; recipients?: Array<{ email: string; kpis: Record<string, boolean> }> } | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
@@ -132,6 +132,29 @@ export default function DashboardPage() {
     fetch("/api/dashboard/plants")
       .then((r) => r.json())
       .then((d) => setPlants(d.plants ?? ["All Plant"]));
+  }, []);
+
+  // Fetch Teams settings from server on mount so auto-send uses up-to-date config
+  useEffect(() => {
+    fetch("/api/settings/teams")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          teamsSettingsRef.current = data;
+          localStorage.setItem("ct-teams-settings", JSON.stringify(data));
+        } else {
+          try {
+            const raw = localStorage.getItem("ct-teams-settings");
+            if (raw) teamsSettingsRef.current = JSON.parse(raw);
+          } catch { /* ignore */ }
+        }
+      })
+      .catch(() => {
+        try {
+          const raw = localStorage.getItem("ct-teams-settings");
+          if (raw) teamsSettingsRef.current = JSON.parse(raw);
+        } catch { /* ignore */ }
+      });
   }, []);
 
   const fetchData = useCallback(async (f: Filters) => {
@@ -166,14 +189,8 @@ export default function DashboardPage() {
       );
       if (newCritical.length > 0) {
         newCritical.forEach((a) => sentAlertIds.current.add(a.id));
-        let teamsRecipients: Array<{ email: string; kpis: Record<string, boolean> }> | undefined;
-        try {
-          const raw = localStorage.getItem("ct-teams-settings");
-          if (raw) {
-            const cfg = JSON.parse(raw) as { enabled?: boolean; recipients?: typeof teamsRecipients };
-            if (cfg.enabled && cfg.recipients?.length) teamsRecipients = cfg.recipients;
-          }
-        } catch { /* ignore */ }
+        const cfg = teamsSettingsRef.current;
+        const teamsRecipients = cfg?.enabled && cfg.recipients?.length ? cfg.recipients : undefined;
         fetch("/api/notifications/teams", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
