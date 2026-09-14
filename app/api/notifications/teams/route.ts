@@ -47,8 +47,17 @@ export async function POST(req: NextRequest) {
 
   const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-  // ── Resolve recipients: server settings > client-sent > env var ───────────
+  // ── Master switch ─────────────────────────────────────────────────────────
+  // Read server settings first. If the feature has been configured via UI
+  // (recipients.length > 0) and is currently disabled, block ALL sends —
+  // even from sessions that still have a stale enabled=true in their ref,
+  // and even if TEAMS_RECIPIENTS env var is set.
   const serverSettings = await getTeamsSettings();
+  if (!serverSettings.enabled && serverSettings.recipients.length > 0) {
+    return NextResponse.json({ ok: true, sent: 0, reason: "disabled" });
+  }
+
+  // ── Resolve recipients: server settings > client-sent > env var ───────────
   const recipients: TeamsRecipientConfig[] =
     serverSettings.enabled && serverSettings.recipients.length > 0
       ? serverSettings.recipients
