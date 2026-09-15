@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Sparkles, RefreshCw, AlertCircle } from "lucide-react";
+import { RefreshCw, AlertCircle } from "lucide-react";
 
 // KPI keyword → look for the next number within 50 chars and make it clickable
 const KPI_KEYWORDS: { pattern: RegExp; id: string }[] = [
@@ -66,7 +66,7 @@ function SummaryText({ text }: { text: string }) {
               window.dispatchEvent(new CustomEvent("kpi-highlight", { detail: { kpi: seg.kpi } }));
             }}
             title={`Highlight di dashboard`}
-            className="font-bold underline decoration-white/50 underline-offset-2 hover:decoration-white hover:text-white transition-colors cursor-pointer"
+            className="font-bold text-[#215AA8] underline decoration-[#A6BDDC] underline-offset-2 hover:decoration-[#215AA8] transition-colors cursor-pointer"
           >
             {seg.text}
           </button>
@@ -191,31 +191,33 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
     : null;
 
   return (
-    <div className="bg-gradient-to-r from-brand-800 via-brand-700 to-brand-600 rounded-xl px-3 py-2 mb-2 shadow-sm">
+    <div className="bg-white rounded-lg border border-[#EBEBEB] shadow-[0px_4px_4px_-2px_rgba(42,61,74,0.08)] px-4 py-3 mb-4">
       <div className="flex items-center gap-2">
-        <div className="bg-white/10 rounded-md p-1 shrink-0">
-          <Sparkles size={11} className="text-blue-300" />
-        </div>
-        <span className="text-[10px] font-semibold text-blue-200 uppercase tracking-wider shrink-0">AI Summary</span>
+        <span
+          className="inline-flex items-center gap-1.5 shrink-0 text-[10px] font-bold text-white rounded-full px-2.5 py-0.5"
+          style={{ background: "linear-gradient(90deg,#725DA3,#864A9C)" }}
+        >
+          ✦ AI Summary
+        </span>
 
         <div className="flex-1 min-w-0">
           {(loading && !summary) && (
             <div className="flex gap-1.5 items-center">
-              <div className="h-2 bg-white/10 rounded-full w-48 animate-pulse" />
-              <div className="h-2 bg-white/10 rounded-full w-32 animate-pulse" />
+              <div className="h-2 bg-[#EBEBEB] rounded-full w-48 animate-pulse" />
+              <div className="h-2 bg-[#EBEBEB] rounded-full w-32 animate-pulse" />
             </div>
           )}
           {(summary || loading) && (
-            <p className="text-xs text-blue-50 leading-relaxed">
+            <p className="text-[13px] text-[#2A3D4A] leading-relaxed">
               <SummaryText text={summary} />
-              {loading && <span className="inline-block w-0.5 h-3 bg-blue-300 ml-0.5 animate-pulse align-middle" />}
+              {loading && <span className="inline-block w-0.5 h-3 bg-[#215AA8] ml-0.5 animate-pulse align-middle" />}
               {truncated && !loading && (
-                <span className="ml-1.5 text-yellow-300/80 text-[10px]">— terpotong, klik Refresh</span>
+                <span className="ml-1.5 text-[#D1A400] text-[10px]">— terpotong, klik Refresh</span>
               )}
             </p>
           )}
           {error && (
-            <div className="flex items-center gap-1.5 text-[11px] text-red-300">
+            <div className="flex items-center gap-1.5 text-[11px] text-[#E6001C]">
               <AlertCircle size={11} />
               <span>{errorMsg || "Gagal memuat ringkasan AI"}</span>
             </div>
@@ -224,12 +226,12 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
 
         <div className="flex items-center gap-2 shrink-0">
           {ageLabel && !loading && !error && (
-            <span className="text-[10px] text-blue-300/60 shrink-0">{ageLabel}</span>
+            <span className="text-[10px] text-[#7A7A7A] shrink-0">{ageLabel}</span>
           )}
           <button
             onClick={() => fetchSummary(true)}
             disabled={loading}
-            className="flex items-center gap-1 text-[10px] text-blue-300 hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-white/10 disabled:opacity-50"
+            className="flex items-center gap-1 text-[10px] text-[#215AA8] hover:text-[#1A4886] transition-colors px-1.5 py-0.5 rounded hover:bg-[#D3DEEE] disabled:opacity-50"
           >
             <RefreshCw size={10} className={loading ? "animate-spin" : ""} />
             {loading ? "..." : "Refresh"}

@@ -1,7 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { RefreshCw, Bell, LayoutGrid, Calendar, ChevronDown, Check, Loader2, X, Send } from "lucide-react";
+import { Bell, LayoutGrid, Calendar, ChevronDown, Check, Loader2, X, Send, Monitor } from "lucide-react";
+
+const ID_DAYS = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+const ID_MONTHS = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+
+
+function useClock() {
+  const [time, setTime] = useState("");
+  const [date, setDate] = useState("");
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, "0");
+      const m = String(now.getMinutes()).padStart(2, "0");
+      const s = String(now.getSeconds()).padStart(2, "0");
+      setTime(`${h}:${m}:${s} WIB`);
+      setDate(`${ID_DAYS[now.getDay()]}, ${now.getDate()} ${ID_MONTHS[now.getMonth()]} ${now.getFullYear()}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return { time, date };
+}
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -42,12 +65,13 @@ interface HeaderProps {
   onBellClick?: () => void;
   alerts?: KPIAlert[];
   onDismiss?: (id: string) => void;
+  onMonitorMode?: () => void;
 }
 
 export function Header({
   plants, onFilterChange, activeView, onViewChange,
   onRefresh, isLoading, lastUpdated, alertCount = 0, onBellClick,
-  alerts = [], onDismiss,
+  alerts = [], onDismiss, onMonitorMode,
 }: HeaderProps) {
   const { data: session } = useSession();
   const { t } = useI18n();
@@ -133,6 +157,8 @@ export function Header({
     setTimeout(() => setTeamsState("idle"), 3500);
   };
 
+  const { time: clockTime, date: clockDate } = useClock();
+
   const initials = session?.user?.name
     ? session.user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
     : "AP";
@@ -143,43 +169,61 @@ export function Header({
   };
 
   return (
-    <header className="bg-white border-b border-gray-100 shrink-0 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
+    <header className="shrink-0">
 
-      {/* ── Row 1: Title + Right actions ─────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-5 h-[52px]">
+      {/* ── Row 1: Navy topbar ───────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 px-4 h-[52px] bg-[#215AA8] border-b border-[#1A4886]">
 
-        <div className="shrink-0">
-          <p className="text-[13px] font-bold text-slate-800 leading-none tracking-tight">Manufacturing Overview</p>
-          <p className="text-[11px] text-gray-500 leading-none mt-0.5">KPI Control Tower</p>
-        </div>
+        {/* Brand */}
+        <span className="text-[13px] font-medium text-white/50 tracking-[0.07em] uppercase shrink-0">Manufacturing Control Tower</span>
 
         {period && (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100 shrink-0">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-white/70 border border-white/15 shrink-0">
             {period}
           </span>
         )}
 
         <div className="flex-1" />
 
-        {/* Alert bell pill */}
+        {/* Live clock */}
+        <div className="flex flex-col items-end pr-2.5 border-r border-white/10 shrink-0">
+          <span className="text-[13px] font-bold text-white/90 tracking-[0.03em] leading-tight tabular-nums">{clockTime}</span>
+          <span className="text-[9.5px] text-white/40 leading-tight">{clockDate}</span>
+        </div>
+
+        {/* Sync / countdown */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.08] border border-white/[0.12] text-[11px] text-white/55 font-medium shrink-0">
+          <span className={cn("w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0", !isLoading && "animate-pulse")} />
+          {isLoading ? "Memuat..." : `Live ${lastUpdated ? fmtCountdown(countdown) : ""}`}
+        </div>
+
+        {/* Monitor mode */}
+        {onMonitorMode && (
+          <button
+            onClick={onMonitorMode}
+            className="w-8 h-8 rounded-[9px] flex items-center justify-center bg-white/[0.08] border border-white/[0.12] text-white/75 hover:bg-white/[0.15] hover:text-white transition-colors shrink-0"
+            title="Monitor mode — tampilan full screen"
+          >
+            <Monitor size={14} />
+          </button>
+        )}
+
+        {/* Alert bell */}
         <div className="relative shrink-0" ref={alertRef}>
           <button
             onClick={() => { setAlertOpen((o) => !o); onBellClick?.(); }}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all border",
+              "relative w-8 h-8 rounded-[9px] flex items-center justify-center transition-colors",
               alertCount > 0
-                ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
-                : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
+                ? "bg-amber-400/20 border border-amber-300/30 text-amber-200 hover:bg-amber-400/30"
+                : "bg-white/[0.08] border border-white/[0.12] text-white/75 hover:bg-white/[0.15]"
             )}
           >
-            <Bell size={12} />
-            {alertCount > 0 ? (
-              <>
-                <span>{alertCount} Alert</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              </>
-            ) : (
-              <span>Alert</span>
+            <Bell size={14} />
+            {alertCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 border-[1.5px] border-[#215AA8] flex items-center justify-center text-[8px] font-bold text-white">
+                {alertCount}
+              </span>
             )}
           </button>
 
@@ -232,7 +276,7 @@ export function Header({
                       teamsState === "ok"      ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                       teamsState === "err"     ? "bg-red-50 text-red-600 border-red-200" :
                       teamsState === "sending" ? "bg-gray-50 text-gray-400 border-gray-200 cursor-wait" :
-                                                 "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                                                 "bg-[#D3DEEE] text-[#143665] border-[#A6BDDC] hover:bg-[#A6BDDC]"
                     )}
                   >
                     {teamsState === "sending" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
@@ -247,23 +291,18 @@ export function Header({
           )}
         </div>
 
-        {/* Refresh */}
-        <button onClick={onRefresh} disabled={isLoading}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 hover:bg-emerald-100 disabled:opacity-50 transition-all shrink-0">
-          <span className={cn("w-1.5 h-1.5 rounded-full bg-emerald-500", !isLoading && "animate-pulse")} />
-          <RefreshCw size={9} className={cn(isLoading && "animate-spin")} />
-          {isLoading ? t("common_loading") : `Live ${lastUpdated ? fmtCountdown(countdown) : ""}`}
-        </button>
-
         {/* Avatar */}
-        <div className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-full flex items-center justify-center shadow-sm cursor-pointer shrink-0"
-          title={session?.user?.name ?? ""}>
+        <div
+          className="w-8 h-8 bg-[#215AA8] rounded-full flex items-center justify-center shadow-sm cursor-pointer shrink-0"
+          title={session?.user?.name ?? ""}
+          onClick={onRefresh}
+        >
           <span className="text-white text-[11px] font-bold tracking-tight">{initials}</span>
         </div>
       </div>
 
       {/* ── Row 2: Filter bar ──────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-5 py-2 border-t border-gray-100 bg-gray-50/60 flex-wrap">
+      <div className="flex items-center gap-2 px-5 py-2 bg-white border-b border-gray-100 flex-wrap shadow-[0_1px_0_rgba(0,0,0,0.03)]">
 
         {/* Period pills */}
         <div className="flex items-center gap-0.5 bg-white rounded-full p-0.5 border border-gray-200 shrink-0">
@@ -271,12 +310,12 @@ export function Header({
             <button key={p.key} onClick={() => handlePeriod(p.key)}
               className={cn(
                 "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10",
-                period === p.key ? "text-indigo-600" : "text-gray-500 hover:text-gray-700"
+                period === p.key ? "text-[#143665]" : "text-gray-500 hover:text-gray-700"
               )}>
               {period === p.key && (
                 <motion.span
                   layoutId="period-pill"
-                  className="absolute inset-0 bg-indigo-50 rounded-full"
+                  className="absolute inset-0 bg-[#D3DEEE] rounded-full"
                   style={{ zIndex: -1 }}
                   transition={{ type: "spring", stiffness: 380, damping: 32 }}
                 />
@@ -292,10 +331,10 @@ export function Header({
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-all",
               plant !== "All Plant"
-                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                ? "border-[#A6BDDC] bg-[#D3DEEE] text-[#143665]"
                 : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
             )}>
-            <LayoutGrid size={10} className={plant !== "All Plant" ? "text-indigo-500" : "text-gray-400"} />
+            <LayoutGrid size={10} className={plant !== "All Plant" ? "text-[#215AA8]" : "text-gray-400"} />
             {plant}
             <ChevronDown size={9} className={cn("text-gray-400 transition-transform duration-150", plantOpen && "rotate-180")} />
           </button>
@@ -305,12 +344,12 @@ export function Header({
                 <button key={p} onClick={() => { handlePlant(p); setPlantOpen(false); }}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-1.5 text-[11px] text-left transition-colors",
-                    plant === p ? "bg-indigo-50/60 text-indigo-700" : "text-gray-600 hover:bg-gray-50"
+                    plant === p ? "bg-[#D3DEEE]/60 text-[#143665]" : "text-gray-600 hover:bg-gray-50"
                   )}>
                   <span className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: PLANT_COLORS[i % PLANT_COLORS.length] }} />
                   <span className="font-medium flex-1">{p}</span>
-                  {plant === p && <Check size={10} className="text-indigo-500 shrink-0" />}
+                  {plant === p && <Check size={10} className="text-[#215AA8] shrink-0" />}
                 </button>
               ))}
             </div>
@@ -333,12 +372,12 @@ export function Header({
             <button key={value} onClick={() => handleDataLevel(value)}
               className={cn(
                 "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10",
-                dataLevel === value ? "text-indigo-600" : "text-gray-500 hover:text-gray-700"
+                dataLevel === value ? "text-[#143665]" : "text-gray-500 hover:text-gray-700"
               )}>
               {dataLevel === value && (
                 <motion.span
                   layoutId="datalevel-pill"
-                  className="absolute inset-0 bg-indigo-50 rounded-full"
+                  className="absolute inset-0 bg-[#D3DEEE] rounded-full"
                   style={{ zIndex: -1 }}
                   transition={{ type: "spring", stiffness: 380, damping: 32 }}
                 />
@@ -356,12 +395,12 @@ export function Header({
             <button key={v} onClick={() => onViewChange(v)}
               className={cn(
                 "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10",
-                activeView === v ? "text-indigo-600" : "text-gray-500 hover:text-gray-700"
+                activeView === v ? "text-[#143665]" : "text-gray-500 hover:text-gray-700"
               )}>
               {activeView === v && (
                 <motion.span
                   layoutId="view-pill"
-                  className="absolute inset-0 bg-indigo-50 rounded-full"
+                  className="absolute inset-0 bg-[#D3DEEE] rounded-full"
                   style={{ zIndex: -1 }}
                   transition={{ type: "spring", stiffness: 380, damping: 32 }}
                 />

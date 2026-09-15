@@ -87,7 +87,7 @@ function InfoTooltip({ text }: { text: string }) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.88, y: 6 }}
             transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 text-xs text-slate-100 bg-[#1e293b] px-3 py-2 rounded-xl shadow-2xl z-50 leading-relaxed font-normal normal-case tracking-normal"
+            className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 text-xs text-slate-100 bg-[#2A3D4A] px-3 py-2 rounded-xl shadow-2xl z-50 leading-relaxed font-normal normal-case tracking-normal"
             style={{ transformOrigin: "50% 100%" }}
           >
             {text}
@@ -125,9 +125,9 @@ interface KPICardProps {
 
 const badgeColors = {
   green:  "bg-emerald-50 text-emerald-600",
-  red:    "bg-red-50 text-red-500",
-  amber:  "bg-amber-50 text-amber-600",
-  blue:   "bg-indigo-50 text-indigo-600",
+  red:    "bg-[#FFEDEF] text-[#8A0011]",
+  amber:  "bg-[#FFFBE4] text-[#342900]",
+  blue:   "bg-[#D3DEEE] text-[#143665]",
   purple: "bg-violet-50 text-violet-600",
 };
 
@@ -150,7 +150,7 @@ export function TrendBadge({ trend }: { trend: number }) {
 export function KPICard({
   title,
   icon,
-  iconColor = "#4f46e5",
+  iconColor = "#215AA8",
   value,
   unit,
   trend,
@@ -171,81 +171,92 @@ export function KPICard({
   const hasValue = value !== undefined && value !== "";
   const isNumeric = hasValue && !isNaN(parseNumeric(value!).raw);
 
+  const accentColor =
+    alert || badgeColor === "red"  ? "#ef4444"
+    : badgeColor === "green"       ? "#22c55e"
+    : badgeColor === "amber"       ? "#D1A400"
+    : badgeColor === "purple"      ? "#7c3aed"
+    : iconColor;
+
   return (
     <div
       className={cn(
-        "relative bg-white rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300",
-        "hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-shadow duration-200",
-        alert
-          ? "border border-red-200 ring-1 ring-red-100/50"
-          : "border border-gray-100/80",
+        "relative bg-white rounded-lg flex overflow-hidden transition-all duration-200",
+        "hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)]",
+        alert ? "border border-[#FFEDEF]" : "border border-[#EBEBEB]",
         dimmed && "opacity-30 scale-[0.99]",
         className
       )}
     >
-      {/* Refresh flash overlay — fires once per flashKey change */}
+      {/* Refresh flash overlay */}
       {flashKey !== undefined && flashKey > 0 && (
         <motion.div
           key={flashKey}
-          className="pointer-events-none absolute inset-0 rounded-2xl"
-          initial={{ opacity: 0.28, backgroundColor: "#6366f1" }}
-          animate={{ opacity: 0, backgroundColor: "#6366f1" }}
+          className="pointer-events-none absolute inset-0 rounded-lg"
+          initial={{ opacity: 0.22, backgroundColor: "#215AA8" }}
+          animate={{ opacity: 0, backgroundColor: "#215AA8" }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
         />
       )}
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          {icon && (
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-              style={{ backgroundColor: `${iconColor}14` }}
-            >
-              <span style={{ color: iconColor }}>{icon}</span>
-            </div>
-          )}
-          <span className="text-[13px] font-semibold text-slate-600 leading-tight">{title}</span>
-          {tooltip && <InfoTooltip text={tooltip} />}
-        </div>
-        <div className="flex items-center gap-1.5">
-          {trend !== undefined && <TrendBadge trend={trend} />}
-          {badge && (
-            <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold", badgeColors[badgeColor])}>
-              {badge}
-            </span>
-          )}
-        </div>
-      </div>
 
-      {/* Primary value */}
-      {hasValue && (
-        <div className="flex items-center justify-between gap-2 -mt-1">
-          <div className="flex items-baseline gap-1.5">
-            {isNumeric ? (
-              <AnimatedNumber
-                value={value!}
-                className={cn(
-                  "font-display font-bold text-slate-900 tabular-nums",
-                  compact ? "text-[1.75rem]" : "text-[2rem]"
-                )}
-              />
-            ) : (
-              <span className={cn("font-display font-bold text-slate-900", compact ? "text-[1.75rem]" : "text-[2rem]")}>
-                {value}
+      {/* Left accent bar */}
+      <div className="w-[5px] shrink-0" style={{ backgroundColor: accentColor }} />
+
+      {/* Card body */}
+      <div className={cn("flex-1 flex flex-col gap-2", compact ? "p-4" : "px-[18px] py-4")}>
+        {/* Label row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-[5px]">
+            {icon && (
+              <span style={{ color: accentColor }} className="shrink-0 [&>svg]:w-[13px] [&>svg]:h-[13px]">
+                {icon}
               </span>
             )}
-            {unit && <span className="text-[13px] text-gray-400 font-medium">{unit}</span>}
+            <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">
+              {title}
+            </span>
+            {tooltip && <InfoTooltip text={tooltip} />}
           </div>
-          {sparkline && sparkline.length >= 2 && (
-            <Sparkline data={sparkline} color={sparklineColor ?? iconColor} width={88} height={36} />
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {trend !== undefined && <TrendBadge trend={trend} />}
+            {badge && (
+              <span className={cn("text-[10.5px] px-2 py-[2px] rounded font-bold", badgeColors[badgeColor])}>
+                {badge}
+              </span>
+            )}
+          </div>
         </div>
-      )}
 
-      {subtitle && <p className="text-[12px] text-gray-500 -mt-2">{subtitle}</p>}
-      {trendLabel && <p className="text-[12px] text-gray-500 -mt-2">{trendLabel}</p>}
+        {/* Primary value */}
+        {hasValue && (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-baseline gap-[2px] leading-none">
+              {isNumeric ? (
+                <AnimatedNumber
+                  value={value!}
+                  className={cn(
+                    "font-bold text-slate-900 tabular-nums tracking-tight leading-none",
+                    compact ? "text-[1.75rem]" : "text-[2rem]"
+                  )}
+                />
+              ) : (
+                <span className={cn("font-bold text-slate-900 tracking-tight leading-none", compact ? "text-[1.75rem]" : "text-[2rem]")}>
+                  {value}
+                </span>
+              )}
+              {unit && <span className="text-[13px] text-slate-400 font-medium ml-[2px]">{unit}</span>}
+            </div>
+            {sparkline && sparkline.length >= 2 && (
+              <Sparkline data={sparkline} color={sparklineColor ?? accentColor} width={88} height={36} />
+            )}
+          </div>
+        )}
 
-      {children}
+        {subtitle && <p className="text-[12px] text-slate-500 leading-snug">{subtitle}</p>}
+        {trendLabel && <p className="text-[12px] text-slate-500">{trendLabel}</p>}
+
+        {children}
+      </div>
     </div>
   );
 }
@@ -289,7 +300,7 @@ export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72, 
         />
       </svg>
       <div className="absolute text-center">
-        <span className="font-display text-sm font-bold text-slate-800 tabular-nums leading-none">{value.toFixed(1)}</span>
+        <span className="text-sm font-bold text-slate-800 tabular-nums leading-none">{value.toFixed(1)}</span>
         <span className="text-[10px] text-gray-400 block leading-none mt-0.5">%</span>
       </div>
     </div>
@@ -305,7 +316,7 @@ interface SparklineProps {
   height?: number;
 }
 
-export function Sparkline({ data, color = "#6366f1", width = 80, height = 32 }: SparklineProps) {
+export function Sparkline({ data, color = "#215AA8", width = 80, height = 32 }: SparklineProps) {
   if (data.length < 2) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);

@@ -2,14 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap');
 
 * {
   box-sizing: border-box;
 }
 
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Lato', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
   background-color: #f0f4f8;
 }
 
@@ -35,4 +37,24 @@ body {
 @keyframes chart-tooltip-in {
   from { opacity: 0; transform: scale(0.96) translateY(3px); }
   to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  body::after {
+    visibility: visible !important;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    content: "Konten Manufacturing Control Tower bersifat rahasia dan tidak dapat dicetak atau diekspor.";
+    font-family: Lato, sans-serif;
+    font-size: 14px;
+    color: #64748b;
+    text-align: center;
+    display: block;
+    max-width: 400px;
+  }
 }

@@ -3,24 +3,24 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Factory, CheckCircle2, Zap, FileText, Settings, LogOut, BarChart3 } from "lucide-react";
+import { LayoutGrid, Clock, BarChart3, Users, Zap, Settings, LogOut, Activity } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 const INACTIVITY_MS = 15 * 60 * 1000;
 
-const NAV_ITEMS: { icon: React.ElementType; tKey: TranslationKey; href: string }[] = [
-  { icon: BarChart3,    tKey: "nav_overview",   href: "/dashboard" },
-  { icon: Factory,      tKey: "nav_production", href: "/dashboard/production" },
-  { icon: CheckCircle2, tKey: "nav_quality",    href: "/dashboard/quality" },
-  { icon: Zap,          tKey: "nav_energy",     href: "/dashboard/energy" },
-  { icon: FileText,     tKey: "nav_reports",    href: "/dashboard/reports" },
-];
+
+const NAV_ITEMS = [
+  { icon: LayoutGrid, label: "Overview",     href: "/dashboard" },
+  { icon: Clock,      label: "Lead Time",    href: "/lead-time" },
+  { icon: BarChart3,  label: "Output",       href: "/dashboard/output" },
+  { icon: Users,      label: "Productivity", href: "/dashboard/productivity" },
+  { icon: Activity,   label: "OEE",          href: "/dashboard/oee" },
+  { icon: Zap,        label: "Energy",       href: "/dashboard/energy" },
+] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { t } = useI18n();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -38,89 +38,70 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-56 h-screen bg-[#1a1760] flex flex-col shrink-0 border-r border-white/[0.06] overflow-hidden">
+    <aside className="w-56 h-screen bg-white flex flex-col shrink-0 border-r border-slate-200 overflow-hidden">
       {/* Logo */}
-      <div className="px-5 pt-6 pb-5">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-900/50 shrink-0">
-            <Factory size={14} className="text-white" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[13px] font-bold text-white leading-none tracking-tight">Control Tower</p>
-            <p className="text-[11px] leading-none mt-0.5 tracking-wide" style={{ color: "rgba(199,210,254,0.45)" }}>Manufacture</p>
-          </div>
-        </div>
+      <div className="px-4 pt-5 pb-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/paragon-corp.98d5977b.png" alt="Paragon Corp" className="w-full h-auto" />
       </div>
 
-      {/* Divider */}
-      <div className="mx-5 h-px bg-white/[0.12] mb-4" />
+      <div className="mx-4 h-px bg-slate-100 mb-3" />
 
-      {/* Nav */}
-      <nav className="px-3 flex flex-col gap-0.5 flex-1">
-        {NAV_ITEMS.map(({ icon, tKey, href }) => (
-          <NavItem
-            key={href}
-            icon={icon}
-            label={t(tKey)}
-            href={href}
-            active={pathname === href}
-          />
-        ))}
+      <div className="px-4 mb-1.5">
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.1em]">Menu</p>
+      </div>
+
+      <nav className="px-2.5 flex flex-col gap-0.5 flex-1">
+        {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
+          const active = href === "/dashboard"
+            ? pathname === "/dashboard"
+            : pathname === href || (pathname?.startsWith(href + "/") ?? false);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "relative flex items-center gap-2 px-2.5 py-[7px] rounded-[10px] transition-all duration-150 w-full",
+                active
+                  ? "bg-[#D3DEEE] text-[#143665]"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              )}
+            >
+              <Icon size={13} strokeWidth={active ? 2.25 : 1.75} className="shrink-0" />
+              <span className={cn("text-[12.5px] tracking-tight flex-1 leading-none", active ? "font-semibold" : "font-medium")}>
+                {label}
+              </span>
+              {active && <span className="w-[3px] h-3.5 rounded-full bg-[#215AA8] shrink-0" />}
+            </Link>
+          );
+        })}
       </nav>
 
-      {/* Bottom */}
-      <div className="px-3 pb-5">
-        <div className="h-px bg-white/[0.12] mb-3" />
-        <NavItem
-          icon={Settings}
-          label={t("nav_settings")}
+      <div className="px-2.5 pb-4">
+        <div className="h-px bg-slate-100 mb-2 mx-0.5" />
+        <Link
           href="/dashboard/settings"
-          active={pathname === "/dashboard/settings"}
-        />
+          className={cn(
+            "relative flex items-center gap-2 px-2.5 py-[7px] rounded-[10px] transition-all duration-150 w-full",
+            pathname === "/dashboard/settings"
+              ? "bg-[#D3DEEE] text-[#143665]"
+              : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+          )}
+        >
+          <Settings size={13} strokeWidth={pathname === "/dashboard/settings" ? 2.25 : 1.75} className="shrink-0" />
+          <span className={cn("text-[12.5px] tracking-tight flex-1 leading-none", pathname === "/dashboard/settings" ? "font-semibold" : "font-medium")}>
+            Settings
+          </span>
+          {pathname === "/dashboard/settings" && <span className="w-[3px] h-3.5 rounded-full bg-[#215AA8] shrink-0" />}
+        </Link>
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="mt-0.5 flex items-center gap-2.5 px-3 py-2 rounded-xl text-white/40 hover:text-red-300 hover:bg-red-500/[0.10] transition-all duration-150 w-full text-left"
+          className="mt-0.5 flex items-center gap-2 px-2.5 py-[7px] rounded-[10px] text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all duration-150 w-full text-left"
         >
-          <LogOut size={14} strokeWidth={1.75} />
-          <span className="text-[13px] font-medium">{t("nav_signout")}</span>
+          <LogOut size={13} strokeWidth={1.75} />
+          <span className="text-[12.5px] font-medium tracking-tight">Sign Out</span>
         </button>
       </div>
     </aside>
-  );
-}
-
-function NavItem({
-  icon: Icon,
-  label,
-  href,
-  active,
-}: {
-  icon: React.ElementType;
-  label: string;
-  href: string;
-  active?: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "relative flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-150 w-full group",
-        active
-          ? "bg-white/[0.14] text-white"
-          : "text-white/50 hover:text-white/80 hover:bg-white/[0.08]"
-      )}
-    >
-      <Icon
-        size={14}
-        strokeWidth={active ? 2.5 : 1.75}
-        className="shrink-0"
-      />
-      <span className={cn("text-[13px] tracking-tight flex-1", active ? "font-semibold" : "font-medium")}>
-        {label}
-      </span>
-      {active && (
-        <span className="w-1 h-4 rounded-full bg-indigo-200/70 shrink-0" />
-      )}
-    </Link>
   );
 }

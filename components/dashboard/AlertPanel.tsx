@@ -15,23 +15,23 @@ interface AlertPanelProps {
 const SEVERITY_CONFIG = {
   critical: {
     icon: AlertCircle,
-    bg: "bg-red-50 border-red-200",
-    icon_color: "text-red-500",
-    badge: "bg-red-100 text-red-700",
+    rowBg: "bg-[#FFEDEF] border-l-4 border-l-[#E6001C]",
+    icon_color: "text-[#E6001C]",
+    badge: "bg-[#FFEDEF] text-[#8A0011]",
     label: "Critical",
   },
   warning: {
     icon: AlertTriangle,
-    bg: "bg-amber-50 border-amber-200",
-    icon_color: "text-amber-500",
-    badge: "bg-amber-100 text-amber-700",
+    rowBg: "bg-[#FFFBE4] border-l-4 border-l-[#D1A400]",
+    icon_color: "text-[#D1A400]",
+    badge: "bg-[#FFFBE4] text-[#342900]",
     label: "Warning",
   },
   info: {
     icon: Info,
-    bg: "bg-blue-50 border-blue-200",
-    icon_color: "text-blue-500",
-    badge: "bg-blue-100 text-blue-700",
+    rowBg: "bg-[#CCDDF5] border-l-4 border-l-[#0056CC]",
+    icon_color: "text-[#0056CC]",
+    badge: "bg-[#CCDDF5] text-[#00347A]",
     label: "Info",
   },
 };
@@ -89,7 +89,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
   }
 
   return (
-    <div className="mb-4 rounded-xl border border-gray-200 bg-white overflow-hidden">
+    <div className="mb-4 rounded-lg border border-[#EBEBEB] bg-white overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
         <button
@@ -125,7 +125,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
           }
           className={cn(
             "ml-3 flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all",
-            sendState === "idle"    && "bg-[#464eb8] hover:bg-[#3b42a0] text-white",
+            sendState === "idle"    && "bg-[#215AA8] hover:bg-[#1A4886] text-white",
             sendState === "sending" && "bg-gray-200 text-gray-400 cursor-wait",
             sendState === "sent"    && "bg-emerald-100 text-emerald-700 cursor-default",
             sendState === "error"   && "bg-red-100 text-red-600 cursor-pointer",
@@ -158,7 +158,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
             const config = SEVERITY_CONFIG[alert.severity];
             const Icon = config.icon;
             return (
-              <div key={alert.id} className={cn("flex items-start gap-3 px-4 py-3", config.bg)}>
+              <div key={alert.id} className={cn("flex items-start gap-3 px-4 py-3", config.rowBg)}>
                 <Icon size={14} className={cn("mt-0.5 shrink-0", config.icon_color)} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
