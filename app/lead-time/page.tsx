@@ -448,15 +448,7 @@ function TacticalView() {
   const [chartTab, setChartTab] = useState<ChartTab>("gross");
 
   return (
-    <div className="flex flex-col gap-0">
-      <div className="px-5 pt-5 pb-3">
-        <p className="text-[11px] text-slate-400 font-medium mb-1">
-          Tactical › <span className="text-[#2A3D4A] font-semibold">Lead Time per Stage Group</span>
-        </p>
-        <h1 className="text-[20px] font-bold text-[#2A3D4A] leading-tight mb-1">Lead Time per Stage Group</h1>
-        <p className="text-[12px] text-slate-500">PO Created → NDC Received, diurai per stage dengan klasifikasi VA / NNVA / UNVA</p>
-      </div>
-
+    <div className="flex flex-col gap-0 pt-5">
       {/* KPI Cards: PO Created | PO Released | VA | UNVA */}
       <div className="grid grid-cols-4 gap-3.5 px-5 mb-4">
         <KpiSummaryCard label="PO Created → NDC" value="16.67" unit="days" accentColor={NNVA_COLOR}
@@ -654,15 +646,7 @@ function TacticalView() {
 
 function StrategicView() {
   return (
-    <div className="flex flex-col gap-0">
-      <div className="px-5 pt-5 pb-3">
-        <p className="text-[11px] text-slate-400 font-medium mb-1">
-          Strategic › <span className="text-[#2A3D4A] font-semibold">Lead Time Executive Summary</span>
-        </p>
-        <h1 className="text-[20px] font-bold text-[#2A3D4A] leading-tight mb-1">Lead Time Executive Summary</h1>
-        <p className="text-[12px] text-slate-500">Ringkasan kinerja lead time untuk VP dan BOD · Quarterly · All Plant</p>
-      </div>
-
+    <div className="flex flex-col gap-0 pt-5">
       {/* 3 KPI cards */}
       <div className="grid grid-cols-3 gap-3.5 px-5 mb-4">
         <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 relative overflow-hidden hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
@@ -748,15 +732,7 @@ function OperationalView() {
   ];
 
   return (
-    <div className="flex flex-col gap-0">
-      <div className="px-5 pt-5 pb-3">
-        <p className="text-[11px] text-slate-400 font-medium mb-1">
-          Operational › <span className="text-[#2A3D4A] font-semibold">Lead Time Daily Tracker</span>
-        </p>
-        <h1 className="text-[20px] font-bold text-[#2A3D4A] leading-tight mb-1">Lead Time Daily Tracker</h1>
-        <p className="text-[12px] text-slate-500">Monitoring harian per batch · PO yang sedang berjalan · Update setiap hari kerja pukul 07:00 WIB</p>
-      </div>
-
+    <div className="flex flex-col gap-0 pt-5">
       <div className="grid grid-cols-2 gap-3.5 px-5 pb-5">
         {/* Exceptions */}
         <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
