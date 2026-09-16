@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
 import { FloatingChat } from "@/components/dashboard/FloatingChat";
-import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ResponsiveBar } from "@nivo/bar";
 import { ResponsiveLine } from "@nivo/line";
@@ -35,18 +34,6 @@ type StageView = "group" | "activity";
 type ChartTab  = "gross" | "nett" | "pareto";
 
 // ── Shared components ──────────────────────────────────────────────────────────
-
-function FilterSelect({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-[0.07em]">{label}</span>
-      <button className="flex items-center gap-1.5 border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white hover:border-[#A6BDDC] hover:bg-[#E9EFF6] transition-colors whitespace-nowrap">
-        {value}
-        <ChevronDown size={10} className="text-slate-400 ml-1 shrink-0" />
-      </button>
-    </div>
-  );
-}
 
 function ChartTitle({ label, badge }: { label: string; badge?: string }) {
   return (
@@ -470,20 +457,6 @@ function TacticalView() {
         <p className="text-[12px] text-slate-500">PO Created → NDC Received, diurai per stage dengan klasifikasi VA / NNVA / UNVA</p>
       </div>
 
-      <div className="flex items-end gap-3 px-5 pb-4 flex-wrap">
-        <FilterSelect label="Quick Filter" value="Year To Date" />
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-[0.07em]">Date Range</span>
-          <div className="flex items-center gap-2">
-            <div className="border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white">01/01/2026</div>
-            <span className="text-slate-400 text-sm">—</span>
-            <div className="border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white">20/07/2026</div>
-          </div>
-        </div>
-        <FilterSelect label="Plant" value="All Plant" />
-        <FilterSelect label="Data Level" value="Weekly" />
-      </div>
-
       {/* KPI Cards: PO Created | PO Released | VA | UNVA */}
       <div className="grid grid-cols-4 gap-3.5 px-5 mb-4">
         <KpiSummaryCard label="PO Created → NDC" value="16.67" unit="days" accentColor={NNVA_COLOR}
@@ -690,20 +663,6 @@ function StrategicView() {
         <p className="text-[12px] text-slate-500">Ringkasan kinerja lead time untuk VP dan BOD · Quarterly · All Plant</p>
       </div>
 
-      <div className="flex items-end gap-3 px-5 pb-4 flex-wrap">
-        <FilterSelect label="Quick Filter" value="Year To Date" />
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-[0.07em]">Date Range</span>
-          <div className="flex items-center gap-2">
-            <div className="border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white">01/01/2026</div>
-            <span className="text-slate-400 text-sm">—</span>
-            <div className="border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white">20/07/2026</div>
-          </div>
-        </div>
-        <FilterSelect label="Plant" value="All Plant" />
-        <FilterSelect label="Data Level" value="Quarterly" />
-      </div>
-
       {/* 3 KPI cards */}
       <div className="grid grid-cols-3 gap-3.5 px-5 mb-4">
         <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 relative overflow-hidden hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
@@ -796,24 +755,6 @@ function OperationalView() {
         </p>
         <h1 className="text-[20px] font-bold text-[#2A3D4A] leading-tight mb-1">Lead Time Daily Tracker</h1>
         <p className="text-[12px] text-slate-500">Monitoring harian per batch · PO yang sedang berjalan · Update setiap hari kerja pukul 07:00 WIB</p>
-      </div>
-
-      <div className="flex items-end gap-3 px-5 pb-4 flex-wrap">
-        <FilterSelect label="Quick Filter" value="7 Hari Terakhir" />
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-[0.07em]">Date Range</span>
-          <div className="flex items-center gap-2">
-            <div className="border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white">09/09/2026</div>
-            <span className="text-slate-400 text-sm">—</span>
-            <div className="border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white">15/09/2026</div>
-          </div>
-        </div>
-        <FilterSelect label="Plant" value="All Plant" />
-        <FilterSelect label="Stage" value="Semua Stage" />
-        <button className="flex items-center gap-1.5 border border-[#FFEDEF] rounded-full px-3 py-1.5 text-[11.5px] font-bold text-[#8A0011] bg-[#FFEDEF] self-end whitespace-nowrap">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#E6001C] animate-pulse shrink-0" />
-          {exceptions.length} Exceptions Aktif
-        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-3.5 px-5 pb-5">
