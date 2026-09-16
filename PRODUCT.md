@@ -25,6 +25,47 @@ Real-time visibility langsung dari Snowflake: data tidak melewati proses manual,
 - UI dalam Bahasa Indonesia karena seluruh pengguna adalah staf lokal
 - Data warehouse: Snowflake schema MIGRATION.CONTROL_TOWER
 
+## Pages & Routes
+
+| Route | Status | Description |
+|---|---|---|
+| `/` | Live | Redirect: auth → `/dashboard`, no-auth → `/login` |
+| `/login` | Live | Azure AD login, typewriter animation, floating KPI cards |
+| `/dashboard` | Live | Main KPI dashboard — Strategic & Tactical views, Monitor Mode, TV Mode |
+| `/lead-time` | Live (mock data) | Lead Time deep-dive — 3 views: Strategic / Tactical / Operational |
+| `/dashboard/settings` | Live | Notifikasi Teams, alert thresholds, display preferences |
+| `/dashboard/output` | Placeholder | Nav link exists, halaman belum dibangun |
+| `/dashboard/productivity` | Placeholder | Nav link exists, halaman belum dibangun |
+| `/dashboard/oee` | Placeholder | Nav link exists, halaman belum dibangun |
+| `/dashboard/energy` | Placeholder | Nav link exists, halaman belum dibangun |
+
+### `/dashboard` — Main Dashboard
+- **Strategic view**: Hero OEE card, 4 Operation KPIs (Lead Time/Yield/RFT/Output), Equipment & People (OEE/OPE/Productivity), Trend charts, AI Summary
+- **Tactical view**: Abbreviated layout for operation floors
+- **Monitor Mode**: Fullscreen display, auto-rotating sections (OKPIs → Equipment → Trends)
+- **TV Mode**: Auto-cycles every 20 seconds
+- Data: live Snowflake via `/api/dashboard/kpi` and `/api/dashboard/trends`
+
+### `/lead-time` — Lead Time Page
+- **Strategic view** (default): 3 KPI cards (Gross LT / UNVA % / Savings potential), Stage Group chart (VA/NNVA/UNVA breakdown), Top 5 + Bottom 5 SKU tables side-by-side, On-Time PO Trend line, Lead Time Pareto per SKU (Nivo bar + cumulative % custom layer)
+- **Tactical view**: 4 KPI cards, 20-stage bar chart (Gross/Nett/Pareto toggle), trend line by stage
+- **Operational view**: Batch exceptions panel (critical/warning), 6×6 stage heatmap (daily)
+- Data: **static mock data** — not yet connected to Snowflake
+- Color classifications: VA = `#215AA8` · NNVA = `#d97706` · UNVA = `#b91c1c`
+
+## Universal Components
+
+### `components/dashboard/Header`
+Used on ALL pages. Props:
+- `views?: Array<{ key: string; label: string }>` — configurable view toggle (defaults to Strategic/Tactical)
+- `activeView: string` + `onViewChange: (v: string) => void`
+- `plants`, `onFilterChange`, `onRefresh`, `isLoading`, `lastUpdated`
+- `alertCount`, `alerts`, `onDismiss`, `onBellClick`
+- `onMonitorMode` — shows monitor icon button when provided
+
+### `components/dashboard/Sidebar`
+Nav links: Overview / Lead Time / Output / Productivity / OEE / Energy / Settings. Inactivity logout after 15 min.
+
 ## Capabilities and Constraints
 
 **KPI structure (tidak boleh diubah):**
@@ -32,7 +73,7 @@ Real-time visibility langsung dari Snowflake: data tidak melewati proses manual,
 - OEE, OPE, Productivity (baris 2)
 
 **AI Features:**
-- AI Summary: ringkasan eksekutif otomatis 3 kalimat di atas dashboard, di-cache 5 jam, powered by Groq (primary: openai/gpt-oss-120b, fallback: groq/compound → qwen/qwen3.8-27b)
+- AI Summary: ringkasan eksekutif otomatis di atas dashboard, di-cache 5 jam, powered by Groq (primary: `openai/gpt-4o` via Groq, fallback: `compound-beta` → `qwen/qwen3-8b`)
 - AI Analyst chatbot (floating UI): query Snowflake via tool use, format respons per-section dengan emoji, selalu menyertakan follow-up questions untuk guided insight discovery
 - Chatbot tools: `get_kpi_data` (7 KPI types) + `get_weekly_trend` (8 trend types: leadtime, upstream, downstream, e2e, oee, rft, output, batch)
 - Agent routing: kompleksitas pertanyaan menentukan model yang dipakai
@@ -50,19 +91,22 @@ Real-time visibility langsung dari Snowflake: data tidak melewati proses manual,
 - Email: via Resend API
 
 **Constraints teknis:**
-- Recharts dipertahankan sebagai library chart; hanya styling yang boleh diubah
-- Brand color indigo (#4f46e5 / brand-600) dipertahankan
+- Chart library: Nivo (`@nivo/line`, `@nivo/bar`) — tidak boleh diganti ke Recharts atau library lain
+- Brand shell (Paradise Design System v2): Paragon Blue `#215AA8` — header bg, sidebar accent, nav item aktif. Tidak dipakai untuk sinyal KPI
 - Semua UI copy tetap Bahasa Indonesia
 - Autentikasi via Azure AD (NextAuth.js)
 - Vercel deployment dari branch `main`; branch `dev` untuk staging lokal
 
 ## Brand Commitments
 
-- Nama produk: "Control Tower" + "Manufacturing Dashboard"
+- Nama produk: "Control Tower" / "Manufacturing Control Tower"
 - Organisasi: PT Paracorp Group
-- Primary color: Indigo (#4f46e5)
-- Typography: Space Grotesk (heading/angka besar), Plus Jakarta Sans (body)
-- Icon: Factory icon (Lucide) di rounded-square badge
+- Shell color (Paradise Design System v2): Paragon Blue `#215AA8` (header bg, sidebar active, nav accent) — bukan untuk data/KPI. Hover: `#1A4886`. Text-accent-strong: `#143665`. Surface-subtle: `#D3DEEE`. Border-subtle: `#EBEBEB`. Text-primary: `#2A3D4A`
+- Status colors: Green `#22c55e` (good) · Amber `#f59e0b` (warn) · Red `#ef4444` (bad)
+- Typography: Inter exclusively — 14px base, `-webkit-font-smoothing: antialiased`
+- Logo: `paragon-corp.98d5977b.png` di sidebar, teks "MANUFACTURING CONTROL TOWER" di header nav
+- Chart panel standard: `rounded-lg p-4 border border-[#EBEBEB] hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)]`
+- Chart title standard: `text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none`
 
 ## Evidence on Hand
 
