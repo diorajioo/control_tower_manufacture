@@ -56,8 +56,9 @@ function daysAgo(n: number) {
 interface HeaderProps {
   plants: string[];
   onFilterChange: (f: { plant: string; startDate: string; endDate: string; dataLevel: string; period: string }) => void;
-  activeView: "strategic" | "tactical";
-  onViewChange: (v: "strategic" | "tactical") => void;
+  activeView: string;
+  onViewChange: (v: string) => void;
+  views?: Array<{ key: string; label: string }>;
   onRefresh: () => void;
   isLoading: boolean;
   lastUpdated?: Date;
@@ -69,12 +70,16 @@ interface HeaderProps {
 }
 
 export function Header({
-  plants, onFilterChange, activeView, onViewChange,
+  plants, onFilterChange, activeView, onViewChange, views,
   onRefresh, isLoading, lastUpdated, alertCount = 0, onBellClick,
   alerts = [], onDismiss, onMonitorMode,
 }: HeaderProps) {
   const { data: session } = useSession();
   const { t } = useI18n();
+  const resolvedViews = views ?? [
+    { key: "strategic", label: t("header_view_strategic") },
+    { key: "tactical",  label: t("header_view_tactical") },
+  ];
   const [countdown,  setCountdown]  = useState(REFRESH_INTERVAL_MS);
   const [plant,      setPlant]      = useState("All Plant");
   const [period,     setPeriod]     = useState("YTD");
@@ -389,15 +394,15 @@ export function Header({
 
         <div className="w-px h-4 bg-gray-200 shrink-0 mx-0.5" />
 
-        {/* Strategic / Tactical */}
+        {/* View toggle */}
         <div className="flex items-center gap-0.5 bg-white rounded-full p-0.5 border border-gray-200 shrink-0">
-          {(["strategic", "tactical"] as const).map((v) => (
-            <button key={v} onClick={() => onViewChange(v)}
+          {resolvedViews.map(({ key, label }) => (
+            <button key={key} onClick={() => onViewChange(key)}
               className={cn(
                 "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10",
-                activeView === v ? "text-[#143665]" : "text-gray-500 hover:text-gray-700"
+                activeView === key ? "text-[#143665]" : "text-gray-500 hover:text-gray-700"
               )}>
-              {activeView === v && (
+              {activeView === key && (
                 <motion.span
                   layoutId="view-pill"
                   className="absolute inset-0 bg-[#D3DEEE] rounded-full"
@@ -405,7 +410,7 @@ export function Header({
                   transition={{ type: "spring", stiffness: 380, damping: 32 }}
                 />
               )}
-              {v === "strategic" ? t("header_view_strategic") : t("header_view_tactical")}
+              {label}
             </button>
           ))}
         </div>

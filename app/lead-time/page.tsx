@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
+import { Header } from "@/components/dashboard/Header";
 import { FloatingChat } from "@/components/dashboard/FloatingChat";
-import { Bell, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ResponsiveBar } from "@nivo/bar";
 import { ResponsiveLine } from "@nivo/line";
@@ -27,29 +28,6 @@ const nivoTheme = {
   grid: { line: { stroke: "#f3f4f6", strokeWidth: 1 } },
   crosshair: { line: { stroke: "#215AA8", strokeWidth: 1, strokeOpacity: 0.3 } },
 };
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-const ID_DAYS   = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
-const ID_MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-
-function useClock() {
-  const [time, setTime] = useState("");
-  const [date, setDate] = useState("");
-  useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      const h = String(now.getHours()).padStart(2, "0");
-      const m = String(now.getMinutes()).padStart(2, "0");
-      const s = String(now.getSeconds()).padStart(2, "0");
-      setTime(`${h}:${m}:${s} WIB`);
-      setDate(`${ID_DAYS[now.getDay()]}, ${now.getDate()} ${ID_MONTHS[now.getMonth()]} ${now.getFullYear()}`);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
-  return { time, date };
-}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type Persona   = "strategic" | "tactical" | "operational";
@@ -906,17 +884,16 @@ function OperationalView() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const PERSONA_CONFIG = {
-  strategic:   { badge: "VP / BOD", badgeCls: "bg-[#E9EFF6] text-[#143665]",      label: "Strategic" },
-  tactical:    { badge: "Manager",  badgeCls: "bg-[#FFFBE4] text-[#342900]",      label: "Tactical" },
-  operational: { badge: "Leader",   badgeCls: "bg-emerald-50 text-emerald-800",   label: "Operational" },
-} as const;
+const LEAD_TIME_VIEWS = [
+  { key: "strategic",   label: "Strategic" },
+  { key: "tactical",    label: "Tactical" },
+  { key: "operational", label: "Operational" },
+];
 
 export default function LeadTimePage() {
   const { status } = useSession();
   const router = useRouter();
-  const { time, date } = useClock();
-  const [persona, setPersona] = useState<Persona>("tactical");
+  const [persona, setPersona] = useState<Persona>("strategic");
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
@@ -935,56 +912,22 @@ export default function LeadTimePage() {
       <Sidebar />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-
-        {/* Topbar */}
-        <div className="h-[52px] bg-[#215AA8] flex items-center gap-3 px-4 shrink-0 border-b border-[#1A4886]">
-          <span className="text-[13px] font-medium text-white/50 tracking-[0.07em] uppercase shrink-0">Manufacturing Control Tower</span>
-          <div className="flex-1" />
-          <div className="flex flex-col items-end pr-2.5 border-r border-white/10">
-            <span className="text-[13px] font-bold text-white/90 tracking-[0.03em] leading-tight tabular-nums">{time}</span>
-            <span className="text-[9.5px] text-white/40 leading-tight">{date}</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.08] border border-white/[0.12] text-[11px] text-white/55 font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-            Last sync 12:21 WIB
-          </div>
-          <div className="relative w-8 h-8 rounded-[9px] bg-white/[0.08] border border-white/[0.12] flex items-center justify-center hover:bg-white/[0.15] transition-colors cursor-pointer">
-            <Bell size={14} className="text-white/85" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#E6001C] border-[1.5px] border-[#215AA8] flex items-center justify-center text-[8px] font-bold text-white">3</span>
-          </div>
-          <div className="w-8 h-8 rounded-full bg-[#215AA8] border border-white/20 flex items-center justify-center cursor-pointer shadow-sm" style={{ background: "#1A4886" }}>
-            <span className="text-white text-[11px] font-bold">DA</span>
-          </div>
-        </div>
-
-        {/* Persona switcher */}
-        <div className="flex items-center bg-white border-b border-[#EBEBEB] px-5 shrink-0">
-          {(Object.entries(PERSONA_CONFIG) as [Persona, typeof PERSONA_CONFIG[Persona]][]).map(([key, cfg]) => (
-            <button
-              key={key}
-              onClick={() => setPersona(key)}
-              className={cn(
-                "flex items-center gap-2 py-3 px-4 border-b-2 text-[12px] font-semibold transition-all",
-                persona === key
-                  ? "border-[#215AA8] text-[#143665]"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              )}
-            >
-              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-[0.05em]", cfg.badgeCls)}>
-                {cfg.badge}
-              </span>
-              {cfg.label}
-            </button>
-          ))}
-        </div>
+        <Header
+          plants={["All Plant", "Plant 1", "Plant 2", "NDC"]}
+          onFilterChange={() => {}}
+          views={LEAD_TIME_VIEWS}
+          activeView={persona}
+          onViewChange={(v) => setPersona(v as Persona)}
+          onRefresh={() => {}}
+          isLoading={false}
+        />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto min-h-0">
-          {persona === "tactical"    && <TacticalView />}
           {persona === "strategic"   && <StrategicView />}
+          {persona === "tactical"    && <TacticalView />}
           {persona === "operational" && <OperationalView />}
         </div>
-
       </div>
 
       <FloatingChat />

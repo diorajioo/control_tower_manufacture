@@ -587,7 +587,7 @@ export default function DashboardPage() {
             plants={plants}
             onFilterChange={handleFilterChange}
             activeView={activeView}
-            onViewChange={setActiveView}
+            onViewChange={(v) => setActiveView(v as "strategic" | "tactical")}
             onRefresh={handleRefresh}
             isLoading={loading}
             lastUpdated={lastUpdated}
