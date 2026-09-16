@@ -699,7 +699,7 @@ export default function DashboardPage() {
                 </div>
               );
             })() : null
-          )}
+          }
 
           <div ref={kpiSectionRef}>
           {/* ── Operation KPIs ─────────────────────────────────────────── */}
