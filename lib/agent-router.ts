@@ -30,10 +30,14 @@ export function classifyQuestion(message: string): QuestionComplexity {
     /kenapa|mengapa|penyebab|root.?cause/,
     /rekomendasi|saran|langkah|action/,
     /bandingkan|perbandingan|compare|vs\.?\s/,
-    /analisa|analisis|analyz|investigasi/,
+    /analisa|analisis|analyz|investigasi|selidiki/,
     /tren|trend|pola|pattern|anomali/,
     /prediksi|forecast|proyeksi/,
     /multi.?step|serangkaian|beberapa.*kpi/,
+    /hubungan|korelasi|dampak|pengaruh|efek/,
+    /diagnos|cari.?tahu|temukan|apa yang (menyebab|terjadi)/,
+    /strategi|optimasi|improve|tingkat(kan)?|perbaik/,
+    /turun|naik|meningkat|menurun|drop|spike/,
   ];
 
   const simplePatterns = [

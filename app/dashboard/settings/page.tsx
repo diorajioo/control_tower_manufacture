@@ -240,38 +240,40 @@ function SettingsShell() {
     router.push(`/dashboard/settings?s=${s}`, { scroll: false });
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      {/* Inner left nav */}
-      <nav className="w-48 shrink-0 bg-white border-r border-gray-100 flex flex-col py-6 px-2 gap-0.5">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">
-          {t("settings_title")}
+    <div className="flex-1 overflow-y-auto bg-slate-100">
+      {/* Page header + horizontal tabs */}
+      <div className="bg-slate-100 border-b border-slate-200 px-8 pt-7 pb-0">
+        <h1 className="text-[20px] font-bold text-slate-900 leading-tight">Settings</h1>
+        <p className="text-[12px] text-slate-500 mt-0.5 mb-4">
+          Manage preferences, notifications, and alert thresholds for your dashboard.
         </p>
-        {SECTIONS
-          .filter(({ id }) => id !== "admin" || isAdmin)
-          .map(({ id, tKey, icon: Icon, adminOnly }) => {
-            const locked = adminOnly && !isAdmin;
-            return (
-              <button
-                key={id}
-                onClick={() => go(id)}
-                className={cn(
-                  "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors w-full text-left",
-                  active === id
-                    ? "bg-brand-50 text-brand-700"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                )}
-              >
-                <Icon size={15} />
-                <span className="flex-1">{t(tKey)}</span>
-                {locked && <Lock size={11} className="text-gray-300 shrink-0" />}
-              </button>
-            );
-          })}
-      </nav>
+        <div className="flex gap-0.5">
+          {SECTIONS
+            .filter(({ id }) => id !== "admin" || isAdmin)
+            .map(({ id, tKey, icon: Icon, adminOnly }) => {
+              const locked = adminOnly && !isAdmin;
+              return (
+                <button
+                  key={id}
+                  onClick={() => go(id)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-4 py-2.5 text-[12.5px] font-medium rounded-t-lg border-b-2 transition-colors",
+                    active === id
+                      ? "border-[#1e4076] text-[#1e4076] bg-white/70"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  )}
+                >
+                  <Icon size={13} />
+                  {t(tKey)}
+                  {locked && <Lock size={10} className="text-slate-300 shrink-0" />}
+                </button>
+              );
+            })}
+        </div>
+      </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-xl mx-auto px-8 py-8">
+      <div className="max-w-2xl mx-auto px-8 py-8">
           {active === "profil" && (
             <ProfilSection
               session={session}
@@ -328,7 +330,6 @@ function SettingsShell() {
               onSave={saveAdmins}
             />
           )}
-        </div>
       </div>
     </div>
   );
@@ -349,16 +350,30 @@ function Card({
   title,
   children,
   className,
+  icon,
+  iconBg,
+  description,
 }: {
   title?: string;
   children: React.ReactNode;
   className?: string;
+  icon?: React.ReactNode;
+  iconBg?: string;
+  description?: string;
 }) {
   return (
-    <div className={cn("bg-white rounded-xl border border-gray-100 overflow-hidden", className)}>
-      {title && (
-        <div className="px-5 py-3 border-b border-gray-100">
-          <p className="text-sm font-semibold text-gray-700">{title}</p>
+    <div className={cn("bg-white rounded-xl border border-slate-200 overflow-hidden", className)}>
+      {(title || icon) && (
+        <div className={cn("px-5 py-4 border-b border-slate-100", icon && "flex items-center gap-3")}>
+          {icon && (
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: iconBg ?? "#EFF6FF" }}>
+              {icon}
+            </div>
+          )}
+          <div>
+            {title && <p className="text-[13px] font-semibold text-slate-800">{title}</p>}
+            {description && <p className="text-[11px] text-slate-500 mt-0.5">{description}</p>}
+          </div>
         </div>
       )}
       <div className="p-5">{children}</div>
@@ -463,19 +478,43 @@ function ProfilSection({
 
   return (
     <div className="space-y-5">
-      <SectionTitle title="Profil" description="Informasi akun Anda" />
-
-      <Card>
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-14 h-14 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
-            <span className="font-display text-xl font-bold text-brand-600">{initials}</span>
-          </div>
-          <div>
-            <p className="font-semibold text-gray-800">{name}</p>
-            <p className="text-sm text-gray-500">{email}</p>
-          </div>
+      {/* Gradient profile card */}
+      <div
+        className="rounded-xl border border-blue-200 px-6 py-5 flex items-center gap-4"
+        style={{ background: "linear-gradient(135deg, #EFF6FF, #EEF2FF)" }}
+      >
+        <div
+          className="w-14 h-14 rounded-full flex items-center justify-center shrink-0 text-xl font-bold"
+          style={{ background: "linear-gradient(135deg, #DBEAFE, #E0E7FF)", color: "#1e4076" }}
+        >
+          {initials}
         </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-slate-900 text-[15px]">{name}</p>
+          <p className="text-[12px] text-slate-500 mt-0.5">{email}</p>
+        </div>
+        {jabatan && (
+          <div
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold shrink-0"
+            style={{ background: "white", color: "#1e4076", border: "1px solid #BFDBFE" }}
+          >
+            <Shield size={11} />
+            {jabatan}
+          </div>
+        )}
+      </div>
 
+      <Card
+        title="Account Information"
+        description="Managed by Azure Active Directory"
+        icon={
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1e4076" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        }
+        iconBg="#EFF6FF"
+      >
         <div className="space-y-4">
           <Field label="Nama">
             <ReadOnly value={name} />
@@ -489,12 +528,12 @@ function ProfilSection({
               value={jabatan}
               onChange={(e) => setJabatan(e.target.value)}
               placeholder="cth. Plant Manager"
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
             />
           </Field>
         </div>
 
-        <div className="mt-5 flex items-center gap-1.5 text-xs text-gray-400">
+        <div className="mt-5 flex items-center gap-1.5 text-xs text-slate-400">
           <AlertCircle size={12} />
           <span>Nama dan email dikelola melalui Microsoft Azure AD</span>
         </div>

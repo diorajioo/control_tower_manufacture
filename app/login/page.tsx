@@ -3,7 +3,7 @@
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Factory, BarChart2, Clock, Shield, Zap, Package, Activity, Gauge, TrendingUp, AlertTriangle } from "lucide-react";
+import { Factory } from "lucide-react";
 
 const REMEMBER_KEY     = "ct_remember_email";
 const REMEMBER_PENDING = "ct_remember_pending";
@@ -16,17 +16,17 @@ const PHRASES = [
   "Every plant, at a glance.",
 ];
 
-const FLOAT_ICONS = [
-  { Icon: BarChart2,     top: "8%",  left: "5%",   delay: 0,    size: 16 },
-  { Icon: Clock,         top: "14%", left: "40%",  delay: -2,   size: 15 },
-  { Icon: Shield,        top: "7%",  left: "68%",  delay: -4,   size: 15 },
-  { Icon: Zap,           top: "70%", left: "7%",   delay: -1,   size: 15 },
-  { Icon: Package,       top: "82%", left: "35%",  delay: -3,   size: 16 },
-  { Icon: Activity,      top: "88%", left: "62%",  delay: -5,   size: 15 },
-  { Icon: Gauge,         top: "52%", left: "2%",   delay: -2.5, size: 15 },
-  { Icon: TrendingUp,    top: "38%", left: "44%",  delay: -1.5, size: 15 },
-  { Icon: AlertTriangle, top: "20%", left: "84%",  delay: -3.5, size: 14 },
-  { Icon: Factory,       top: "66%", left: "80%",  delay: -0.5, size: 16 },
+const FLOAT_KPIS = [
+  { label: "OEE",          value: "71.3", unit: "%", pos: { top: "8%",    left: "4%"    }, delay: 0,    dur: 6   },
+  { label: "Lead Time",    value: "16.0", unit: "d", pos: { top: "13%",   left: "42%"   }, delay: -2.5, dur: 8   },
+  { label: "RFT",          value: "96.2", unit: "%", pos: { top: "6%",    right: "7%"   }, delay: -1,   dur: 7   },
+  { label: "Bulk Loss",    value: "3.8",  unit: "%", pos: { top: "37%",   left: "1%"    }, delay: -3.5, dur: 9   },
+  { label: "Output",       value: "284",  unit: "t", pos: { top: "62%",   left: "5%"    }, delay: -5,   dur: 6.5 },
+  { label: "OPE",          value: "78.5", unit: "%", pos: { top: "31%",   left: "44%"   }, delay: -1.8, dur: 7.5 },
+  { label: "Pack Loss",    value: "0.7",  unit: "%", pos: { top: "17%",   right: "1%"   }, delay: -4,   dur: 8.5 },
+  { label: "Productivity", value: "65",   unit: "%", pos: { bottom: "30%",right: "3%"   }, delay: -2,   dur: 7   },
+  { label: "Man-hours",    value: "1420", unit: "h", pos: { bottom: "14%",left: "35%"   }, delay: -6,   dur: 9.5 },
+  { label: "Batches",      value: "218",  unit: "",  pos: { bottom: "22%",right: "13%"  }, delay: -3,   dur: 6   },
 ];
 
 function useTypewriter(phrases: string[]) {
@@ -105,11 +105,12 @@ export default function LoginPage() {
       {/* Grid */}
       <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage:"linear-gradient(rgba(255,255,255,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.025) 1px,transparent 1px)",backgroundSize:"48px 48px" }} />
 
-      {/* Floating icon circles */}
-      {FLOAT_ICONS.map(({ Icon, top, left, delay, size }, i) => (
-        <div key={i} className="float-icon absolute flex items-center justify-center rounded-full pointer-events-none"
-          style={{ top, left, width:44, height:44, animationDelay:`${delay}s`, background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", backdropFilter:"blur(8px)" }}>
-          <Icon size={size} style={{ color:"rgba(165,180,252,0.5)" }} strokeWidth={1.5} />
+      {/* Floating mini KPI cards */}
+      {FLOAT_KPIS.map(({ label, value, unit, pos, delay, dur }, i) => (
+        <div key={i} className="float-kpi absolute pointer-events-none select-none"
+          style={{ ...pos, animationDelay:`${delay}s`, animationDuration:`${dur}s` }}>
+          <div className="float-kpi-label">{label}</div>
+          <div className="float-kpi-val">{value}{unit && <span>{unit}</span>}</div>
         </div>
       ))}
 
@@ -126,7 +127,7 @@ export default function LoginPage() {
           </div>
 
           {/* Headline + typewriter */}
-          <div className="mb-5" style={{ fontFamily:"'Space Grotesk',sans-serif",letterSpacing:"-0.04em",lineHeight:1.05 }}>
+          <div className="mb-5" style={{ fontFamily:"Inter,sans-serif",letterSpacing:"-0.04em",lineHeight:1.05 }}>
             <div className="font-bold text-white" style={{ fontSize:58 }}>Every KPI.</div>
             <div className="font-bold" style={{ fontSize:58, color:"#a5b4fc", minHeight:"1.1em" }}>
               {typedText}<span className="cursor-blink">|</span>
@@ -166,7 +167,7 @@ export default function LoginPage() {
                 style={{ background:"linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%)",boxShadow:"0 6px 20px rgba(79,70,229,0.45)" }}>
                 <Factory size={20} className="text-white" />
               </div>
-              <p className="font-bold text-white leading-none" style={{ fontFamily:"'Space Grotesk',sans-serif",fontSize:16,letterSpacing:"-0.02em" }}>Control Tower</p>
+              <p className="font-bold text-white leading-none" style={{ fontFamily:"Inter,sans-serif",fontSize:16,letterSpacing:"-0.02em" }}>Control Tower</p>
               <p className="text-[10px] mt-1" style={{ color:"rgba(165,180,252,0.45)" }}>PT Paracorp Group</p>
             </div>
 
@@ -234,8 +235,11 @@ export default function LoginPage() {
         .aurora-root { position:absolute;inset:0;pointer-events:none; }
         .aurora-blob { position:absolute;border-radius:50%;filter:blur(90px);opacity:0.4;animation:drift 14s ease-in-out infinite alternate; }
         @keyframes drift { 0%{transform:translate(0,0) scale(1)} 50%{transform:translate(28px,-20px) scale(1.05)} 100%{transform:translate(-20px,30px) scale(0.96)} }
-        .float-icon { animation:floatIcon 8s ease-in-out infinite alternate; }
-        @keyframes floatIcon { 0%{transform:translateY(0) scale(1)} 100%{transform:translateY(-14px) scale(1.04)} }
+        .float-kpi { padding:8px 13px; border-radius:10px; background:rgba(255,255,255,0.065); border:1px solid rgba(255,255,255,0.1); backdrop-filter:blur(10px); animation:floatKpi 8s ease-in-out infinite alternate; }
+        .float-kpi-label { font-size:8px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:rgba(165,180,252,0.55); margin-bottom:2px; }
+        .float-kpi-val { font-size:16px; font-weight:700; color:rgba(255,255,255,0.85); line-height:1.1; font-variant-numeric:tabular-nums; }
+        .float-kpi-val span { font-size:10px; font-weight:500; color:rgba(165,180,252,0.6); margin-left:1px; }
+        @keyframes floatKpi { 0%{transform:translateY(0) scale(1)} 100%{transform:translateY(-12px) scale(1.02)} }
         .cursor-blink { display:inline-block;color:#a5b4fc;font-weight:200;margin-left:2px;animation:blink 1s step-end infinite; }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
       `}</style>

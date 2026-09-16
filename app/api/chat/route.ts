@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getGroqClient, buildChatModelPriority, isGroqModelUnavailable } from "@/lib/ai-provider";
 import { isValidModelId } from "@/lib/ai-models";
 import { routeModel } from "@/lib/agent-router";
+import { buildSystemPrompt, type KPISnapshot } from "@/lib/diagnostic-prompt";
 import { executeQuery } from "@/lib/snowflake";
 import type Groq from "groq-sdk";
 
@@ -62,48 +63,6 @@ const TOOLS: Groq.Chat.ChatCompletionTool[] = [
   },
 ];
 
-function buildSystemPrompt(context?: { plant?: string; startDate?: string; endDate?: string }) {
-  const filterCtx = context?.startDate
-    ? `Konteks filter aktif — Plant: ${context.plant || "Semua Plant"}, Periode: ${context.startDate} s/d ${context.endDate}.`
-    : "Gunakan YTD sebagai default periode jika user tidak menyebutkan.";
-
-  return `Kamu adalah AI Analyst untuk Control Tower Manufacturing di perusahaan farmasi berskala besar.
-Kamu memiliki akses langsung ke database Snowflake melalui tools yang tersedia.
-
-${filterCtx}
-
-Panduan:
-- Gunakan tool get_kpi_data atau get_weekly_trend sebelum menjawab pertanyaan berbasis data
-- Jangan mengarang angka — selalu ambil dari database
-- Jawab dalam Bahasa Indonesia, profesional tapi conversational
-
-Format respons:
-- Gunakan emoji sederhana sebagai penanda section (📊 untuk data, ⚠️ untuk warning, ✅ untuk on-track, 💡 untuk insight/rekomendasi)
-- Bagi jawaban per section dengan header pendek, bukan satu paragraf panjang
-- Gunakan bullet points untuk list angka atau temuan
-- Untuk lookup data sederhana: langsung ke angka + 1-2 kalimat konteks, tidak perlu banyak section
-- Untuk analisa: pakai section — mulai dari kondisi aktual, lalu temuan penting, lalu rekomendasi
-- Sertakan angka aktual dengan konteks (vs target, vs periode sebelumnya)
-
-Follow-up questions (WAJIB di setiap respons):
-- Selalu akhiri jawaban dengan section "**Mau explore lebih lanjut?**"
-- Berikan tepat 2-3 pertanyaan follow-up yang relevan dan actionable
-- Format: > diikuti tanda kutip dan teks pertanyaan, contoh: > "Tunjukkan tren OEE minggu ini"
-- Pilih pertanyaan yang mengarah ke insight lebih dalam — bukan yang sudah dijawab, tapi yang logical next step
-- Contoh: setelah jawab OEE → follow-up bisa ke breakdown per plant, tren mingguan, atau perbandingan vs bulan lalu
-
-KPI Targets:
-- Lead Time: semakin rendah semakin baik
-- Bulk Loss: target < 3%
-- Pack Loss: target < 1%
-- Right First Time (RFT): target ≥ 95%
-- OEE: target ≥ 65%
-
-Highlight tagging: Saat menyebut nilai aktual sebuah KPI, tambahkan tag [kpi:ID] tepat setelah angkanya:
-[kpi:leadtime] = Lead Time · [kpi:yield] = Bulk/Pack Loss · [kpi:rft] = RFT · [kpi:output] = Output FG/Bulk · [kpi:oee] = OEE · [kpi:ope] = OPE · [kpi:productivity] = Produktivitas
-Contoh: "Lead Time saat ini 5.2 hari [kpi:leadtime], OEE 67.3% [kpi:oee]."
-Gunakan tag HANYA saat menyebut nilai angka aktual KPI tersebut, bukan saat membahas topik secara umum.`;
-}
 
 function validateDate(d?: string): string | undefined {
   if (!d) return undefined;
@@ -410,10 +369,12 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { messages, context, model: requestedModel } = body as {
+  const { messages, context, model: requestedModel, kpiSnapshot, alerts } = body as {
     messages: { role: "user" | "assistant"; content: string }[];
-    context?: { plant?: string; startDate?: string; endDate?: string };
+    context?: { plant?: string; startDate?: string; endDate?: string; period?: string };
     model?: string;
+    kpiSnapshot?: KPISnapshot;
+    alerts?: { severity: string; kpi: string; message: string }[];
   };
 
   // Agent routing: classify the latest user message and pick the optimal model.
@@ -428,9 +389,19 @@ export async function POST(req: NextRequest) {
   const validatedModel = resolvedModel;
 
   const groq = getGroqClient();
+  // Cap history to last 10 turns to stay within context budget
+  const MAX_HISTORY = 10;
+  const systemPrompt = buildSystemPrompt({
+    plant:       context?.plant,
+    startDate:   context?.startDate,
+    endDate:     context?.endDate,
+    period:      context?.period,
+    kpiSnapshot,
+    alerts,
+  });
   const allMessages: ChatMessage[] = [
-    { role: "system", content: buildSystemPrompt(context) },
-    ...messages,
+    { role: "system", content: systemPrompt },
+    ...messages.slice(-MAX_HISTORY),
   ];
 
   const MAX_TOOL_ROUNDS = 3;

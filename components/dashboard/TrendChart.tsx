@@ -10,6 +10,7 @@ import {
   computeControlLimits,
   computePerPlantLimits,
 } from "@/lib/chartConfig";
+import { cn } from "@/lib/utils";
 
 interface Filters {
   plant: string;
@@ -21,6 +22,8 @@ interface TrendChartProps {
   filters: Filters;
   kpiType: string;
   onKpiChange: (kpi: string) => void;
+  chartHeight?: number;
+  fillHeight?: boolean;
 }
 
 const KPI_TAB_LABELS: Record<string, string> = {
@@ -48,7 +51,7 @@ const nivoTheme = {
   },
 };
 
-export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
+export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, fillHeight = false }: TrendChartProps) {
   const [data,    setData]    = useState<Record<string, unknown>[]>([]);
   const [plants,  setPlants]  = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -196,9 +199,9 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
   const isEmpty = nivoData.length === 0 || nivoData.every((s) => s.data.length === 0);
 
   return (
-    <div className="bg-white rounded-2xl pt-4 px-4 pb-2 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] border border-gray-100/80">
+    <div className={cn("bg-white rounded-xl pt-4 px-4 pb-2 border border-slate-200 hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-shadow duration-200", fillHeight && "h-full flex flex-col")}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className={cn("flex items-center justify-between mb-3", fillHeight && "shrink-0")}>
         <div className="flex items-center gap-2">
           <h3 className="text-[13px] font-bold text-slate-800 tracking-tight">{t("chart_metric_trend")}</h3>
           {loading && (
@@ -211,7 +214,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
       </div>
 
       {/* KPI tabs + plant legend */}
-      <div className="flex items-center justify-between gap-2 mb-3">
+      <div className={cn("flex items-center justify-between gap-2 mb-3", fillHeight && "shrink-0")}>
         <div className="flex flex-wrap gap-1">
           {KPI_OPTIONS.map((opt) => (
             <button
@@ -243,7 +246,7 @@ export function TrendChart({ filters, kpiType, onKpiChange }: TrendChartProps) {
       </div>
 
       {/* Chart */}
-      <div style={{ height: 210 }}>
+      <div className={fillHeight ? "flex-1 min-h-0" : ""} style={fillHeight ? undefined : { height: chartHeight }}>
         {isEmpty ? (
           <div className="h-full flex items-center justify-center text-[11px] text-gray-300">No data available</div>
         ) : (

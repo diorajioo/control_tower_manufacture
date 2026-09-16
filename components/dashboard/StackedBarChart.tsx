@@ -9,6 +9,7 @@ import {
   computeControlLimits,
   computePerPlantLimits,
 } from "@/lib/chartConfig";
+import { cn } from "@/lib/utils";
 
 interface Filters {
   plant: string;
@@ -20,6 +21,8 @@ interface StackedBarChartProps {
   filters: Filters;
   kpiType: string;
   onKpiChange: (kpi: string) => void;
+  chartHeight?: number;
+  fillHeight?: boolean;
 }
 
 const KPI_TAB_LABELS: Record<string, string> = {
@@ -44,7 +47,7 @@ const nivoTheme = {
   },
 };
 
-export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarChartProps) {
+export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 148, fillHeight = false }: StackedBarChartProps) {
   const [rawData,  setRawData]  = useState<Record<string, unknown>[]>([]);
   const [plants,   setPlants]   = useState<string[]>([]);
   const [loading,  setLoading]  = useState(false);
@@ -138,9 +141,9 @@ export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarCha
   }, [ucl, mean, lcl]);
 
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] border border-gray-100/80">
+    <div className={cn("bg-white rounded-xl p-4 border border-slate-200 hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-shadow duration-200", fillHeight && "h-full flex flex-col")}>
       {/* Header */}
-      <div className="flex items-start justify-between mb-3">
+      <div className={cn("flex items-start justify-between mb-3", fillHeight && "shrink-0")}>
         <div>
           <h3 className="text-[13px] font-bold text-slate-800 tracking-tight">{t("chart_kpi_by_plant")}</h3>
           <p className="text-[10px] text-gray-400 mt-0.5 tracking-tight">{t("chart_subtitle_plant")}</p>
@@ -156,7 +159,7 @@ export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarCha
       </div>
 
       {/* KPI tabs */}
-      <div className="flex flex-wrap gap-1 mb-3">
+      <div className={cn("flex flex-wrap gap-1 mb-3", fillHeight && "shrink-0")}>
         {KPI_OPTIONS.map((opt) => (
           <button
             key={opt.value}
@@ -173,7 +176,7 @@ export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarCha
       </div>
 
       {/* Bar chart */}
-      <div style={{ height: 148 }}>
+      <div className={fillHeight ? "flex-1 min-h-0" : ""} style={fillHeight ? undefined : { height: chartHeight }}>
         {plantData.length === 0 ? (
           <div className="h-full flex items-center justify-center text-[11px] text-gray-300">No data available</div>
         ) : (
@@ -240,7 +243,7 @@ export function StackedBarChart({ filters, kpiType, onKpiChange }: StackedBarCha
 
       {/* Plant status list */}
       {plantData.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+        <div className={cn("mt-3 pt-3 border-t border-gray-100 space-y-1.5", fillHeight && "shrink-0")}>
           {plantData.map((p) => {
             const { label, cls } = getStatus(p.value);
             return (

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { MessageSquare, X, Send, Sparkles, Loader2, ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GROQ_MODELS, CHAT_DEFAULT_MODEL_ID, getModelConfig } from "@/lib/ai-models";
+import type { KPISnapshot } from "@/lib/diagnostic-prompt";
+import type { KPIAlert } from "@/lib/alerts";
 
 interface Message {
   role: "user" | "assistant";
@@ -11,7 +13,9 @@ interface Message {
 }
 
 interface FloatingChatProps {
-  filters?: { plant: string; startDate: string; endDate: string };
+  filters?: { plant: string; startDate: string; endDate: string; period?: string };
+  kpiSnapshot?: KPISnapshot;
+  alerts?: Pick<KPIAlert, "severity" | "kpi" | "message">[];
 }
 
 const QUICK_ACTIONS = [
@@ -125,7 +129,7 @@ const BADGE_CLS: Record<string, { bg: string; text: string }> = {
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
-export function FloatingChat({ filters }: FloatingChatProps) {
+export function FloatingChat({ filters, kpiSnapshot, alerts }: FloatingChatProps) {
   const [open,           setOpen]           = useState(false);
   const [messages,       setMessages]       = useState<Message[]>([]);
   const [input,          setInput]          = useState("");
@@ -198,10 +202,17 @@ export function FloatingChat({ filters }: FloatingChatProps) {
     setTyped("");
 
     try {
+      const MAX_HISTORY = 10;
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next, context: filters, model: selectedModel }),
+        body: JSON.stringify({
+          messages:    next.slice(-MAX_HISTORY),
+          context:     filters,
+          model:       selectedModel,
+          kpiSnapshot: kpiSnapshot ?? undefined,
+          alerts:      alerts?.length ? alerts : undefined,
+        }),
       });
 
       if (!res.ok || !res.body) throw new Error("Gagal mendapatkan respons");
