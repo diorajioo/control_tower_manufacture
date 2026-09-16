@@ -1,17 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { Bell, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ResponsiveBar } from "@nivo/bar";
+import { ResponsiveLine } from "@nivo/line";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const VA_COLOR   = "#215AA8";
 const NNVA_COLOR = "#d97706";
 const UNVA_COLOR = "#b91c1c";
+
+const nivoTheme = {
+  background: "transparent",
+  axis: {
+    ticks: {
+      line: { strokeWidth: 0 },
+      text: { fill: "#9ca3af", fontSize: 10, fontFamily: "inherit" },
+    },
+    domain: { line: { strokeWidth: 0 } },
+  },
+  grid: { line: { stroke: "#f3f4f6", strokeWidth: 1 } },
+  crosshair: { line: { stroke: "#215AA8", strokeWidth: 1, strokeOpacity: 0.3 } },
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const ID_DAYS   = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
@@ -144,30 +159,31 @@ const BOTTOM_SKUS = [
 
 // ── Chart components ───────────────────────────────────────────────────────────
 
+const STAGE_GROUP_DATA = [
+  { stage: "PO & Approval", value: 6.62, color: UNVA_COLOR, cls: "UNVA" },
+  { stage: "Produksi",       value: 2.84, color: VA_COLOR,   cls: "VA"   },
+  { stage: "QC & NDC",       value: 0.60, color: NNVA_COLOR, cls: "NNVA" },
+  { stage: "WIP Waiting",    value: 8.97, color: UNVA_COLOR, cls: "UNVA" },
+];
+
+const ACTIVITY_DATA = [
+  { stage: "WIP-PO",     value: 4.20, color: UNVA_COLOR },
+  { stage: "PO-Rel",     value: 2.42, color: UNVA_COLOR },
+  { stage: "Scheduling", value: 1.60, color: NNVA_COLOR },
+  { stage: "WIP-Kemas",  value: 2.80, color: UNVA_COLOR },
+  { stage: "Timbang",    value: 0.35, color: VA_COLOR   },
+  { stage: "Olah",       value: 0.61, color: VA_COLOR   },
+  { stage: "Kemas 1",    value: 0.60, color: VA_COLOR   },
+  { stage: "Kemas 2",    value: 1.36, color: VA_COLOR   },
+  { stage: "QC Hold",    value: 3.80, color: UNVA_COLOR },
+  { stage: "Lab Test",   value: 0.60, color: NNVA_COLOR },
+  { stage: "Transport",  value: 0.50, color: NNVA_COLOR },
+  { stage: "NDC-In",     value: 0.35, color: NNVA_COLOR },
+];
+
 function StageGroupChart() {
   const [view, setView] = useState<StageView>("group");
-
-  const groupData = [
-    { label: "PO & Approval", value: 6.62, color: UNVA_COLOR, cls: "UNVA" },
-    { label: "Produksi",       value: 2.84, color: VA_COLOR,   cls: "VA"   },
-    { label: "QC & NDC",       value: 0.60, color: NNVA_COLOR, cls: "NNVA" },
-    { label: "WIP Waiting",    value: 8.97, color: UNVA_COLOR, cls: "UNVA" },
-  ];
-
-  const activityData = [
-    { label: "WIP-PO",     value: 4.20, color: UNVA_COLOR },
-    { label: "PO-Rel",     value: 2.42, color: UNVA_COLOR },
-    { label: "Scheduling", value: 1.60, color: NNVA_COLOR },
-    { label: "WIP-Kemas",  value: 2.80, color: UNVA_COLOR },
-    { label: "Timbang",    value: 0.35, color: VA_COLOR   },
-    { label: "Olah",       value: 0.61, color: VA_COLOR   },
-    { label: "Kemas 1",    value: 0.60, color: VA_COLOR   },
-    { label: "Kemas 2",    value: 1.36, color: VA_COLOR   },
-    { label: "QC Hold",    value: 3.80, color: UNVA_COLOR },
-    { label: "Lab Test",   value: 0.60, color: NNVA_COLOR },
-    { label: "Transport",  value: 0.50, color: NNVA_COLOR },
-    { label: "NDC-In",     value: 0.35, color: NNVA_COLOR },
-  ];
+  const data = view === "group" ? STAGE_GROUP_DATA : ACTIVITY_DATA;
 
   return (
     <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
@@ -182,61 +198,39 @@ function StageGroupChart() {
           onChange={(k) => setView(k as StageView)}
         />
       </div>
-      <p className="text-[10.5px] text-slate-400 mb-3">YTD 2026 · All Plant · Median per stage dalam hari</p>
+      <p className="text-[10.5px] text-slate-400 mb-2">YTD 2026 · All Plant · Median per stage dalam hari</p>
       <VALegend />
-      <div className="mt-3">
-        {view === "group" ? (
-          <svg viewBox="0 0 700 210" style={{ width: "100%" }} fontFamily="inherit">
-            {[0, 3, 6, 9].map((v) => {
-              const y = 180 - (v / 10) * 150;
-              return (
-                <g key={v}>
-                  <line x1="44" y1={y} x2="690" y2={y} stroke="#f3f4f6" strokeWidth="1" />
-                  <text x="38" y={y + 3} textAnchor="end" fontSize="9" fill="#9ca3af">{v}</text>
-                </g>
-              );
-            })}
-            <line x1="44" y1="30" x2="44" y2="180" stroke="#f3f4f6" strokeWidth="1" />
-            {groupData.map((d, i) => {
-              const barW = 110, spacing = 158, x = 68 + i * spacing;
-              const h = (d.value / 10) * 150, y = 180 - h;
-              return (
-                <g key={d.label}>
-                  <rect x={x} y={y} width={barW} height={h} fill={d.color} rx="3" opacity="0.88" />
-                  <text x={x + barW / 2} y={y - 7} textAnchor="middle" fontSize="10.5" fill="#374151" fontWeight="700">{d.value}</text>
-                  <text x={x + barW / 2} y="195" textAnchor="middle" fontSize="9.5" fill="#374151" fontWeight="600">{d.label}</text>
-                  <text x={x + barW / 2} y="206" textAnchor="middle" fontSize="8" fill={d.color} fontWeight="700">{d.cls}</text>
-                </g>
-              );
-            })}
-          </svg>
-        ) : (
-          <div className="overflow-x-auto">
-            <svg viewBox="0 0 760 210" style={{ width: "100%", minWidth: 580 }} fontFamily="inherit">
-              {[0, 1, 2, 3, 4, 5].map((v) => {
-                const y = 180 - (v / 5) * 150;
-                return (
-                  <g key={v}>
-                    <line x1="44" y1={y} x2="750" y2={y} stroke="#f3f4f6" strokeWidth="1" />
-                    <text x="38" y={y + 3} textAnchor="end" fontSize="9" fill="#9ca3af">{v}</text>
-                  </g>
-                );
-              })}
-              <line x1="44" y1="30" x2="44" y2="180" stroke="#f3f4f6" strokeWidth="1" />
-              {activityData.map((d, i) => {
-                const barW = 38, spacing = 58, x = 54 + i * spacing;
-                const h = (d.value / 5) * 150, y = 180 - h;
-                return (
-                  <g key={d.label}>
-                    <rect x={x} y={y} width={barW} height={h} fill={d.color} rx="3" opacity="0.88" />
-                    <text x={x + barW / 2} y={y - 5} textAnchor="middle" fontSize="8.5" fill="#374151" fontWeight="700">{d.value}</text>
-                    <text x={x + barW / 2} y="196" textAnchor="middle" fontSize="7.5" fill="#64748b">{d.label}</text>
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
-        )}
+      <div style={{ height: 200 }} className="mt-3">
+        <ResponsiveBar
+          data={data}
+          keys={["value"]}
+          indexBy="stage"
+          theme={nivoTheme}
+          margin={{ top: 4, right: 16, bottom: 32, left: 36 }}
+          padding={view === "group" ? 0.48 : 0.36}
+          borderRadius={4}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          colors={(bar: any) => String(bar.data.color)}
+          colorBy="indexValue"
+          axisBottom={{ tickSize: 0, tickPadding: 8 }}
+          axisLeft={{
+            tickSize: 0,
+            tickPadding: 6,
+            tickValues: 4,
+            format: (v) => Number(v).toFixed(1),
+          }}
+          enableGridX={false}
+          enableLabel={false}
+          tooltip={({ indexValue, value, color }) => (
+            <div style={{
+              background: "#2A3D4A", borderRadius: 10, padding: "8px 13px",
+              fontSize: 11, minWidth: 140, boxShadow: "0 8px 32px rgba(0,0,0,0.28)", fontFamily: "inherit",
+            }}>
+              <p style={{ fontWeight: 700, marginBottom: 4, color: String(color) }}>{String(indexValue)}</p>
+              <p style={{ color: "#f1f5f9", margin: 0 }}>{Number(value).toFixed(2)} hari</p>
+            </div>
+          )}
+        />
       </div>
     </div>
   );
@@ -298,58 +292,75 @@ function SKUTable({ skus, title, variant }: {
 }
 
 function OnTimePOTrend() {
-  const data = [
-    { month: "Jan", pct: 72 }, { month: "Feb", pct: 68 }, { month: "Mar", pct: 75 },
-    { month: "Apr", pct: 71 }, { month: "Mei", pct: 78 }, { month: "Jun", pct: 82 },
-    { month: "Jul", pct: 79 },
+  const raw = [
+    { x: "Jan", y: 72 }, { x: "Feb", y: 68 }, { x: "Mar", y: 75 },
+    { x: "Apr", y: 71 }, { x: "Mei", y: 78 }, { x: "Jun", y: 82 },
+    { x: "Jul", y: 79 },
   ];
-  const avg = Math.round(data.reduce((s, d) => s + d.pct, 0) / data.length);
-  const W = 640, H = 160, padL = 44, padR = 48, padT = 22, padB = 28;
-  const cW = W - padL - padR, cH = H - padT - padB;
-  const minY = 60, maxY = 100;
-  const toX = (i: number) => padL + (i / (data.length - 1)) * cW;
-  const toY = (v: number) => padT + cH - ((v - minY) / (maxY - minY)) * cH;
-  const pts = data.map((d, i) => `${toX(i)},${toY(d.pct)}`).join(" ");
-  const avgY = toY(avg);
+  const avg = Math.round(raw.reduce((s, d) => s + d.y, 0) / raw.length);
+  const nivoData = useMemo(() => [{ id: "On-Time PO", color: VA_COLOR, data: raw }], []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const markers: any[] = useMemo(() => [{
+    axis: "y", value: avg,
+    lineStyle: { stroke: "#94a3b8", strokeDasharray: "5 3", strokeWidth: 1.5 },
+    legend: `avg ${avg}%`,
+    legendOffsetX: -8, legendOffsetY: -8,
+    textStyle: { fill: "#94a3b8", fontSize: 9, fontFamily: "inherit" },
+  }], [avg]);
 
   return (
     <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
-      <ChartTitle label="On-Time PO Trend" badge="Monthly · 2026" />
-      <p className="text-[10.5px] text-slate-400 mb-3">% PO yang delivered on-time dari target NDC · Rata-rata {avg}%</p>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }} fontFamily="inherit">
-        {[60, 70, 80, 90, 100].map((v) => {
-          const y = toY(v);
-          return (
-            <g key={v}>
-              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#f3f4f6" strokeWidth="1" />
-              <text x={padL - 4} y={y + 3} textAnchor="end" fontSize="8.5" fill="#9ca3af">{v}%</text>
-            </g>
-          );
-        })}
-        <line x1={padL} y1={avgY} x2={W - padR} y2={avgY} stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="5,4" />
-        <text x={W - padR + 4} y={avgY + 3} fontSize="8.5" fill="#94a3b8" fontWeight="600">avg {avg}%</text>
-        <defs>
-          <linearGradient id="onTimeGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={VA_COLOR} stopOpacity="0.13" />
-            <stop offset="100%" stopColor={VA_COLOR} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polygon points={`${toX(0)},${padT + cH} ${pts} ${toX(data.length - 1)},${padT + cH}`} fill="url(#onTimeGrad)" />
-        <polyline points={pts} fill="none" stroke={VA_COLOR} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-        {data.map((d, i) => (
-          <g key={d.month}>
-            <circle cx={toX(i)} cy={toY(d.pct)} r="4" fill="white" stroke={VA_COLOR} strokeWidth="2" />
-            <text x={toX(i)} y={toY(d.pct) - 9} textAnchor="middle" fontSize="9" fill={VA_COLOR} fontWeight="700">{d.pct}%</text>
-            <text x={toX(i)} y={H - 4} textAnchor="middle" fontSize="9" fill="#9ca3af">{d.month}</text>
-          </g>
-        ))}
-      </svg>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">On-Time PO Trend</span>
+        <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold">Monthly · 2026</span>
+      </div>
+      <p className="text-[10.5px] text-slate-400 mb-2">% PO delivered on-time dari target NDC · Rata-rata {avg}%</p>
+      <div style={{ height: 180 }}>
+        <ResponsiveLine
+          data={nivoData}
+          theme={nivoTheme}
+          margin={{ top: 4, right: 16, bottom: 24, left: 36 }}
+          xScale={{ type: "point" }}
+          yScale={{ type: "linear", min: 60, max: 100 }}
+          curve="monotoneX"
+          axisBottom={{ tickSize: 0, tickPadding: 8 }}
+          axisLeft={{
+            tickSize: 0, tickPadding: 6, tickValues: 5,
+            format: (v) => `${v}%`,
+          }}
+          gridYValues={5}
+          enablePoints={true}
+          pointSize={7}
+          pointColor="white"
+          pointBorderWidth={2}
+          pointBorderColor={{ from: "serieColor" }}
+          enableArea={true}
+          areaOpacity={0.08}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          colors={(serie: any) => String(serie.color)}
+          lineWidth={2.5}
+          markers={markers}
+          useMesh={true}
+          enableCrosshair={false}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          tooltip={({ point }: any) => (
+            <div style={{
+              background: "#2A3D4A", borderRadius: 10, padding: "8px 13px",
+              fontSize: 11, minWidth: 120, boxShadow: "0 8px 32px rgba(0,0,0,0.28)", fontFamily: "inherit",
+            }}>
+              <p style={{ color: "#64748b", margin: "0 0 4px", fontSize: 10 }}>{String(point.data.x)}</p>
+              <p style={{ color: "#f1f5f9", margin: 0, fontWeight: 700 }}>{Number(point.data.y).toFixed(0)}%</p>
+            </div>
+          )}
+        />
+      </div>
     </div>
   );
 }
 
 function LTParetoSKU() {
-  const raw = [
+  const sorted = [
     { name: "OMG LC 14",   lt: 26.73, color: UNVA_COLOR },
     { name: "OMG LC 15",   lt: 23.98, color: UNVA_COLOR },
     { name: "OMG LC 13",   lt: 23.72, color: UNVA_COLOR },
@@ -360,57 +371,91 @@ function LTParetoSKU() {
     { name: "KAHF FW",     lt: 12.65, color: "#10b981"  },
     { name: "EMINA BN",    lt: 12.57, color: "#10b981"  },
     { name: "KAHF Scrub",  lt: 12.19, color: "#10b981"  },
-  ].sort((a, b) => b.lt - a.lt);
+  ];
 
-  const total = raw.reduce((s, d) => s + d.lt, 0);
-  let cum = 0;
-  const data = raw.map((d) => { cum += (d.lt / total) * 100; return { ...d, cum }; });
+  const total = sorted.reduce((s, d) => s + d.lt, 0);
+  const maxLT = sorted[0].lt * 1.12;
+  let cumSum = 0;
+  const data = useMemo(() => sorted.map((d) => {
+    cumSum += (d.lt / total) * 100;
+    return { ...d, cumPct: Math.round(cumSum), cumNorm: (cumSum / 100) * maxLT };
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const W = 680, H = 200, padL = 44, padR = 44, padT = 18, padB = 32;
-  const cW = W - padL - padR, cH = H - padT - padB;
-  const n = data.length, barW = (cW / n) * 0.62;
-  const maxLT = raw[0].lt * 1.15;
-  const toBarX  = (i: number) => padL + (i / n) * cW + (cW / n) * 0.19;
-  const toLineX = (i: number) => padL + ((i + 0.5) / n) * cW;
-  const toLineY = (v: number) => padT + cH - (v / 100) * cH;
-  const toBarH  = (lt: number) => (lt / maxLT) * cH;
-  const linePts = data.map((d, i) => `${toLineX(i)},${toLineY(d.cum)}`).join(" ");
+  // Custom layer: cumulative % line drawn over bars using bar coords
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const CumulativeLine = useCallback((props: any) => {
+    const { bars, yScale } = props;
+    if (!bars || !yScale || bars.length === 0) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pts = bars.map((bar: any, i: number) => ({
+      x: bar.x + bar.width / 2,
+      y: yScale(data[i]?.cumNorm ?? 0),
+      pct: data[i]?.cumPct ?? 0,
+    }));
+    const pathD = pts.map((p: {x:number;y:number;pct:number}, i: number) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+    return (
+      <g>
+        <path d={pathD} fill="none" stroke="#f97316" strokeWidth="2" strokeLinejoin="round" />
+        {pts.map((p: {x:number;y:number;pct:number}, i: number) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="3" fill="white" stroke="#f97316" strokeWidth="1.5" />
+            {(i === 0 || i === 3 || i === 6 || i === 9) && (
+              <text x={p.x} y={p.y - 7} textAnchor="middle" fontSize="8" fill="#f97316" fontWeight="600">{p.pct}%</text>
+            )}
+          </g>
+        ))}
+      </g>
+    );
+  }, [data]);
+
+  const markers = useMemo(() => [{
+    axis: "y" as const, value: 0.8 * maxLT,
+    lineStyle: { stroke: "#94a3b8", strokeDasharray: "4 3", strokeWidth: 1.5 },
+    legend: "80%", legendOffsetX: -8, legendOffsetY: -8,
+    textStyle: { fill: "#94a3b8", fontSize: 9, fontFamily: "inherit" },
+  }], [maxLT]);
 
   return (
     <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
-      <ChartTitle label="Lead Time Pareto per SKU" badge="Top 10 · YTD 2026" />
-      <p className="text-[10.5px] text-slate-400 mb-3">SKU diurutkan dari lead time tertinggi · Garis oranye = kumulatif %</p>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%" }} fontFamily="inherit">
-        {[0, 10, 20, 30].map((v) => {
-          const y = padT + cH - (v / maxLT) * cH;
-          return (
-            <g key={v}>
-              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#f3f4f6" strokeWidth="1" />
-              <text x={padL - 4} y={y + 3} textAnchor="end" fontSize="8.5" fill="#9ca3af">{v}</text>
-            </g>
-          );
-        })}
-        {[0, 25, 50, 75, 100].map((v) => (
-          <text key={v} x={W - padR + 4} y={toLineY(v) + 3} fontSize="8.5" fill="#9ca3af">{v}%</text>
-        ))}
-        <line x1={padL} y1={toLineY(80)} x2={W - padR} y2={toLineY(80)} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4,3" />
-        <text x={W - padR + 4} y={toLineY(80) - 3} fontSize="7.5" fill="#94a3b8">80%</text>
-        {data.map((d, i) => {
-          const h = toBarH(d.lt), x = toBarX(i), y = padT + cH - h;
-          return (
-            <g key={d.name}>
-              <rect x={x} y={y} width={barW} height={h} fill={d.color} rx="2" opacity="0.85" />
-              <text x={x + barW / 2} y={y - 4} textAnchor="middle" fontSize="8" fill="#374151" fontWeight="600">{d.lt}</text>
-              <text x={x + barW / 2} y={H - 6} textAnchor="middle" fontSize="7.5" fill="#64748b">{d.name}</text>
-            </g>
-          );
-        })}
-        <polyline points={linePts} fill="none" stroke="#f97316" strokeWidth="2" strokeLinejoin="round" />
-        {data.map((d, i) => (
-          <circle key={i} cx={toLineX(i)} cy={toLineY(d.cum)} r="3" fill="white" stroke="#f97316" strokeWidth="1.5" />
-        ))}
-      </svg>
-      <div className="flex flex-wrap gap-4 mt-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">Lead Time Pareto per SKU</span>
+        <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold">Top 10 · YTD 2026</span>
+      </div>
+      <p className="text-[10.5px] text-slate-400 mb-2">SKU diurutkan dari lead time tertinggi · Garis oranye = kumulatif %</p>
+      <div style={{ height: 200 }}>
+        <ResponsiveBar
+          data={data}
+          keys={["lt"]}
+          indexBy="name"
+          theme={nivoTheme}
+          margin={{ top: 16, right: 16, bottom: 32, left: 36 }}
+          padding={0.36}
+          borderRadius={3}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          colors={(bar: any) => String(bar.data.color)}
+          colorBy="indexValue"
+          axisBottom={{ tickSize: 0, tickPadding: 8 }}
+          axisLeft={{
+            tickSize: 0, tickPadding: 6, tickValues: 4,
+            format: (v) => `${Number(v).toFixed(0)}d`,
+          }}
+          enableGridX={false}
+          enableLabel={false}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          markers={markers as any}
+          layers={["grid", "axes", "bars", CumulativeLine, "markers"]}
+          tooltip={({ indexValue, value, color }) => (
+            <div style={{
+              background: "#2A3D4A", borderRadius: 10, padding: "8px 13px",
+              fontSize: 11, minWidth: 140, boxShadow: "0 8px 32px rgba(0,0,0,0.28)", fontFamily: "inherit",
+            }}>
+              <p style={{ fontWeight: 700, marginBottom: 4, color: String(color) }}>{String(indexValue)}</p>
+              <p style={{ color: "#f1f5f9", margin: 0 }}>{Number(value).toFixed(2)} hari</p>
+            </div>
+          )}
+        />
+      </div>
+      <div className="flex flex-wrap gap-4 mt-1">
         {([
           [UNVA_COLOR, "UNVA (>20 hari)"],
           [NNVA_COLOR, "NNVA (13–20 hari)"],
@@ -496,7 +541,7 @@ function TacticalView() {
       {/* Stage chart */}
       <div className="px-5 mb-4">
         <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <div>
               <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">Lead Time per Stage</span>
               <p className="text-[10.5px] text-slate-400 mt-0.5">45 stage · klasifikasi VA / NNVA / UNVA</p>
@@ -512,31 +557,56 @@ function TacticalView() {
             />
           </div>
           <VALegend />
-          <div className="overflow-x-auto mt-3">
-            <svg viewBox="0 0 820 210" style={{ width: "100%", minWidth: 560 }} fontFamily="inherit">
-              <line x1="52" y1="10" x2="52" y2="180" stroke="#f3f4f6" strokeWidth="1" />
-              <line x1="52" y1="180" x2="810" y2="180" stroke="#f3f4f6" strokeWidth="1" />
-              {[0, 2, 4, 6, 8].map((v, i) => {
-                const y = 180 - i * 42;
-                return <g key={v}><line x1="52" y1={y} x2="810" y2={y} stroke="#f3f4f6" strokeWidth="1" /><text x="46" y={y + 3} textAnchor="end" fontSize="9" fill="#9ca3af">{v}</text></g>;
-              })}
-              {[
-                [57, 150, UNVA_COLOR], [91, 130, UNVA_COLOR], [125, 105, UNVA_COLOR], [159, 85, UNVA_COLOR],
-                [193, 67, UNVA_COLOR], [227, 57, UNVA_COLOR], [261, 47, UNVA_COLOR], [295, 37, UNVA_COLOR],
-                [329, 55, NNVA_COLOR], [363, 47, NNVA_COLOR], [397, 40, NNVA_COLOR], [431, 35, NNVA_COLOR],
-                [465, 30, NNVA_COLOR], [499, 25, NNVA_COLOR],
-                [533, 37, VA_COLOR],   [567, 32, VA_COLOR],   [601, 27, VA_COLOR],   [635, 23, VA_COLOR],
-                [669, 18, VA_COLOR],   [703, 14, VA_COLOR],
-              ].map(([x, h, color], i) => (
-                <rect key={i} x={Number(x)} y={180 - Number(h)} width="28" height={Number(h)} fill={String(color)} rx="2" opacity="0.88" />
-              ))}
-              {["WIP-PO","QC Hold","PO-Rel","Sched","WIP-Kemas","Timbang","Transport","GR-Delay",
-                "Inspect","Lab Test","NDC-In","Release","Quarantine","Sampling",
-                "Olah","Kemas","Kemas 2","NDC-QC","Dispensing","IPC"
-              ].map((lbl, i) => (
-                <text key={lbl} x={71 + i * 34} y="197" textAnchor="middle" fontSize="7" fill="#64748b">{lbl}</text>
-              ))}
-            </svg>
+          <div style={{ height: 210 }} className="mt-3">
+            <ResponsiveBar
+              data={[
+                { stage: "WIP-PO",      value: 5.6,  color: UNVA_COLOR },
+                { stage: "QC Hold",     value: 4.8,  color: UNVA_COLOR },
+                { stage: "PO-Rel",      value: 3.9,  color: UNVA_COLOR },
+                { stage: "Sched",       value: 3.1,  color: UNVA_COLOR },
+                { stage: "WIP-Kemas",   value: 2.5,  color: UNVA_COLOR },
+                { stage: "Timbang",     value: 2.1,  color: UNVA_COLOR },
+                { stage: "Transport",   value: 1.7,  color: UNVA_COLOR },
+                { stage: "GR-Delay",    value: 1.4,  color: UNVA_COLOR },
+                { stage: "Inspect",     value: 2.0,  color: NNVA_COLOR },
+                { stage: "Lab Test",    value: 1.7,  color: NNVA_COLOR },
+                { stage: "NDC-In",      value: 1.5,  color: NNVA_COLOR },
+                { stage: "Release",     value: 1.3,  color: NNVA_COLOR },
+                { stage: "Quarantine",  value: 1.1,  color: NNVA_COLOR },
+                { stage: "Sampling",    value: 0.9,  color: NNVA_COLOR },
+                { stage: "Olah",        value: 1.4,  color: VA_COLOR   },
+                { stage: "Kemas",       value: 1.2,  color: VA_COLOR   },
+                { stage: "Kemas 2",     value: 1.0,  color: VA_COLOR   },
+                { stage: "NDC-QC",      value: 0.8,  color: VA_COLOR   },
+                { stage: "Dispensing",  value: 0.7,  color: VA_COLOR   },
+                { stage: "IPC",         value: 0.5,  color: VA_COLOR   },
+              ]}
+              keys={["value"]}
+              indexBy="stage"
+              theme={nivoTheme}
+              margin={{ top: 4, right: 16, bottom: 36, left: 36 }}
+              padding={0.3}
+              borderRadius={3}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              colors={(bar: any) => String(bar.data.color)}
+              colorBy="indexValue"
+              axisBottom={{ tickSize: 0, tickPadding: 8, tickRotation: -30 }}
+              axisLeft={{
+                tickSize: 0, tickPadding: 6, tickValues: 4,
+                format: (v) => Number(v).toFixed(1),
+              }}
+              enableGridX={false}
+              enableLabel={false}
+              tooltip={({ indexValue, value, color }) => (
+                <div style={{
+                  background: "#2A3D4A", borderRadius: 10, padding: "8px 13px",
+                  fontSize: 11, minWidth: 140, boxShadow: "0 8px 32px rgba(0,0,0,0.28)", fontFamily: "inherit",
+                }}>
+                  <p style={{ fontWeight: 700, marginBottom: 4, color: String(color) }}>{String(indexValue)}</p>
+                  <p style={{ color: "#f1f5f9", margin: 0 }}>{Number(value).toFixed(2)} hari</p>
+                </div>
+              )}
+            />
           </div>
         </div>
       </div>
@@ -544,42 +614,82 @@ function TacticalView() {
       {/* Trend line chart */}
       <div className="px-5 pb-5">
         <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
-          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">Lead Time Stages Trend</span>
-          <p className="text-[10.5px] text-slate-400 mb-3 mt-0.5">Median per stage, mingguan · Jan – Jul 2026</p>
-          <svg viewBox="0 0 760 210" style={{ width: "100%" }} fontFamily="inherit">
-            <line x1="48" y1="15" x2="48" y2="180" stroke="#f3f4f6" strokeWidth="1" />
-            <line x1="48" y1="180" x2="745" y2="180" stroke="#f3f4f6" strokeWidth="1" />
-            {[0, 2, 4, 6, 8, 10, 12].map((v, i) => {
-              const y = 180 - i * 27;
-              return <g key={v}><line x1="48" y1={y} x2="745" y2={y} stroke="#f3f4f6" strokeWidth="1" /><text x="42" y={y + 3} textAnchor="end" fontSize="8.5" fill="#9ca3af">{v}</text></g>;
-            })}
-            <line x1="48" y1="113" x2="745" y2="113" stroke="#9ca3af" strokeWidth="1.5" strokeDasharray="5,4" />
-            <polyline points="73,178 123,179 173,178 223,179 273,178 323,179 373,178 423,179 473,178 523,179 573,178 623,179 673,178 723,178" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinejoin="round" />
-            <polyline points="73,177 123,178 173,177 223,178 273,177 323,178 373,177 423,178 473,177 523,178 573,177 623,178 673,177 723,177" fill="none" stroke={NNVA_COLOR} strokeWidth="2" strokeLinejoin="round" strokeDasharray="4,3" />
-            <polyline points="73,28 123,17 173,36 223,56 273,47 323,66 373,57 423,53 473,76 523,84 573,108 623,111 673,99 723,7" fill="none" stroke={UNVA_COLOR} strokeWidth="2.5" strokeLinejoin="round" />
-            {[73,123,173,223,273,323,373,423,473,523,573,623,673,723].map((cx, i) => (
-              <circle key={i} cx={cx} cy={[28,17,36,56,47,66,57,53,76,84,108,111,99,7][i]} r="3.5" fill={UNVA_COLOR} />
-            ))}
-            <polyline points="73,121 123,105 173,121 223,79 273,108 323,92 373,23 423,105 473,0 523,16 573,88 623,95 673,87 723,83" fill="none" stroke={VA_COLOR} strokeWidth="2.5" strokeLinejoin="round" />
-            {[73,123,173,223,273,323,373,423,473,523,573,623,673,723].map((cx, i) => (
-              <circle key={i} cx={cx} cy={[121,105,121,79,108,92,23,105,0,16,88,95,87,83][i]} r="3.5" fill={VA_COLOR} />
-            ))}
-            {["Jan 12","Jan 26","Feb 9","Feb 23","Mar 9","Mar 23","Apr 6","Apr 20","Mei 4","Mei 18","Jun 1","Jun 15","Jun 29","Jul 13"].map((lbl, i) => (
-              <text key={lbl} x={73 + i * 50} y="197" textAnchor="middle" fontSize="8" fill="#64748b">{lbl}</text>
-            ))}
-          </svg>
-          <div className="flex items-center gap-5 justify-center mt-3 flex-wrap">
-            {([
-              [VA_COLOR,   "VA (PO)"],
-              [UNVA_COLOR, "UNVA (WIP after Rework)"],
-              ["#22c55e",  "Filling 2"],
-              [NNVA_COLOR, "NNVA (Manpack)"],
-              ["#9ca3af",  "Avg Standard"],
-            ] as [string, string][]).map(([c, l]) => (
-              <div key={l} className="flex items-center gap-1.5 text-[10.5px] text-slate-500">
-                <span className="w-5 h-[2.5px] rounded-sm inline-block" style={{ background: c }} />{l}
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">Lead Time Stages Trend</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {([
+                [VA_COLOR,   "VA (PO)"],
+                [UNVA_COLOR, "UNVA (WIP Rework)"],
+                ["#22c55e",  "Filling 2"],
+                [NNVA_COLOR, "NNVA (Manpack)"],
+              ] as [string, string][]).map(([c, l]) => (
+                <div key={l} className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                  <span className="w-4 h-0.5 rounded-sm inline-block" style={{ background: c }} />{l}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ height: 200 }}>
+            <ResponsiveLine
+              data={[
+                { id: "VA (PO)",        color: VA_COLOR,   data: [
+                  {x:"W2",y:2.2},{x:"W4",y:2.8},{x:"W6",y:2.2},{x:"W8",y:3.7},{x:"W10",y:2.7},
+                  {x:"W12",y:3.3},{x:"W14",y:5.8},{x:"W16",y:2.8},{x:"W18",y:6.7},{x:"W20",y:6.1},
+                  {x:"W22",y:3.4},{x:"W24",y:3.1},{x:"W26",y:3.4},{x:"W28",y:3.6},
+                ]},
+                { id: "UNVA (WIP Rework)", color: UNVA_COLOR, data: [
+                  {x:"W2",y:5.6},{x:"W4",y:6.0},{x:"W6",y:5.3},{x:"W8",y:4.6},{x:"W10",y:4.9},
+                  {x:"W12",y:4.2},{x:"W14",y:4.6},{x:"W16",y:4.7},{x:"W18",y:3.9},{x:"W20",y:3.6},
+                  {x:"W22",y:2.7},{x:"W24",y:2.6},{x:"W26",y:3.0},{x:"W28",y:6.4},
+                ]},
+                { id: "Filling 2",      color: "#22c55e",  data: [
+                  {x:"W2",y:0.1},{x:"W4",y:0.1},{x:"W6",y:0.1},{x:"W8",y:0.1},{x:"W10",y:0.1},
+                  {x:"W12",y:0.1},{x:"W14",y:0.1},{x:"W16",y:0.1},{x:"W18",y:0.1},{x:"W20",y:0.1},
+                  {x:"W22",y:0.1},{x:"W24",y:0.1},{x:"W26",y:0.1},{x:"W28",y:0.1},
+                ]},
+                { id: "NNVA (Manpack)", color: NNVA_COLOR, data: [
+                  {x:"W2",y:0.8},{x:"W4",y:0.7},{x:"W6",y:0.8},{x:"W8",y:0.7},{x:"W10",y:0.8},
+                  {x:"W12",y:0.7},{x:"W14",y:0.8},{x:"W16",y:0.7},{x:"W18",y:0.8},{x:"W20",y:0.7},
+                  {x:"W22",y:0.8},{x:"W24",y:0.7},{x:"W26",y:0.8},{x:"W28",y:0.8},
+                ]},
+              ]}
+              theme={nivoTheme}
+              margin={{ top: 4, right: 16, bottom: 24, left: 36 }}
+              xScale={{ type: "point" }}
+              yScale={{ type: "linear", min: "auto", max: "auto", stacked: false }}
+              curve="linear"
+              axisBottom={{ tickSize: 0, tickPadding: 8 }}
+              axisLeft={{
+                tickSize: 0, tickPadding: 6, tickValues: 5,
+                format: (v) => Number(v).toFixed(1),
+              }}
+              gridYValues={5}
+              enablePoints={false}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              colors={(serie: any) => String(serie.color)}
+              lineWidth={2.5}
+              useMesh={true}
+              crosshairType="x"
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              markers={[{
+                axis: "y", value: 5,
+                lineStyle: { stroke: "#9ca3af", strokeDasharray: "5 3", strokeWidth: 1.5 },
+                legend: "Avg Standard",
+                legendOffsetX: -8, legendOffsetY: -8,
+                textStyle: { fill: "#9ca3af", fontSize: 9, fontFamily: "inherit" },
+              }] as any}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              tooltip={({ point }: any) => (
+                <div style={{
+                  background: "#2A3D4A", borderRadius: 10, padding: "8px 13px",
+                  fontSize: 11, minWidth: 140, boxShadow: "0 8px 32px rgba(0,0,0,0.28)", fontFamily: "inherit",
+                }}>
+                  <p style={{ color: "#64748b", margin: "0 0 4px", fontSize: 10 }}>{String(point.data.x)}</p>
+                  <p style={{ color: String(point.serieColor), fontWeight: 700, margin: 0 }}>{String(point.serieId)}</p>
+                  <p style={{ color: "#f1f5f9", margin: "2px 0 0" }}>{Number(point.data.y).toFixed(2)} hari</p>
+                </div>
+              )}
+            />
           </div>
         </div>
       </div>
