@@ -31,7 +31,7 @@ Real-time visibility langsung dari Snowflake: data tidak melewati proses manual,
 |---|---|---|
 | `/` | Live | Redirect: auth → `/dashboard`, no-auth → `/login` |
 | `/login` | Live | Azure AD login, typewriter animation, floating KPI cards |
-| `/dashboard` | Live | Main KPI dashboard — Strategic & Tactical views, Monitor Mode, TV Mode |
+| `/dashboard` | Live | Strategic view — Main KPI dashboard, Monitor Mode, TV Mode |
 | `/lead-time` | Live (mock data) | Lead Time deep-dive — 3 views: Strategic / Tactical / Operational |
 | `/dashboard/settings` | Live | Notifikasi Teams, alert thresholds, display preferences |
 | `/dashboard/output` | Placeholder | Nav link exists, halaman belum dibangun |
@@ -39,9 +39,8 @@ Real-time visibility langsung dari Snowflake: data tidak melewati proses manual,
 | `/dashboard/oee` | Placeholder | Nav link exists, halaman belum dibangun |
 | `/dashboard/energy` | Placeholder | Nav link exists, halaman belum dibangun |
 
-### `/dashboard` — Main Dashboard
-- **Strategic view**: Hero OEE card, 4 Operation KPIs (Lead Time/Yield/RFT/Output), Equipment & People (OEE/OPE/Productivity), Trend charts, AI Summary
-- **Tactical view**: Abbreviated layout for operation floors
+### `/dashboard` — Strategic View
+- Hero OEE card, 4 Operation KPIs (Lead Time/Yield/RFT/Output), Equipment & People (OEE/OPE/Productivity), Trend charts, AI Summary
 - **Monitor Mode**: Fullscreen display, auto-rotating sections (OKPIs → Equipment → Trends)
 - **TV Mode**: Auto-cycles every 20 seconds
 - Data: live Snowflake via `/api/dashboard/kpi` and `/api/dashboard/trends`

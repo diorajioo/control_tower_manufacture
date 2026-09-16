@@ -329,7 +329,6 @@ export default function DashboardPage() {
   const [plants,        setPlants]        = useState<string[]>(["All Plant"]);
   const [loading,       setLoading]       = useState(true);
   const [lastUpdated,   setLastUpdated]   = useState<Date>();
-  const [activeView,    setActiveView]    = useState<"strategic" | "tactical">("strategic");
   const [alerts,        setAlerts]        = useState<KPIAlert[]>([]);
   const [dismissedIds,  setDismissedIds]  = useState<Set<string>>(new Set());
   const [alertPanelOpen, setAlertPanelOpen] = useState(false);
@@ -586,8 +585,9 @@ export default function DashboardPage() {
           <Header
             plants={plants}
             onFilterChange={handleFilterChange}
-            activeView={activeView}
-            onViewChange={(v) => setActiveView(v as "strategic" | "tactical")}
+            views={[]}
+            activeView=""
+            onViewChange={() => {}}
             onRefresh={handleRefresh}
             isLoading={loading}
             lastUpdated={lastUpdated}
@@ -632,9 +632,8 @@ export default function DashboardPage() {
             />
           )}
 
-          {/* ── Hero OEE (Strategic view only) ─────────────────────────── */}
-          {activeView === "strategic" && (
-            loading ? (
+          {/* ── Hero OEE ────────────────────────────────────────────────── */}
+          {loading ? (
               <div className="mb-4 rounded-xl border border-slate-200 bg-white h-[92px] animate-pulse" />
             ) : kpi ? (() => {
               const oeeVal  = kpi.oee?.value       ?? 0;
@@ -923,13 +922,13 @@ export default function DashboardPage() {
           {/* ── Equipment & People ──────────────────────────────────────── */}
           <SectionDivider label={t("section_equipment_people")} accentColor="#8b5cf6" />
 
-          <div className={cn("grid grid-cols-1 gap-[14px] mb-5", activeView === "strategic" ? "lg:grid-cols-2" : "lg:grid-cols-3")}>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-[14px] mb-5">
             {loading ? (
-              Array.from({ length: activeView === "strategic" ? 2 : 3 }).map((_, i) => <SkeletonCard key={i} />)
+              Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
             ) : (
               <>
-                {/* OEE — Tactical only; Strategic shows Hero OEE card above */}
-                {activeView !== "strategic" && <KPICard
+                {/* OEE */}
+                <KPICard
                   dimmed={highlightedKpi !== null && highlightedKpi !== "oee"}
                   flashKey={refreshCount}
                   title={t("card_oee")}
@@ -975,7 +974,7 @@ export default function DashboardPage() {
                       </div>
                     </>
                   )}
-                </KPICard>}
+                </KPICard>
 
                 {/* OPE */}
                 <KPICard
