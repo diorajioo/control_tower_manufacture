@@ -810,11 +810,17 @@ const LEAD_TIME_VIEWS = [
 export default function LeadTimePage() {
   const { status } = useSession();
   const router = useRouter();
-  const [persona, setPersona] = useState<Persona>("strategic");
+  const [persona,       setPersona]     = useState<Persona>("strategic");
+  const [lastUpdated,   setLastUpdated] = useState<Date>();
+  const [isMonitorMode, setMonitorMode] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
+
+  useEffect(() => {
+    setLastUpdated(new Date());
+  }, []);
 
   if (status === "loading") {
     return (
@@ -826,18 +832,24 @@ export default function LeadTimePage() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F4F6F9]">
-      <Sidebar />
+      {!isMonitorMode && <Sidebar />}
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header
-          plants={["All Plant", "Plant 1", "Plant 2", "NDC"]}
-          onFilterChange={() => {}}
-          views={LEAD_TIME_VIEWS}
-          activeView={persona}
-          onViewChange={(v) => setPersona(v as Persona)}
-          onRefresh={() => {}}
-          isLoading={false}
-        />
+        {!isMonitorMode && (
+          <Header
+            plants={["All Plant", "Plant 1", "Plant 2", "NDC"]}
+            onFilterChange={() => {}}
+            views={LEAD_TIME_VIEWS}
+            activeView={persona}
+            onViewChange={(v) => setPersona(v as Persona)}
+            onRefresh={() => setLastUpdated(new Date())}
+            isLoading={false}
+            lastUpdated={lastUpdated}
+            alertCount={0}
+            alerts={[]}
+            onMonitorMode={() => setMonitorMode(true)}
+          />
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto min-h-0">
@@ -845,9 +857,21 @@ export default function LeadTimePage() {
           {persona === "tactical"    && <TacticalView />}
           {persona === "operational" && <OperationalView />}
         </div>
+
+        {isMonitorMode && (
+          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 bg-[#0f172a]/85 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl select-none">
+            <span className="text-[11px] font-semibold text-white/70">Monitor Mode</span>
+            <button
+              onClick={() => setMonitorMode(false)}
+              className="text-[11px] font-semibold text-white px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              Exit
+            </button>
+          </div>
+        )}
       </div>
 
-      <FloatingChat />
+      {!isMonitorMode && <FloatingChat />}
     </div>
   );
 }
