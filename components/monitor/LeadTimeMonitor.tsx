@@ -102,17 +102,48 @@ export function LeadTimeMonitor() {
         />
       </div>
 
-      {/* Charts + right panel */}
+      {/* VA / NNVA / UNVA breakdown — compact row like Strategic's Equipment section */}
+      <div className="grid grid-cols-3 gap-2 shrink-0">
+        {[
+          { label: "VA",   days: VA_DAYS,   color: VA_COLOR   },
+          { label: "NNVA", days: NNVA_DAYS, color: NNVA_COLOR },
+          { label: "UNVA", days: UNVA_DAYS, color: UNVA_COLOR },
+        ].map(({ label, days, color }) => (
+          <div key={label} className="bg-white rounded-xl border border-slate-200 flex overflow-hidden">
+            <div className="w-[5px] shrink-0" style={{ background: color }} />
+            <div className="flex-1 px-3 py-2 min-w-0">
+              <p className="text-[9.5px] font-bold uppercase tracking-[0.09em] text-slate-400 mb-1">{label}</p>
+              <div className="flex items-baseline gap-1 leading-none">
+                <span className="text-[1.75rem] font-bold tabular-nums tracking-tight leading-none" style={{ color }}>{days.toFixed(2)}</span>
+                <span className="text-[11px] font-medium text-slate-400 ml-0.5">hari</span>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-0.5">{(days / TOTAL_LT * 100).toFixed(1)}% of total</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Stage chart + Top 5 SKU — fills remaining space */}
       <div className="flex-1 min-h-0 grid grid-cols-2 gap-2.5">
 
         {/* Stage breakdown chart */}
         <div className="bg-white rounded-xl border border-slate-200 flex flex-col overflow-hidden p-3">
           <div className="flex items-center justify-between mb-2 shrink-0">
-            <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">
-              Lead Time per Stage
-            </span>
-            <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
-              {([["group", "Stage Group"], ["activity", "Activity"]] as const).map(([k, l]) => (
+            <div className="flex items-center gap-3">
+              <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">
+                Lead Time per Stage
+              </span>
+              <div className="flex gap-2">
+                {([[VA_COLOR, "VA"], [NNVA_COLOR, "NNVA"], [UNVA_COLOR, "UNVA"]] as [string, string][]).map(([c, l]) => (
+                  <div key={l} className="flex items-center gap-1 text-[10px] text-slate-500">
+                    <span className="w-2 h-2 rounded-[2px] shrink-0" style={{ background: c }} />
+                    {l}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5 shrink-0">
+              {([["group", "Group"], ["activity", "Activity"]] as const).map(([k, l]) => (
                 <button
                   key={k}
                   onClick={() => setStageView(k)}
@@ -125,14 +156,6 @@ export function LeadTimeMonitor() {
                 </button>
               ))}
             </div>
-          </div>
-          <div className="flex gap-3 mb-2 shrink-0">
-            {([[VA_COLOR, "VA"], [NNVA_COLOR, "NNVA"], [UNVA_COLOR, "UNVA"]] as [string, string][]).map(([c, l]) => (
-              <div key={l} className="flex items-center gap-1 text-[10px] text-slate-500">
-                <span className="w-2 h-2 rounded-[2px] shrink-0" style={{ background: c }} />
-                {l}
-              </div>
-            ))}
           </div>
           <div className="flex-1 min-h-0">
             <ResponsiveBar
@@ -160,35 +183,15 @@ export function LeadTimeMonitor() {
           </div>
         </div>
 
-        {/* Right: VA breakdown + Top 5 SKU */}
-        <div className="flex flex-col gap-2.5 min-h-0 overflow-hidden">
-
-          {/* VA breakdown */}
-          <div className="grid grid-cols-3 gap-2 shrink-0">
-            {[
-              { label: "VA",   days: VA_DAYS,   color: VA_COLOR   },
-              { label: "NNVA", days: NNVA_DAYS, color: NNVA_COLOR },
-              { label: "UNVA", days: UNVA_DAYS, color: UNVA_COLOR },
-            ].map(({ label, days, color }) => (
-              <div key={label} className="bg-white rounded-xl border border-slate-200 p-3">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="w-2 h-2 rounded-[2px] shrink-0" style={{ background: color }} />
-                  <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-[0.07em]">{label}</span>
-                </div>
-                <p className="text-[1.4rem] font-bold tabular-nums leading-none" style={{ color }}>{days.toFixed(2)}</p>
-                <p className="text-[9.5px] text-slate-400 mt-0.5">hari · {(days / TOTAL_LT * 100).toFixed(1)}%</p>
-              </div>
-            ))}
+        {/* Top 5 SKU */}
+        <div className="min-h-0 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
+          <div className="px-3 py-2 border-b border-slate-100 shrink-0 flex items-center gap-2">
+            <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em]">Top 5 SKU</span>
+            <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-[#D3DEEE] text-[#143665] ml-auto">Highest Volume</span>
           </div>
-
-          {/* Top 5 SKU */}
-          <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
-            <div className="px-3 py-2 border-b border-slate-100 shrink-0 flex items-center gap-2">
-              <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em]">Top 5 SKU</span>
-              <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-full bg-[#D3DEEE] text-[#143665] ml-auto">Highest Volume</span>
-            </div>
+          <div className="flex-1 min-h-0 overflow-auto">
             <table className="w-full border-collapse">
-              <thead>
+              <thead className="sticky top-0">
                 <tr className="bg-[#F8FAFC]">
                   <th className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.06em] px-3 py-1.5 text-left w-6">#</th>
                   <th className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.06em] px-3 py-1.5 text-left">Product</th>
@@ -218,8 +221,8 @@ export function LeadTimeMonitor() {
               </tbody>
             </table>
           </div>
-
         </div>
+
       </div>
     </div>
   );

@@ -6,7 +6,9 @@
       "app/query-docs/page.tsx",
       "QUERIES.md",
       "lib/graph/teams.ts",
-      "design-draft.html"
+      "design-draft.html",
+      "design-strategic-mockup.html",
+      "app/lead-time/page.tsx"
     ],
     "ignoreValues": [
       {
@@ -166,6 +168,21 @@
           "app/login/page.tsx"
         ],
         "createdAt": "2026-09-10T04:22:01.642Z"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "*",
+        "files": [
+          "app/lead-time/page.tsx"
+        ],
+        "createdAt": "2026-09-14T07:11:10.139Z",
+        "reason": "Arbitrary px font sizes match the existing codebase-wide Tailwind text-[Xpx] pattern; DESIGN.md ramp describes the main design system"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "inter",
+        "createdAt": "2026-09-14T08:10:37.894Z",
+        "reason": "Intentional font switch to match design-strategic-mockup.html reference which uses ui-sans-serif/system-ui stack"
       }
     ]
   }

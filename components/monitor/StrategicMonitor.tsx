@@ -229,7 +229,7 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters }) {
       </div>
 
       {/* Charts */}
-      <div className="flex-1 min-h-0 max-h-[260px] grid grid-cols-2 gap-2">
+      <div className="flex-1 min-h-0 grid grid-cols-2 gap-2">
         <div className="min-h-0 h-full overflow-hidden">
           <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} fillHeight />
         </div>
