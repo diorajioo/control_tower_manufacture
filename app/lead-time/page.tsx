@@ -359,44 +359,54 @@ function OnTimePOTrend() {
   );
 }
 
+const PARETO_RAW = [
+  { name: "OMG LC 14",   lt: 26.73, color: UNVA_COLOR },
+  { name: "OMG LC 15",   lt: 23.98, color: UNVA_COLOR },
+  { name: "OMG LC 13",   lt: 23.72, color: UNVA_COLOR },
+  { name: "OMG LC 12",   lt: 19.47, color: NNVA_COLOR },
+  { name: "WARDAH UV",   lt: 16.06, color: NNVA_COLOR },
+  { name: "KAHF Triple", lt: 13.19, color: "#10b981"  },
+  { name: "EMINA SB35",  lt: 12.78, color: "#10b981"  },
+  { name: "KAHF FW",     lt: 12.65, color: "#10b981"  },
+  { name: "EMINA BN",    lt: 12.57, color: "#10b981"  },
+  { name: "KAHF Scrub",  lt: 12.19, color: "#10b981"  },
+];
+const PARETO_TOTAL = PARETO_RAW.reduce((s, d) => s + d.lt, 0);
+const PARETO_MAX   = PARETO_RAW[0].lt * 1.12;
+const PARETO_DATA  = (() => {
+  let c = 0;
+  return PARETO_RAW.map((d) => {
+    c += (d.lt / PARETO_TOTAL) * 100;
+    return { ...d, cumPct: Math.round(c), cumNorm: (c / 100) * PARETO_MAX };
+  });
+})();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const PARETO_MARKERS: any[] = [{
+  axis: "y", value: 0.8 * PARETO_MAX,
+  lineStyle: { stroke: "#94a3b8", strokeDasharray: "4 3", strokeWidth: 1.5 },
+  legend: "80%", legendOffsetX: -8, legendOffsetY: -8,
+  textStyle: { fill: "#94a3b8", fontSize: 9, fontFamily: "inherit" },
+}];
+
 function LTParetoSKU() {
-  const sorted = [
-    { name: "OMG LC 14",   lt: 26.73, color: UNVA_COLOR },
-    { name: "OMG LC 15",   lt: 23.98, color: UNVA_COLOR },
-    { name: "OMG LC 13",   lt: 23.72, color: UNVA_COLOR },
-    { name: "OMG LC 12",   lt: 19.47, color: NNVA_COLOR },
-    { name: "WARDAH UV",   lt: 16.06, color: NNVA_COLOR },
-    { name: "KAHF Triple", lt: 13.19, color: "#10b981"  },
-    { name: "EMINA SB35",  lt: 12.78, color: "#10b981"  },
-    { name: "KAHF FW",     lt: 12.65, color: "#10b981"  },
-    { name: "EMINA BN",    lt: 12.57, color: "#10b981"  },
-    { name: "KAHF Scrub",  lt: 12.19, color: "#10b981"  },
-  ];
-
-  const total = sorted.reduce((s, d) => s + d.lt, 0);
-  const maxLT = sorted[0].lt * 1.12;
-  let cumSum = 0;
-  const data = useMemo(() => sorted.map((d) => {
-    cumSum += (d.lt / total) * 100;
-    return { ...d, cumPct: Math.round(cumSum), cumNorm: (cumSum / 100) * maxLT };
-  }), []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Custom layer: cumulative % line drawn over bars using bar coords
+  // Custom layer: cumulative % line using Nivo bar coordinates
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const CumulativeLine = useCallback((props: any) => {
     const { bars, yScale } = props;
     if (!bars || !yScale || bars.length === 0) return null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pts = bars.map((bar: any, i: number) => ({
-      x: bar.x + bar.width / 2,
-      y: yScale(data[i]?.cumNorm ?? 0),
-      pct: data[i]?.cumPct ?? 0,
-    }));
-    const pathD = pts.map((p: {x:number;y:number;pct:number}, i: number) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+    const pts = bars.map((bar: any, i: number) => {
+      const d = PARETO_DATA[i];
+      if (!d || bar.x == null) return null;
+      return { x: bar.x + bar.width / 2, y: yScale(d.cumNorm), pct: d.cumPct };
+    }).filter(Boolean) as { x: number; y: number; pct: number }[];
+
+    if (pts.length < 2) return null;
+    const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
     return (
       <g>
         <path d={pathD} fill="none" stroke="#f97316" strokeWidth="2" strokeLinejoin="round" />
-        {pts.map((p: {x:number;y:number;pct:number}, i: number) => (
+        {pts.map((p, i) => (
           <g key={i}>
             <circle cx={p.x} cy={p.y} r="3" fill="white" stroke="#f97316" strokeWidth="1.5" />
             {(i === 0 || i === 3 || i === 6 || i === 9) && (
@@ -406,14 +416,7 @@ function LTParetoSKU() {
         ))}
       </g>
     );
-  }, [data]);
-
-  const markers = useMemo(() => [{
-    axis: "y" as const, value: 0.8 * maxLT,
-    lineStyle: { stroke: "#94a3b8", strokeDasharray: "4 3", strokeWidth: 1.5 },
-    legend: "80%", legendOffsetX: -8, legendOffsetY: -8,
-    textStyle: { fill: "#94a3b8", fontSize: 9, fontFamily: "inherit" },
-  }], [maxLT]);
+  }, []);
 
   return (
     <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
@@ -424,7 +427,7 @@ function LTParetoSKU() {
       <p className="text-[10.5px] text-slate-400 mb-2">SKU diurutkan dari lead time tertinggi · Garis oranye = kumulatif %</p>
       <div style={{ height: 200 }}>
         <ResponsiveBar
-          data={data}
+          data={PARETO_DATA}
           keys={["lt"]}
           indexBy="name"
           theme={nivoTheme}
@@ -441,8 +444,7 @@ function LTParetoSKU() {
           }}
           enableGridX={false}
           enableLabel={false}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          markers={markers as any}
+          markers={PARETO_MARKERS}
           layers={["grid", "axes", "bars", CumulativeLine, "markers"]}
           tooltip={({ indexValue, value, color }) => (
             <div style={{
@@ -711,9 +713,17 @@ function StrategicView() {
       </div>
 
       <div className="flex items-end gap-3 px-5 pb-4 flex-wrap">
-        <FilterSelect label="Period" value="Q2 2026" />
+        <FilterSelect label="Quick Filter" value="Year To Date" />
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-[0.07em]">Date Range</span>
+          <div className="flex items-center gap-2">
+            <div className="border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white">01/01/2026</div>
+            <span className="text-slate-400 text-sm">—</span>
+            <div className="border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white">20/07/2026</div>
+          </div>
+        </div>
         <FilterSelect label="Plant" value="All Plant" />
-        <FilterSelect label="View" value="Quarterly" />
+        <FilterSelect label="Data Level" value="Quarterly" />
       </div>
 
       {/* 3 KPI cards */}
@@ -812,6 +822,14 @@ function OperationalView() {
 
       <div className="flex items-end gap-3 px-5 pb-4 flex-wrap">
         <FilterSelect label="Quick Filter" value="7 Hari Terakhir" />
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-[0.07em]">Date Range</span>
+          <div className="flex items-center gap-2">
+            <div className="border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white">09/09/2026</div>
+            <span className="text-slate-400 text-sm">—</span>
+            <div className="border border-[#EBEBEB] rounded-full px-3 py-1.5 text-[11.5px] font-semibold text-[#2A3D4A] bg-white">15/09/2026</div>
+          </div>
+        </div>
         <FilterSelect label="Plant" value="All Plant" />
         <FilterSelect label="Stage" value="Semua Stage" />
         <button className="flex items-center gap-1.5 border border-[#FFEDEF] rounded-full px-3 py-1.5 text-[11.5px] font-bold text-[#8A0011] bg-[#FFEDEF] self-end whitespace-nowrap">
