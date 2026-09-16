@@ -230,9 +230,32 @@ Large featured card — OEE is the primary diagnostic metric.
 - Left accent bar: 5px, red if below target, green if on target
 
 ### Chart Panels (`components/dashboard/TrendChart.tsx`, `StackedBarChart.tsx`)
-Same shell as KPI cards: `bg-white rounded-lg border border-[#EBEBEB] hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)]`  
-Title: `13px font-bold text-slate-800 tracking-tight` (normal case).  
-Nivo theme: `fontFamily: "inherit"` — auto-inherits Lato.
+Same shell as KPI cards: `bg-white rounded-lg p-3 border border-[#EBEBEB] hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)]`
+
+**Chart title** — matches KPI card label style (NOT the old 13px slate-800):
+```
+text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none
+```
+Both TrendChart and StackedBarChart use this exact class. No exceptions.
+
+**KPI selector badge** (top-right pill): `bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold text-[10px]`  
+**Active KPI tab pill**: `bg-[#215AA8] text-white`; inactive: `bg-gray-100 text-gray-500`  
+**Loading spinner**: `border border-[#215AA8] border-t-transparent`  
+**Tooltip bg**: `#2A3D4A`  
+**Nivo margin** (both charts): `{ top: 4, right: 16, bottom: 24, left: 36 }` — tight, no excess whitespace  
+**Nivo theme**: `fontFamily: "inherit"` — auto-inherits Lato; axis tick text `#9ca3af 10px`  
+**Crosshair color**: `#215AA8`  
+**SPC control zone fill**: `#E9EFF6` (brand-50) opacity 0.55
+
+**TrendChart-specific**:
+- `chartHeight = 195` (default)
+- X-axis ticks: even ISO week numbers only (W2, W4, W6…) — never show all weeks. Filter: `getISOWeek(date) % 2 === 0`; thin further (step 2) if > 26 even-week data points
+- Plant legend: inline top-right, 4px line + plant name, 10px text-gray-400
+
+**StackedBarChart-specific**:
+- `chartHeight = 180` (default)
+- Plant status legend: compact 2-column grid below chart. One row per plant: dot + name + weeks + avg value + status label. No separate detail rows.
+- Legend font: 10px. Status colors: emerald-600 (In control), red-500 (Above UCL), amber-500 (Below LCL)
 
 ### AISummary (`components/dashboard/AISummary.tsx`)
 - **White card** — `bg-white rounded-lg border border-[#EBEBEB] shadow-[0px_4px_4px_-2px_rgba(42,61,74,0.08)]`

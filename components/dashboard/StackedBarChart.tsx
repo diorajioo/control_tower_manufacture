@@ -47,7 +47,7 @@ const nivoTheme = {
   },
 };
 
-export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 148, fillHeight = false }: StackedBarChartProps) {
+export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 180, fillHeight = false }: StackedBarChartProps) {
   const [rawData,  setRawData]  = useState<Record<string, unknown>[]>([]);
   const [plants,   setPlants]   = useState<string[]>([]);
   const [loading,  setLoading]  = useState(false);
@@ -83,7 +83,6 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
     [rawData, plants]
   );
 
-  // Aggregate per plant: use per-plant mean as the bar value
   const plantData = useMemo(
     () =>
       plants.map((plant, i) => {
@@ -107,12 +106,11 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
 
   const getStatus = (val: number) => {
     if (ucl === 0) return { label: "—", cls: "text-gray-300" };
-    if (val > ucl)         return { label: `Above UCL`, cls: "text-red-500"    };
-    if (lcl > 0 && val < lcl) return { label: `Below LCL`, cls: "text-amber-500" };
-    return                     { label: t("chart_in_control"), cls: "text-emerald-600" };
+    if (val > ucl)             return { label: "Above UCL",             cls: "text-red-500"     };
+    if (lcl > 0 && val < lcl) return { label: "Below LCL",             cls: "text-amber-500"   };
+    return                          { label: t("chart_in_control"),     cls: "text-emerald-600" };
   };
 
-  // Markers for reference lines
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markers: any[] = useMemo(() => {
     const m = [];
@@ -141,32 +139,31 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
   }, [ucl, mean, lcl]);
 
   return (
-    <div className={cn("bg-white rounded-xl p-4 border border-slate-200 hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-shadow duration-200", fillHeight && "h-full flex flex-col")}>
+    <div className={cn("bg-white rounded-lg p-3 border border-[#EBEBEB] hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200", fillHeight && "h-full flex flex-col")}>
       {/* Header */}
-      <div className={cn("flex items-start justify-between mb-3", fillHeight && "shrink-0")}>
-        <div>
-          <h3 className="text-[13px] font-bold text-slate-800 tracking-tight">{t("chart_kpi_by_plant")}</h3>
-          <p className="text-[10px] text-gray-400 mt-0.5 tracking-tight">{t("chart_subtitle_plant")}</p>
-        </div>
+      <div className={cn("flex items-center justify-between mb-2", fillHeight && "shrink-0")}>
         <div className="flex items-center gap-2">
-          {loading && (
-            <span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin inline-block" />
-          )}
-          <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
-            {selectedKpi.label}
+          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">
+            {t("chart_kpi_by_plant")}
           </span>
+          {loading && (
+            <span className="w-3 h-3 border border-[#215AA8] border-t-transparent rounded-full animate-spin inline-block" />
+          )}
         </div>
+        <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
+          {selectedKpi.label}
+        </span>
       </div>
 
       {/* KPI tabs */}
-      <div className={cn("flex flex-wrap gap-1 mb-3", fillHeight && "shrink-0")}>
+      <div className={cn("flex flex-wrap gap-1 mb-2", fillHeight && "shrink-0")}>
         {KPI_OPTIONS.map((opt) => (
           <button
             key={opt.value}
             onClick={() => onKpiChange(opt.value)}
             className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
               kpiType === opt.value
-                ? "bg-indigo-600 text-white"
+                ? "bg-[#215AA8] text-white"
                 : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
             }`}
           >
@@ -185,7 +182,7 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
             keys={["value"]}
             indexBy="plant"
             theme={nivoTheme}
-            margin={{ top: 10, right: 20, bottom: 28, left: 40 }}
+            margin={{ top: 4, right: 16, bottom: 24, left: 36 }}
             padding={0.38}
             borderRadius={5}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -193,11 +190,11 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
             colorBy="indexValue"
             axisBottom={{
               tickSize: 0,
-              tickPadding: 10,
+              tickPadding: 8,
             }}
             axisLeft={{
               tickSize: 0,
-              tickPadding: 8,
+              tickPadding: 6,
               tickValues: 4,
               format: (v) => Number(v).toFixed(1),
             }}
@@ -206,7 +203,7 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
             markers={markers}
             tooltip={({ indexValue, value, color }) => (
               <div style={{
-                background: "#1e293b",
+                background: "#2A3D4A",
                 borderRadius: 10,
                 padding: "9px 13px",
                 fontSize: 11,
@@ -241,25 +238,22 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
         )}
       </div>
 
-      {/* Plant status list */}
+      {/* Plant status — compact 2-col grid so bar chart stays dominant */}
       {plantData.length > 0 && (
-        <div className={cn("mt-3 pt-3 border-t border-gray-100 space-y-1.5", fillHeight && "shrink-0")}>
+        <div className={cn("mt-2 pt-2 border-t border-gray-100 grid gap-x-4 gap-y-1", fillHeight && "shrink-0",
+          plantData.length > 2 ? "grid-cols-2" : "grid-cols-1"
+        )}>
           {plantData.map((p) => {
             const { label, cls } = getStatus(p.value);
             return (
-              <div key={p.plant} className="flex items-center justify-between text-[11px]">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                  <span className="text-slate-700 font-semibold tracking-tight">{p.plant}</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-gray-400 tabular-nums">{p.weeks}w</span>
-                  <span className="font-bold text-slate-700 tabular-nums">
-                    {p.value.toFixed(2)}&thinsp;
-                    <span className="font-normal text-gray-400">{selectedKpi.unit}</span>
-                  </span>
-                  <span className={`font-semibold w-20 text-right ${cls}`}>{label}</span>
-                </div>
+              <div key={p.plant} className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                <span className="text-[10px] font-semibold text-slate-700 shrink-0">{p.plant}</span>
+                <span className="text-[10px] text-gray-400 tabular-nums shrink-0">{p.weeks}w</span>
+                <span className="text-[10px] font-bold text-slate-700 tabular-nums shrink-0">
+                  {p.value.toFixed(2)}<span className="font-normal text-gray-400 ml-0.5">{selectedKpi.unit}</span>
+                </span>
+                <span className={`text-[10px] font-semibold ml-auto shrink-0 ${cls}`}>{label}</span>
               </div>
             );
           })}

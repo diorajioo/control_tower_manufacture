@@ -704,7 +704,7 @@ export default function DashboardPage() {
 
           <div ref={kpiSectionRef}>
           {/* ── Operation KPIs ─────────────────────────────────────────── */}
-          <SectionDivider label={t("section_operation_kpis")} accentColor="#6366f1" />
+          <SectionDivider label={t("section_operation_kpis")} accentColor="#215AA8" />
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-[14px] mb-5">
             {loading ? (

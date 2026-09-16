@@ -47,15 +47,14 @@ const nivoTheme = {
     line: { stroke: "#f3f4f6", strokeWidth: 1 },
   },
   crosshair: {
-    line: { stroke: "#6366f1", strokeWidth: 1, strokeOpacity: 0.3 },
+    line: { stroke: "#215AA8", strokeWidth: 1, strokeOpacity: 0.3 },
   },
 };
 
-export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, fillHeight = false }: TrendChartProps) {
+export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, fillHeight = false }: TrendChartProps) {
   const [data,    setData]    = useState<Record<string, unknown>[]>([]);
   const [plants,  setPlants]  = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  // useRef instead of useState — avoids re-render chain that causes twitching
   const activeXRef = useRef<string | null>(null);
   const { t } = useI18n();
 
@@ -104,14 +103,20 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, f
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Show every Nth tick so x-axis stays readable at any data density
+  // Show ticks at every even ISO week (W2, W4, W6…)
   const axisTicks = useMemo(() => {
     if (!data.length) return undefined;
-    const step = data.length > 24 ? 4 : data.length > 12 ? 2 : 1;
-    return data.filter((_, i) => i % step === 0).map((d) => String(d.date));
+    const evenWeeks = data.filter((d) => {
+      try {
+        return getISOWeek(parseAnyDate(String(d.date))) % 2 === 0;
+      } catch { return false; }
+    });
+    // For very dense datasets thin further (every 4th even week)
+    const step = evenWeeks.length > 26 ? 2 : 1;
+    return evenWeeks.filter((_, i) => i % step === 0).map((d) => String(d.date));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
-  // Transform flat data to Nivo Line series format — must be before ActivePointsLayer
   const nivoData = useMemo(
     () =>
       plants.map((plant, i) => ({
@@ -124,7 +129,6 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, f
     [data, plants]
   );
 
-  // Custom layer: render dots only at hovered x — reads ref (no extra re-render)
   const ActivePointsLayer = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (props: any) => {
@@ -150,11 +154,9 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, f
         </g>
       );
     },
-    [nivoData] // activeXRef is a stable object — not needed in deps
+    [nivoData]
   );
 
-
-  // Reference lines for UCL / Mean / LCL
   const markers = useMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const m: any[] = [];
@@ -182,7 +184,6 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, f
     return m;
   }, [ucl, mean, lcl]);
 
-  // Custom SVG layer that fills the control zone between LCL and UCL
   const ControlZoneLayer = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (props: any) => {
@@ -191,7 +192,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, f
       const y2  = props.yScale(Math.max(lcl, 0));
       const top = Math.min(y1, y2);
       const h   = Math.max(Math.abs(y2 - y1), 0);
-      return <rect x={0} y={top} width={props.innerWidth} height={h} fill="#eef2ff" opacity={0.55} />;
+      return <rect x={0} y={top} width={props.innerWidth} height={h} fill="#E9EFF6" opacity={0.55} />;
     },
     [ucl, lcl]
   );
@@ -199,22 +200,24 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, f
   const isEmpty = nivoData.length === 0 || nivoData.every((s) => s.data.length === 0);
 
   return (
-    <div className={cn("bg-white rounded-xl pt-4 px-4 pb-2 border border-slate-200 hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] transition-shadow duration-200", fillHeight && "h-full flex flex-col")}>
+    <div className={cn("bg-white rounded-lg p-3 border border-[#EBEBEB] hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200", fillHeight && "h-full flex flex-col")}>
       {/* Header */}
-      <div className={cn("flex items-center justify-between mb-3", fillHeight && "shrink-0")}>
+      <div className={cn("flex items-center justify-between mb-2", fillHeight && "shrink-0")}>
         <div className="flex items-center gap-2">
-          <h3 className="text-[13px] font-bold text-slate-800 tracking-tight">{t("chart_metric_trend")}</h3>
+          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">
+            {t("chart_metric_trend")}
+          </span>
           {loading && (
-            <span className="w-3 h-3 border border-indigo-400 border-t-transparent rounded-full animate-spin inline-block" />
+            <span className="w-3 h-3 border border-[#215AA8] border-t-transparent rounded-full animate-spin inline-block" />
           )}
         </div>
-        <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
+        <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
           {selectedKpi.label} · {selectedKpi.unit}
         </span>
       </div>
 
       {/* KPI tabs + plant legend */}
-      <div className={cn("flex items-center justify-between gap-2 mb-3", fillHeight && "shrink-0")}>
+      <div className={cn("flex items-center justify-between gap-2 mb-2", fillHeight && "shrink-0")}>
         <div className="flex flex-wrap gap-1">
           {KPI_OPTIONS.map((opt) => (
             <button
@@ -222,7 +225,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, f
               onClick={() => onKpiChange(opt.value)}
               className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
                 kpiType === opt.value
-                  ? "bg-indigo-600 text-white"
+                  ? "bg-[#215AA8] text-white"
                   : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
               }`}
             >
@@ -253,19 +256,19 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, f
           <ResponsiveLine
             data={nivoData}
             theme={nivoTheme}
-            margin={{ top: 8, right: 20, bottom: 28, left: 40 }}
+            margin={{ top: 4, right: 16, bottom: 24, left: 36 }}
             xScale={{ type: "point" }}
             yScale={{ type: "linear", min: "auto", max: "auto", stacked: false }}
             curve="linear"
             axisBottom={{
               format: (v) => formatTick(String(v)),
               tickSize: 0,
-              tickPadding: 10,
+              tickPadding: 8,
               tickValues: axisTicks,
             }}
             axisLeft={{
               tickSize: 0,
-              tickPadding: 8,
+              tickPadding: 6,
               tickValues: 5,
               format: (v) => Number(v).toFixed(1),
             }}
@@ -273,7 +276,6 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, f
             enablePoints={false}
             useMesh={true}
             crosshairType="x"
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             onMouseMove={(point: any) => { activeXRef.current = String(point.data.x); }}
             onMouseLeave={() => { activeXRef.current = null; }}
@@ -298,7 +300,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 210, f
               );
               return (
                 <div style={{
-                  background: "#1e293b",
+                  background: "#2A3D4A",
                   borderRadius: 10,
                   padding: "9px 13px",
                   fontSize: 11,
