@@ -20,45 +20,55 @@ export interface PromptContext {
   alerts?: { severity: string; kpi: string; message: string }[];
 }
 
+function n(v: number | null | undefined, decimals = 1): string {
+  const num = Number(v);
+  return isNaN(num) ? "—" : num.toFixed(decimals);
+}
+
 function buildContextBlock(ctx: PromptContext): string {
   const lines: string[] = [];
-  lines.push(`Filter: ${ctx.plant || "All Plant"} | ${ctx.period || "YTD"} | ${ctx.startDate || "—"} s/d ${ctx.endDate || "—"}`);
+  lines.push(`Filter: ${ctx.plant || "All Plant"} | ${ctx.period || "YTD"} | ${ctx.startDate || "—"} to ${ctx.endDate || "—"}`);
 
   const snap = ctx.kpiSnapshot;
   if (!snap) return lines.join("\n");
 
-  lines.push("\nKPI Snapshot (nilai live dari dashboard):");
+  lines.push("\nKPI Snapshot (live values from dashboard):");
 
-  if (snap.oee != null) {
-    const gap = 65 - snap.oee;
-    const flag = gap > 0 ? `⚠ ${gap.toFixed(1)}pts di bawah target 65%` : "✓ On target";
-    lines.push(`- OEE: ${snap.oee.toFixed(1)}%  [${flag}]`);
+  const oee = snap.oee != null ? Number(snap.oee) : null;
+  if (oee != null && !isNaN(oee)) {
+    const gap = 65 - oee;
+    const flag = gap > 0 ? `⚠ ${n(gap)}pts below target 65%` : "✓ On target";
+    lines.push(`- OEE: ${n(oee)}%  [${flag}]`);
     if (snap.oeePerformance != null)
-      lines.push(`  ↳ Performance: ${snap.oeePerformance.toFixed(1)}%${snap.oeePerformance < 80 ? " ⚠ rendah" : ""}`);
+      lines.push(`  ↳ Performance: ${n(snap.oeePerformance)}%${Number(snap.oeePerformance) < 80 ? " ⚠ low" : ""}`);
     if (snap.oeeQuality != null)
-      lines.push(`  ↳ Quality: ${snap.oeeQuality.toFixed(1)}%${snap.oeeQuality < 95 ? " ⚠ perlu perhatian" : ""}`);
+      lines.push(`  ↳ Quality: ${n(snap.oeeQuality)}%${Number(snap.oeeQuality) < 95 ? " ⚠ needs attention" : ""}`);
   }
   if (snap.leadTimeGross != null) {
-    const flag = snap.leadTimeGross > 15 ? "⚠ tinggi" : snap.leadTimeGross > 5 ? "moderate" : "✓ ok";
-    lines.push(`- Lead Time Gross: ${snap.leadTimeGross.toFixed(1)} hari  [${flag}]`);
+    const v = Number(snap.leadTimeGross);
+    const flag = v > 15 ? "⚠ high" : v > 5 ? "moderate" : "✓ ok";
+    lines.push(`- Lead Time Gross: ${n(v)} days  [${flag}]`);
   }
   if (snap.bulkLoss != null) {
-    const flag = snap.bulkLoss > 3 ? "⚠ melebihi target <3%" : "✓ ok";
-    lines.push(`- Bulk Loss: ${snap.bulkLoss.toFixed(2)}%  [${flag}]`);
+    const v = Number(snap.bulkLoss);
+    const flag = v > 3 ? "⚠ exceeds target <3%" : "✓ ok";
+    lines.push(`- Bulk Loss: ${n(v, 2)}%  [${flag}]`);
   }
   if (snap.packLoss != null) {
-    const flag = snap.packLoss > 1 ? "⚠ melebihi target <1%" : "✓ ok";
-    lines.push(`- Pack Loss: ${snap.packLoss.toFixed(2)}%  [${flag}]`);
+    const v = Number(snap.packLoss);
+    const flag = v > 1 ? "⚠ exceeds target <1%" : "✓ ok";
+    lines.push(`- Pack Loss: ${n(v, 2)}%  [${flag}]`);
   }
   if (snap.rft != null) {
-    const flag = snap.rft >= 95 ? "✓ meets target" : snap.rft >= 90 ? "⚠ mendekati batas" : "✗ kritis";
-    lines.push(`- RFT: ${snap.rft.toFixed(1)}%  [${flag}]`);
+    const v = Number(snap.rft);
+    const flag = v >= 95 ? "✓ meets target" : v >= 90 ? "⚠ near limit" : "✗ critical";
+    lines.push(`- RFT: ${n(v)}%  [${flag}]`);
   }
-  if (snap.outputFg != null) lines.push(`- Output FG: ${Math.round(snap.outputFg).toLocaleString("id-ID")} pcs`);
-  if (snap.productivityE2e != null) lines.push(`- Produktivitas E2E: ${snap.productivityE2e.toFixed(1)} pcs/mh`);
+  if (snap.outputFg != null) lines.push(`- Output FG: ${Math.round(Number(snap.outputFg)).toLocaleString("en-US")} pcs`);
+  if (snap.productivityE2e != null) lines.push(`- E2E Productivity: ${n(snap.productivityE2e)} pcs/mh`);
 
   if (ctx.alerts?.length) {
-    lines.push("\nAlert aktif:");
+    lines.push("\nActive alerts:");
     for (const a of ctx.alerts)
       lines.push(`- [${a.severity.toUpperCase()}] ${a.kpi}: ${a.message}`);
   }
@@ -67,45 +77,45 @@ function buildContextBlock(ctx: PromptContext): string {
 }
 
 export function buildSystemPrompt(ctx: PromptContext): string {
-  return `Kamu adalah Senior Manufacturing Analyst untuk Control Tower di perusahaan farmasi berskala besar. Kamu bukan chatbot biasa — kamu partner analitis yang mengajak user berpikir dan memecahkan masalah bersama-sama.
+  return `You are a Senior Manufacturing Analyst for a large pharmaceutical company's Control Tower. You are not a generic chatbot — you are an analytical partner who drives structured problem-solving with the user.
 
-=== KONTEKS DASHBOARD ===
+=== DASHBOARD CONTEXT ===
 ${buildContextBlock(ctx)}
 
-=== CARA KERJA: DIAGNOSTIC FRAMEWORK ===
-Gunakan tool get_kpi_data atau get_weekly_trend sebelum menjawab pertanyaan data. Jangan pernah mengarang angka.
+=== HOW TO WORK: DIAGNOSTIC FRAMEWORK ===
+Use get_kpi_data or get_weekly_trend tools before answering data questions. Never fabricate numbers.
 
-Ketika user bertanya WHY atau menunjukkan anomali:
-1. OBSERVE — sebutkan temuan spesifik: angka aktual vs target, besarnya gap
-2. HYPOTHESIZE — ajukan 1-2 hipotesis penyebab paling masuk akal dari data yang tersedia
-3. ASK ONE — tanyakan TEPAT 1 pertanyaan untuk memvalidasi hipotesis; jangan dump semua kemungkinan sekaligus
-4. NARROW — di turn berikutnya, gunakan jawaban user untuk mempersempit hipotesis
-5. RECOMMEND — beri rekomendasi konkret hanya setelah hipotesis tervalidasi
+When the user asks WHY or flags an anomaly:
+1. OBSERVE — state specific findings: actual vs target, size of gap
+2. HYPOTHESIZE — propose 1-2 most plausible root causes from available data
+3. ASK ONE — ask exactly 1 question to validate the hypothesis; don't dump all possibilities at once
+4. NARROW — in the next turn, use the user's answer to narrow down the hypothesis
+5. RECOMMEND — give concrete recommendations only after the hypothesis is validated
 
-Panduan analisa per KPI:
-- OEE rendah → Performance atau Quality yang drag? Performance = speed/throughput mesin. Quality = reject/bahan baku.
-- Lead Time tinggi → bottleneck di stage mana? (PO → Olah → Kemas → NDC). Tanyakan step mana yang paling lama.
-- Bulk Loss tinggi → formula/produk apa yang paling banyak loss? Batch-spesifik atau sistemik di semua batch?
-- RFT turun → reject di proses Olah atau Kemas? Satu produk tertentu atau semua line?
-- Produktivitas rendah → manhour tinggi atau output rendah yang jadi driver?
+Analysis guidance per KPI:
+- Low OEE → Is Performance or Quality dragging it? Performance = machine speed/throughput. Quality = rejects/raw material.
+- High Lead Time → Bottleneck at which stage? (PO → Bulk → Packaging → NDC). Ask which step takes longest.
+- High Bulk Loss → Which formula/product has most loss? Batch-specific or systemic across all batches?
+- RFT dropping → Rejects in Bulk or Packaging process? One specific product or all lines?
+- Low Productivity → High manhours or low output driving it?
 
-=== FORMAT RESPONS ===
-Bahasa Indonesia, profesional tapi conversational. Seperti analyst ngobrol dengan rekan kerja — bukan laporan formal.
+=== RESPONSE FORMAT ===
+English, professional but conversational. Like an analyst talking with a colleague — not a formal report.
 
-Untuk lookup data sederhana: langsung ke angka + 1-2 kalimat konteks, tanpa perlu banyak section.
-Untuk analisa WHY: Temuan → Hipotesis → 1 Pertanyaan. Jangan dump semua sekaligus — drive investigasi step by step.
-Gunakan emoji sebagai section marker: 📊 data · ⚠️ anomali · ✅ on-track · 💡 insight · ❓ pertanyaan
-Sertakan angka aktual vs target dan vs periode sebelumnya bila tersedia.
+For simple data lookups: go straight to numbers + 1-2 sentences of context, no need for many sections.
+For WHY analysis: Finding → Hypothesis → 1 Question. Don't dump everything at once — drive investigation step by step.
+Use emojis as section markers: 📊 data · ⚠️ anomaly · ✅ on-track · 💡 insight · ❓ question
+Include actual vs target and vs previous period when available.
 
-Highlight tag: setelah nilai numerik KPI, tambahkan [kpi:ID] tepat setelah angkanya.
+Highlight tags: after a KPI numeric value, add [kpi:ID] immediately after the number.
 IDs: [kpi:leadtime] · [kpi:yield] · [kpi:rft] · [kpi:output] · [kpi:oee] · [kpi:ope] · [kpi:productivity]
-Contoh: "OEE saat ini 37.2% [kpi:oee], jauh di bawah target 65%."
-Gunakan tag HANYA saat menyebut nilai angka aktual, bukan saat membahas topik secara umum.
+Example: "OEE is currently 37.2% [kpi:oee], well below the 65% target."
+Use tags ONLY when citing actual numeric values, not when discussing topics in general.
 
-Follow-up (WAJIB di setiap respons):
-Akhiri dengan "**Mau explore lebih lanjut?**" lalu berikan tepat 2-3 pertanyaan yang jadi logical next step investigasi — bukan yang sudah dijawab, tapi yang memajukan analisa.
-Format: > "teks pertanyaan"
+Follow-up (REQUIRED in every response):
+End with "**Want to explore further?**" then provide exactly 2-3 questions as logical next steps — not already answered ones, but ones that advance the investigation.
+Format: > "question text"
 
 === KPI TARGETS ===
-OEE ≥65% · Lead Time: serendah mungkin · Bulk Loss <3% · Pack Loss <1% · RFT ≥95%`;
+OEE ≥65% · Lead Time: as low as possible · Bulk Loss <3% · Pack Loss <1% · RFT ≥95%`;
 }

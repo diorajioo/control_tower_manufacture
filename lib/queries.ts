@@ -386,6 +386,88 @@ export async function getE2EWeekly(filters: QueryFilters) {
   `, dateBinds);
 }
 
+// Lead Time weekly series → sparkline for dashboard card
+export async function getLeadTimeWeekly(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ WEEK: string; AVG_DAYS: number }>(`
+    SELECT WEEK, AVG(DAYS) AS AVG_DAYS
+    FROM (
+      SELECT
+        DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK,
+        DATEDIFF('minute',
+          MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
+          MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
+        ) / 1440.0 AS DAYS
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY 1, PROCESS_ORDER_FG
+      HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
+        AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
+    )
+    GROUP BY 1
+    ORDER BY 1
+  `, dateBinds);
+}
+
+// Output FG weekly series → sparkline for dashboard card
+export async function getOutputWeekly(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ WEEK: string; TOTAL_FG: number }>(`
+    SELECT
+      DATE_TRUNC('week', CORRECTION_DATE::DATE) AS WEEK,
+      SUM(QUANTITY) AS TOTAL_FG
+    FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_FG
+    WHERE ${datePred}
+    GROUP BY 1
+    ORDER BY 1
+  `, dateBinds);
+}
+
+// Output Bulk weekly series → sparkline for dashboard card (no PLANT col in this table)
+export async function getBulkOutputWeekly(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ WEEK: string; TOTAL_BULK: number }>(`
+    SELECT
+      DATE_TRUNC('week', CORRECTION_DATE::DATE) AS WEEK,
+      SUM(REALIZATION_QUANTITY) AS TOTAL_BULK
+    FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
+    WHERE ${datePred}
+    GROUP BY 1
+    ORDER BY 1
+  `, dateBinds);
+}
+
+// Bulk Loss % weekly series → sparkline for dashboard card (no PLANT col)
+export async function getYieldWeekly(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ WEEK: string; BULK_LOSS_PCT: number }>(`
+    SELECT
+      DATE_TRUNC('week', CORRECTION_DATE::DATE) AS WEEK,
+      SUM(BULK_LOSS_QUANTITY) / NULLIF(SUM(THEORETICAL_QUANTITY), 0) * 100 AS BULK_LOSS_PCT
+    FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
+    WHERE ${datePred}
+    GROUP BY 1
+    ORDER BY 1
+  `, dateBinds);
+}
+
+// RFT weekly series → sparkline for dashboard card
+export async function getRFTWeekly(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ WEEK: string; RFT_PCT: number }>(`
+    SELECT
+      DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK,
+      COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) * 100.0
+        / NULLIF(COUNT(*), 0) AS RFT_PCT
+    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+    WHERE ${datePred}
+      ${plantWhere(filters.plant)}
+    GROUP BY 1
+    ORDER BY 1
+  `, dateBinds);
+}
+
 // Trend Line → CT_MANUF_TRENDS for charting (weekly aggregated)
 export async function getTrendsData(filters: QueryFilters) {
   return executeQuery<{
@@ -560,22 +642,42 @@ export async function getTrendKPIByPlant(
         ORDER BY WEEK
       `);
 
-    case "batch":
-      // SUM({FIXED [NOMO]: MAX([BESAR_BATCH])}) → SUM per week per plant
+    case "oee":
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT WEEK, PLANT, SUM(nomo_batch) AS KPI_VALUE
-        FROM (
-          SELECT
-            NOMO,
-            DATE_TRUNC('week', OLAH_COMPLETED_AT::DATE) AS WEEK,
-            PLANT,
-            MAX(BESAR_BATCH) AS nomo_batch
-          FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-          WHERE OLAH_COMPLETED_AT::DATE BETWEEN ${dateRange}
-            ${pf}
-          GROUP BY NOMO, WEEK, PLANT
-        ) sub
+        SELECT DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK, PLANT,
+          AVG(
+            (CASE WHEN QTY_TOTAL > 0 THEN QTY_FG_GOOD::FLOAT / QTY_TOTAL ELSE 0 END) *
+            (CASE WHEN ACTIVITY_PRODUCTIVITY_STD > 0
+              THEN LEAST(PRODUCTIVITY::FLOAT / ACTIVITY_PRODUCTIVITY_STD, 1.0) ELSE 0 END)
+          ) * 100 AS KPI_VALUE
+        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
+        WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ${dateRange}
+          ${pf}
         GROUP BY WEEK, PLANT
+        ORDER BY WEEK
+      `);
+
+    case "rft":
+      return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
+        SELECT DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
+          COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) * 100.0
+            / NULLIF(COUNT(*), 0) AS KPI_VALUE
+        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+        WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
+          ${pf}
+        GROUP BY WEEK, PLANT
+        ORDER BY WEEK
+      `);
+
+    case "bulkloss":
+      // No PLANT column in this table — always returns "All Plant"
+      return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
+        SELECT DATE_TRUNC('week', CORRECTION_DATE::DATE) AS WEEK,
+          'All Plant' AS PLANT,
+          SUM(BULK_LOSS_QUANTITY) / NULLIF(SUM(THEORETICAL_QUANTITY), 0) * 100 AS KPI_VALUE
+        FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
+        WHERE CORRECTION_DATE::DATE BETWEEN ${dateRange}
+        GROUP BY WEEK
         ORDER BY WEEK
       `);
 
@@ -592,4 +694,12 @@ export async function getPlantList() {
     ORDER BY PLANT
   `);
   return rows.map((r) => r.PLANT);
+}
+
+export async function getEtlTimestamp(): Promise<string | null> {
+  const rows = await executeQuery<{ LAST_ETL: string | null }>(`
+    SELECT MAX(LOAD_TIMESTAMP) AS LAST_ETL
+    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+  `);
+  return rows[0]?.LAST_ETL ?? null;
 }

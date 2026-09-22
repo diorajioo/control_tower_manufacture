@@ -349,13 +349,13 @@ interface I18nContextValue {
 }
 
 const I18nContext = createContext<I18nContextValue>({
-  lang: "id",
+  lang: "en",
   setLang: () => {},
-  t: (key) => dict.id[key] as string,
+  t: (key) => dict.en[key] as string,
 });
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("id");
+  const [lang, setLangState] = useState<Lang>("en");
 
   useEffect(() => {
     try {

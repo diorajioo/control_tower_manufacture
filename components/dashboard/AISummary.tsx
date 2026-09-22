@@ -191,7 +191,7 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
     : null;
 
   return (
-    <div className="bg-white rounded-lg border border-[#EBEBEB] shadow-[0px_4px_4px_-2px_rgba(42,61,74,0.08)] px-4 py-3 mb-4">
+    <div className="bg-white rounded-lg border border-[#EBEBEB] shadow-[0px_4px_4px_-2px_rgba(42,61,74,0.08)] px-4 py-3">
       <div className="flex items-center gap-2">
         <span
           className="inline-flex items-center gap-1.5 shrink-0 text-[10px] font-bold text-white rounded-full px-2.5 py-0.5"

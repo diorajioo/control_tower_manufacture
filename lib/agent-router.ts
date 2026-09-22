@@ -66,9 +66,9 @@ export function classifyQuestion(message: string): QuestionComplexity {
 // sets the front of the priority queue.
 
 export const COMPLEXITY_MODEL_MAP: Record<QuestionComplexity, string> = {
-  simple:   "qwen/qwen3.6-27b",      // lowest latency
-  moderate: "qwen/qwen3.8-27b",      // structured output, balanced
-  complex:  "openai/gpt-oss-120b",   // deepest reasoning
+  simple:   "deepseek-chat",      // DeepSeek V4 — lowest latency, tool use supported
+  moderate: "deepseek-chat",      // DeepSeek V4 — fast structured output
+  complex:  "deepseek-reasoner",  // DeepSeek R1 — chain-of-thought, root-cause analysis
 };
 
 /**

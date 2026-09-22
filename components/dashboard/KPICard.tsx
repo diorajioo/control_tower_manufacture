@@ -35,9 +35,10 @@ function fmt(n: number, decimals: number): string {
 interface AnimatedNumberProps {
   value: string | number;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-function AnimatedNumber({ value, className }: AnimatedNumberProps) {
+function AnimatedNumber({ value, className, style }: AnimatedNumberProps) {
   const { raw, decimals, prefix, suffix } = parseNumeric(value);
   const mv = useMotionValue(0);
   const [display, setDisplay] = useState(() =>
@@ -63,7 +64,7 @@ function AnimatedNumber({ value, className }: AnimatedNumberProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raw]);
 
-  return <span className={className}>{display}</span>;
+  return <span className={className} style={style}>{display}</span>;
 }
 
 // ── InfoTooltip ───────────────────────────────────────────────────────────────
@@ -119,6 +120,7 @@ interface KPICardProps {
   sparkline?: number[];
   sparklineColor?: string;
   dimmed?: boolean;
+  valueColor?: string;
   /** Increment this value whenever data refreshes to trigger a brief flash. */
   flashKey?: number;
 }
@@ -166,6 +168,7 @@ export function KPICard({
   sparkline,
   sparklineColor,
   dimmed,
+  valueColor,
   flashKey,
 }: KPICardProps) {
   const hasValue = value !== undefined && value !== "";
@@ -235,12 +238,16 @@ export function KPICard({
                 <AnimatedNumber
                   value={value!}
                   className={cn(
-                    "font-bold text-slate-900 tabular-nums tracking-tight leading-none",
+                    "font-bold tabular-nums tracking-tight leading-none",
                     compact ? "text-[1.75rem]" : "text-[2rem]"
                   )}
+                  style={valueColor ? { color: valueColor } : { color: undefined }}
                 />
               ) : (
-                <span className={cn("font-bold text-slate-900 tracking-tight leading-none", compact ? "text-[1.75rem]" : "text-[2rem]")}>
+                <span
+                  className={cn("font-bold tracking-tight leading-none", !valueColor && "text-slate-900", compact ? "text-[1.75rem]" : "text-[2rem]")}
+                  style={valueColor ? { color: valueColor } : undefined}
+                >
                   {value}
                 </span>
               )}

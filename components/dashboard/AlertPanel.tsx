@@ -43,10 +43,18 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
   const [sendState, setSendState] = useState<SendState>("idle");
   const [sendError, setSendError] = useState<string | null>(null);
 
-  if (alerts.length === 0) return null;
-
   const criticalCount = alerts.filter((a) => a.severity === "critical").length;
   const warningCount  = alerts.filter((a) => a.severity === "warning").length;
+
+  if (alerts.length === 0) {
+    return (
+      <div className="rounded-lg border border-[#EBEBEB] bg-white px-4 py-2.5 flex items-center gap-2 shrink-0">
+        <AlertTriangle size={13} className="text-gray-300 shrink-0" />
+        <span className="text-xs font-semibold text-gray-400">KPI Alerts</span>
+        <span className="ml-auto text-[11px] text-emerald-600 font-semibold">✓ All KPIs within normal range</span>
+      </div>
+    );
+  }
 
   async function handleSendToTeams() {
     setSendState("sending");
@@ -89,7 +97,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
   }
 
   return (
-    <div className="mb-4 rounded-lg border border-[#EBEBEB] bg-white overflow-hidden">
+    <div className="rounded-lg border border-[#EBEBEB] bg-white overflow-hidden shrink-0">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
         <button

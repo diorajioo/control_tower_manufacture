@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getGroqClient, buildChatModelPriority, isGroqModelUnavailable } from "@/lib/ai-provider";
+import { getClientForModel, isAIModelUnavailable, buildChatModelPriority } from "@/lib/ai-provider";
 import { isValidModelId } from "@/lib/ai-models";
 import { routeModel } from "@/lib/agent-router";
 import { buildSystemPrompt, type KPISnapshot } from "@/lib/diagnostic-prompt";
 import { executeQuery } from "@/lib/snowflake";
-import type Groq from "groq-sdk";
+import type OpenAI from "openai";
 
 type ChatMessage = {
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   tool_call_id?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tool_calls?: any[];
 };
 
-const TOOLS: Groq.Chat.ChatCompletionTool[] = [
+// Tool definitions use the OpenAI schema (structurally identical to Groq)
+const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
@@ -33,8 +36,8 @@ const TOOLS: Groq.Chat.ChatCompletionTool[] = [
             description: "Jenis KPI yang ingin diambil",
           },
           start_date: { type: "string", description: "Format YYYY-MM-DD (default: awal tahun ini)" },
-          end_date: { type: "string", description: "Format YYYY-MM-DD (default: hari ini)" },
-          plant: { type: "string", description: "Nama plant spesifik, atau 'All Plant' untuk semua" },
+          end_date:   { type: "string", description: "Format YYYY-MM-DD (default: hari ini)" },
+          plant:      { type: "string", description: "Nama plant spesifik, atau 'All Plant' untuk semua" },
         },
         required: ["kpi_type"],
       },
@@ -54,8 +57,8 @@ const TOOLS: Groq.Chat.ChatCompletionTool[] = [
             description: "Jenis KPI untuk tren",
           },
           start_date: { type: "string", description: "Format YYYY-MM-DD" },
-          end_date: { type: "string", description: "Format YYYY-MM-DD" },
-          plant: { type: "string", description: "Nama plant atau 'All Plant'" },
+          end_date:   { type: "string", description: "Format YYYY-MM-DD" },
+          plant:      { type: "string", description: "Nama plant atau 'All Plant'" },
         },
         required: ["kpi_type"],
       },
@@ -69,7 +72,6 @@ function validateDate(d?: string): string | undefined {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return undefined;
   const ts = Date.parse(d);
   if (isNaN(ts)) return undefined;
-  // Reject future dates and dates before 2020 (outside business data range)
   const date = new Date(ts);
   if (date > new Date() || date.getFullYear() < 2020) return undefined;
   return d;
@@ -77,7 +79,6 @@ function validateDate(d?: string): string | undefined {
 
 function sanitizePlant(p?: string): string {
   if (!p || p === "All Plant") return "";
-  // Strip any character that isn't alphanumeric, space, or hyphen
   return p.replace(/[^A-Za-z0-9 \-]/g, "").trim().slice(0, 64);
 }
 
@@ -88,13 +89,11 @@ async function executeGetKpiData(args: {
   plant?: string;
 }): Promise<string> {
   const startDate = validateDate(args.start_date) ?? `${new Date().getFullYear()}-01-01`;
-  const endDate = validateDate(args.end_date) ?? new Date().toISOString().split("T")[0];
-  const plant = sanitizePlant(args.plant);
-
-  // Parameterized helpers — dates always go first, plant appended when present
+  const endDate   = validateDate(args.end_date)   ?? new Date().toISOString().split("T")[0];
+  const plant     = sanitizePlant(args.plant);
   const dateBinds = [startDate, endDate] as unknown[];
   const withPlant = plant ? [...dateBinds, plant] : dateBinds;
-  const pf = plant ? "AND PLANT = ?" : "";  // parameterized plant filter
+  const pf = plant ? "AND PLANT = ?" : "";
 
   try {
     let rows: unknown[];
@@ -246,10 +245,9 @@ async function executeGetWeeklyTrend(args: {
   plant?: string;
 }): Promise<string> {
   const startDate = validateDate(args.start_date) ?? `${new Date().getFullYear()}-01-01`;
-  const endDate = validateDate(args.end_date) ?? new Date().toISOString().split("T")[0];
-  const plant = sanitizePlant(args.plant);
-  const pf = plant ? "AND PLANT = ?" : "";
-  // All weekly-trend queries share the same bind order: [startDate, endDate, plant?]
+  const endDate   = validateDate(args.end_date)   ?? new Date().toISOString().split("T")[0];
+  const plant     = sanitizePlant(args.plant);
+  const pf        = plant ? "AND PLANT = ?" : "";
   const binds: unknown[] = [startDate, endDate, ...(plant ? [plant] : [])];
 
   const queryMap: Record<string, string> = {
@@ -355,17 +353,27 @@ async function executeGetWeeklyTrend(args: {
 }
 
 async function dispatchTool(name: string, args: Record<string, unknown>): Promise<string> {
-  if (name === "get_kpi_data") return executeGetKpiData(args as Parameters<typeof executeGetKpiData>[0]);
+  if (name === "get_kpi_data")    return executeGetKpiData(args as Parameters<typeof executeGetKpiData>[0]);
   if (name === "get_weekly_trend") return executeGetWeeklyTrend(args as Parameters<typeof executeGetWeeklyTrend>[0]);
   return JSON.stringify({ error: `Tool '${name}' tidak dikenal` });
+}
+
+// Generic completion call that works with both Groq and OpenAI/DeepSeek clients
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function callCompletion(modelId: string, params: Record<string, any>): Promise<any> {
+  const client = getClientForModel(modelId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (client as any).chat.completions.create({ model: modelId, ...params });
 }
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!process.env.GROQ_API_KEY) {
-    return NextResponse.json({ error: "GROQ_API_KEY not configured" }, { status: 503 });
+  const hasDeepSeek = !!process.env.DEEPSEEK_API_KEY;
+  const hasGroq     = !!process.env.GROQ_API_KEY;
+  if (!hasDeepSeek && !hasGroq) {
+    return NextResponse.json({ error: "Tidak ada API key AI yang dikonfigurasi" }, { status: 503 });
   }
 
   const body = await req.json();
@@ -377,20 +385,14 @@ export async function POST(req: NextRequest) {
     alerts?: { severity: string; kpi: string; message: string }[];
   };
 
-  // Agent routing: classify the latest user message and pick the optimal model.
+  // Agent routing: classify the latest user message and pick optimal model.
   // For complex questions the agent overrides the user's manual selection.
-  // For simple/moderate questions it respects the user's choice.
   const latestUserMessage = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const agentRoute = routeModel(latestUserMessage);
   const resolvedModel = agentRoute.complexity === "complex"
     ? agentRoute.modelId
     : (requestedModel && isValidModelId(requestedModel) ? requestedModel : agentRoute.modelId);
 
-  const validatedModel = resolvedModel;
-
-  const groq = getGroqClient();
-  // Cap history to last 10 turns to stay within context budget
-  const MAX_HISTORY = 10;
   const systemPrompt = buildSystemPrompt({
     plant:       context?.plant,
     startDate:   context?.startDate,
@@ -399,52 +401,51 @@ export async function POST(req: NextRequest) {
     kpiSnapshot,
     alerts,
   });
+
   const allMessages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
-    ...messages.slice(-MAX_HISTORY),
+    ...messages.slice(-10),
   ];
 
   const MAX_TOOL_ROUNDS = 3;
-
-  const chatModelPriority = buildChatModelPriority(validatedModel);
+  const chatModelPriority = buildChatModelPriority(resolvedModel);
   let selectedModel = chatModelPriority[0];
   let modelResolved = false;
 
   try {
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      let response: Groq.Chat.ChatCompletion | null = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let response: any = null;
 
       if (!modelResolved) {
         let lastErr: unknown;
-        for (const model of chatModelPriority) {
+        for (const modelId of chatModelPriority) {
           try {
-            response = await groq.chat.completions.create({
-              model,
-              messages: allMessages as Groq.Chat.ChatCompletionMessageParam[],
+            response = await callCompletion(modelId, {
+              messages: allMessages,
               tools: TOOLS,
               tool_choice: "auto",
-              max_tokens: 1500,
+              max_tokens: 2000,
               temperature: 0.3,
             });
-            selectedModel = model;
+            selectedModel = modelId;
             modelResolved = true;
             break;
           } catch (err) {
-            if (isGroqModelUnavailable(err)) { lastErr = err; continue; }
+            if (isAIModelUnavailable(err)) { lastErr = err; continue; }
             throw err;
           }
         }
         if (!response) {
-          const msg = lastErr instanceof Error ? lastErr.message : "No Groq model available";
+          const msg = lastErr instanceof Error ? lastErr.message : "Tidak ada AI model yang tersedia";
           return NextResponse.json({ error: msg }, { status: 503 });
         }
       } else {
-        response = await groq.chat.completions.create({
-          model: selectedModel,
-          messages: allMessages as Groq.Chat.ChatCompletionMessageParam[],
+        response = await callCompletion(selectedModel, {
+          messages: allMessages,
           tools: TOOLS,
           tool_choice: "auto",
-          max_tokens: 1500,
+          max_tokens: 2000,
           temperature: 0.3,
         });
       }
@@ -453,14 +454,14 @@ export async function POST(req: NextRequest) {
       const msg = choice.message;
 
       if (choice.finish_reason !== "tool_calls" || !msg.tool_calls?.length) {
-        break; // no more tools — proceed to streaming final answer
+        break;
       }
 
       allMessages.push({
         role: "assistant",
         content: msg.content ?? "",
-        ...(msg.tool_calls ? { tool_calls: msg.tool_calls } : {}),
-      } as ChatMessage);
+        tool_calls: msg.tool_calls,
+      });
 
       for (const toolCall of msg.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments ?? "{}") as Record<string, unknown>;
@@ -474,10 +475,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Stream final answer with the resolved model
-    const finalStream = await groq.chat.completions.create({
-      model: selectedModel,
-      messages: allMessages as Groq.Chat.ChatCompletionMessageParam[],
-      max_tokens: 1200,
+    const finalStream = await callCompletion(selectedModel, {
+      messages: allMessages,
+      max_tokens: 3000,
       temperature: 0.3,
       stream: true,
     });
@@ -487,7 +487,8 @@ export async function POST(req: NextRequest) {
       async start(controller) {
         try {
           for await (const chunk of finalStream) {
-            const text = chunk.choices[0]?.delta?.content ?? "";
+            const text = (chunk as { choices?: [{ delta?: { content?: string } }] })
+              .choices?.[0]?.delta?.content ?? "";
             if (text) controller.enqueue(encoder.encode(text));
           }
         } finally {

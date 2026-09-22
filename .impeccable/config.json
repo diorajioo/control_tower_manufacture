@@ -8,7 +8,9 @@
       "lib/graph/teams.ts",
       "design-draft.html",
       "design-strategic-mockup.html",
-      "app/lead-time/page.tsx"
+      "app/lead-time/page.tsx",
+      "design-minimalist-mockup.html",
+      "components/dashboard/OutputKPICard.tsx"
     ],
     "ignoreValues": [
       {
@@ -183,6 +185,42 @@
         "value": "inter",
         "createdAt": "2026-09-14T08:10:37.894Z",
         "reason": "Intentional font switch to match design-strategic-mockup.html reference which uses ui-sans-serif/system-ui stack"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#725da3",
+        "createdAt": "2026-09-21T08:50:46.681Z",
+        "reason": "AI badge gradient start — intentional per mockup spec"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#864a9c",
+        "createdAt": "2026-09-21T08:50:49.781Z",
+        "reason": "AI badge gradient end — intentional per mockup spec"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#9ca3af",
+        "createdAt": "2026-09-21T09:41:35.816Z",
+        "reason": "Nivo chart axis tick color — intentional muted gray for chart-internal styling, not UI design drift"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#dbeafe",
+        "createdAt": "2026-09-22T17:21:17.956Z",
+        "reason": "Blue bar track for lead time position breakdown"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#667085",
+        "createdAt": "2026-09-22T17:21:18.234Z",
+        "reason": "Muted secondary label color"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#a3a8b5",
+        "createdAt": "2026-09-22T17:21:18.515Z",
+        "reason": "Dim caption color"
       }
     ]
   }

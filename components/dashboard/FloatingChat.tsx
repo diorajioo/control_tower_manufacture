@@ -126,6 +126,12 @@ const BADGE_CLS: Record<string, { bg: string; text: string }> = {
   emerald: { bg: "bg-emerald-100", text: "text-emerald-700" },
   amber:   { bg: "bg-amber-100",   text: "text-amber-700"   },
   cyan:    { bg: "bg-cyan-100",    text: "text-cyan-700"    },
+  violet:  { bg: "bg-violet-100",  text: "text-violet-700"  },
+};
+
+const PROVIDER_LABEL: Record<string, { label: string; cls: string }> = {
+  deepseek: { label: "DeepSeek", cls: "text-emerald-300/80" },
+  groq:     { label: "Groq",     cls: "text-blue-300/60"    },
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -300,6 +306,9 @@ export function FloatingChat({ filters, kpiSnapshot, alerts }: FloatingChatProps
                           <span className="text-[12px] font-semibold text-white leading-none">{m.name}</span>
                           <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none", badge.bg, badge.text)}>
                             {m.badge}
+                          </span>
+                          <span className={cn("text-[9px] font-medium leading-none", PROVIDER_LABEL[m.provider]?.cls)}>
+                            {PROVIDER_LABEL[m.provider]?.label}
                           </span>
                         </div>
                         <p className="text-[10px] text-blue-200/70 leading-snug">{m.tagline}</p>

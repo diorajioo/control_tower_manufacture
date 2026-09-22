@@ -11,7 +11,7 @@ const INACTIVITY_MS = 15 * 60 * 1000;
 
 
 const NAV_ITEMS = [
-  { icon: LayoutGrid, label: "Strategic",     href: "/dashboard" },
+  { icon: LayoutGrid, label: "Overview",      href: "/dashboard" },
   { icon: Clock,      label: "Lead Time",    href: "/lead-time" },
   { icon: BarChart3,  label: "Output",       href: "/dashboard/output" },
   { icon: Users,      label: "Productivity", href: "/dashboard/productivity" },

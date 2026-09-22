@@ -18,6 +18,12 @@ import {
   getOEEWeekly,
   getE2EWeekly,
   getProductivityDetails,
+  getEtlTimestamp,
+  getLeadTimeWeekly,
+  getOutputWeekly,
+  getBulkOutputWeekly,
+  getYieldWeekly,
+  getRFTWeekly,
 } from "@/lib/queries";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -79,7 +85,8 @@ async function runKPIQueries(
     e2eRes, upstreamRes, downstreamRes, oeeRes,
     prevLeadTimeRes, prevYieldRes, prevRftRes, prevE2ERes, prevOeeRes,
     ltByPosRes, oeeWeeklyRes, e2eWeeklyRes,
-    prevOutputRes, productivityDetailsRes,
+    prevOutputRes, productivityDetailsRes, etlTimestampRes,
+    leadTimeWeeklyRes, outputWeeklyRes, bulkOutputWeeklyRes, yieldWeeklyRes, rftWeeklyRes,
   ] = await Promise.allSettled([
     getLeadTimeKPI(filters),
     getYieldKPI(filters),
@@ -99,6 +106,12 @@ async function runKPIQueries(
     getE2EWeekly(filters),
     getOutputKPI(prev),
     getProductivityDetails(filters),
+    getEtlTimestamp(),
+    getLeadTimeWeekly(filters),
+    getOutputWeekly(filters),
+    getBulkOutputWeekly(filters),
+    getYieldWeekly(filters),
+    getRFTWeekly(filters),
   ]);
 
   const failures = [
@@ -130,6 +143,12 @@ async function runKPIQueries(
   const prevRft        = val(prevRftRes,           { rftPct: 0 });
   const prevE2E        = val(prevE2ERes,           { avgE2EProd: 0 });
   const prevOee        = val(prevOeeRes,           [] as { PLANT: string; OEE: number }[]);
+  const etlTimestamp     = val(etlTimestampRes,      null as string | null);
+  const leadTimeWeekly   = val(leadTimeWeeklyRes,    [] as { WEEK: string; AVG_DAYS: number }[]);
+  const outputWeekly     = val(outputWeeklyRes,      [] as { WEEK: string; TOTAL_FG: number }[]);
+  const bulkOutputWeekly = val(bulkOutputWeeklyRes,  [] as { WEEK: string; TOTAL_BULK: number }[]);
+  const yieldWeekly      = val(yieldWeeklyRes,       [] as { WEEK: string; BULK_LOSS_PCT: number }[]);
+  const rftWeekly        = val(rftWeeklyRes,         [] as { WEEK: string; RFT_PCT: number }[]);
 
   const avg = (arr: { OEE: number; QUALITY?: number; PERFORMANCE?: number }[], key: "OEE" | "QUALITY" | "PERFORMANCE") =>
     arr.length > 0 ? arr.reduce((s, r) => s + (r[key] ?? 0), 0) / arr.length : 0;
@@ -147,6 +166,7 @@ async function runKPIQueries(
       nettTrend:      delta(leadTime.AVG_NETT_LEADTIME  ?? 0, prevLeadTime.AVG_NETT_LEADTIME  ?? 0),
       byPositionNett:  ltByPos.nett.map((r) => ({ position: r.POSITION, avgHours: Number(r.AVG_HOURS.toFixed(1)) })),
       byPositionGross: ltByPos.gross.map((r) => ({ position: r.POSITION, avgHours: Number(r.AVG_HOURS.toFixed(1)) })),
+      sparkline: leadTimeWeekly.map((r) => Number((r.AVG_DAYS ?? 0).toFixed(2))),
     },
     yield: {
       bulkLossPct:   yield_.bulkLossPct,
@@ -154,16 +174,20 @@ async function runKPIQueries(
       bulkLossKg:    yield_.bulkLossKg,
       bulkLossTrend: delta(yield_.bulkLossPct, prevYield.bulkLossPct),
       packLossTrend: delta(yield_.packLossPct, prevYield.packLossPct),
+      sparkline: yieldWeekly.map((r) => Number((r.BULK_LOSS_PCT ?? 0).toFixed(2))),
     },
     rightFirstTime: {
       value: rft.rftPct,
       trend: delta(rft.rftPct, prevRft.rftPct),
+      sparkline: rftWeekly.map((r) => Number((r.RFT_PCT ?? 0).toFixed(1))),
     },
     output: {
       bulkQty:   output.acceptedBulkKg,
       fgQty:     output.releasedFgPcs,
       fgTrend:   delta(output.releasedFgPcs,  prevOutput.releasedFgPcs),
       bulkTrend: delta(output.acceptedBulkKg, prevOutput.acceptedBulkKg),
+      sparkline:     outputWeekly.map((r) => Number((r.TOTAL_FG   ?? 0).toFixed(0))),
+      bulkSparkline: bulkOutputWeekly.map((r) => Number((r.TOTAL_BULK ?? 0).toFixed(0))),
     },
     oee: {
       value:       Number(avgOEE.toFixed(1)),
@@ -183,6 +207,7 @@ async function runKPIQueries(
       byPlant:      oeeByPlant.map((p) => ({ PLANT: p.PLANT })),
       sparkline:    e2eWeekly.map((r) => Number(r.AVG_PROD.toFixed(1))),
     },
+    etlTimestamp,
     _errors: failures.length > 0 ? failures.map(([name]) => name) : undefined,
   };
 }
@@ -208,7 +233,7 @@ const fetchByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runKPIQueries(plant, startDate, endDate, period);
   },
-  ["kpi-by-period"],
+  ["kpi-by-period-v2"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 
@@ -216,7 +241,7 @@ const fetchByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string) => {
     return runKPIQueries(plant, startDate, endDate, undefined);
   },
-  ["kpi-by-dates"],
+  ["kpi-by-dates-v2"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 

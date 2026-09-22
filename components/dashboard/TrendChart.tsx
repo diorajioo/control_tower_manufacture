@@ -24,14 +24,19 @@ interface TrendChartProps {
   onKpiChange: (kpi: string) => void;
   chartHeight?: number;
   fillHeight?: boolean;
+  hideSelector?: boolean;
+  hoveredPlant?: string | null;
+  onPlantHover?: (plant: string | null) => void;
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
 const KPI_TAB_LABELS: Record<string, string> = {
-  leadtime:   "chart_tab_leadtime",
-  upstream:   "chart_tab_upstream",
-  downstream: "chart_tab_downstream",
-  e2e:        "chart_tab_e2e",
-  output:     "chart_tab_output",
+  leadtime: "chart_tab_leadtime",
+  output:   "chart_tab_output",
 };
 
 const nivoTheme = {
@@ -51,7 +56,7 @@ const nivoTheme = {
   },
 };
 
-export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, fillHeight = false }: TrendChartProps) {
+export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, fillHeight = false, hideSelector = false, hoveredPlant = null, onPlantHover }: TrendChartProps) {
   const [data,    setData]    = useState<Record<string, unknown>[]>([]);
   const [plants,  setPlants]  = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -62,16 +67,31 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
 
   useEffect(() => {
     setLoading(true);
+    // OPE is derived from OEE × 0.8 — fetch OEE data and scale client-side
+    const fetchType = kpiType === "ope" ? "oee" : kpiType;
     const params = new URLSearchParams({
       plant:     filters.plant,
       startDate: filters.startDate,
       endDate:   filters.endDate,
-      kpiType,
+      kpiType:   fetchType,
     });
     fetch(`/api/dashboard/trends?${params}`)
       .then((r) => r.json())
       .then((d) => {
-        setData(d.trendSeries ?? []);
+        const series: Record<string, unknown>[] = d.trendSeries ?? [];
+        if (kpiType === "ope") {
+          const plants: string[] = d.plants ?? [];
+          setData(series.map((pt) => {
+            const scaled: Record<string, unknown> = { date: pt.date };
+            for (const p of plants) {
+              const v = pt[p];
+              scaled[p] = typeof v === "number" ? Number((v * 0.8).toFixed(2)) : v;
+            }
+            return scaled;
+          }));
+        } else {
+          setData(series);
+        }
         setPlants(d.plants ?? []);
       })
       .catch(console.error)
@@ -128,6 +148,15 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       })),
     [data, plants]
   );
+
+  const lastValues = useMemo(() => {
+    const out: Record<string, number | null> = {};
+    nivoData.forEach((serie) => {
+      const last = serie.data[serie.data.length - 1];
+      out[String(serie.id)] = last != null ? last.y : null;
+    });
+    return out;
+  }, [nivoData]);
 
   const ActivePointsLayer = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -197,6 +226,31 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
     [ucl, lcl]
   );
 
+  const ActiveLineLayer = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (props: any) => {
+      if (!hoveredPlant || !props.xScale || !props.yScale) return null;
+      const serie = nivoData.find((s) => s.id === hoveredPlant);
+      if (!serie) return null;
+      const points = serie.data.filter((d) => d.y != null);
+      if (points.length < 2) return null;
+      const pathD = points
+        .map((d, i) => `${i === 0 ? "M" : "L"} ${props.xScale(d.x)} ${props.yScale(d.y)}`)
+        .join(" ");
+      return (
+        <path
+          d={pathD}
+          fill="none"
+          stroke={String(serie.color)}
+          strokeWidth={3.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      );
+    },
+    [hoveredPlant, nivoData]
+  );
+
   const isEmpty = nivoData.length === 0 || nivoData.every((s) => s.data.length === 0);
 
   return (
@@ -217,36 +271,57 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       </div>
 
       {/* KPI tabs + plant legend */}
-      <div className={cn("flex items-center justify-between gap-2 mb-2", fillHeight && "shrink-0")}>
-        <div className="flex flex-wrap gap-1">
-          {KPI_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => onKpiChange(opt.value)}
-              className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
-                kpiType === opt.value
-                  ? "bg-[#215AA8] text-white"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
-              }`}
-            >
-              {KPI_TAB_LABELS[opt.value] ? t(KPI_TAB_LABELS[opt.value] as Parameters<typeof t>[0]) : opt.label}
-            </button>
-          ))}
+      {(!hideSelector || plants.length > 0) && (
+        <div className={cn("flex items-center justify-between gap-2 mb-2", fillHeight && "shrink-0")}>
+          {!hideSelector && (
+            <div className="flex flex-wrap gap-1">
+              {KPI_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onKpiChange(opt.value)}
+                  className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
+                    kpiType === opt.value
+                      ? "bg-[#215AA8] text-white"
+                      : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                  }`}
+                >
+                  {KPI_TAB_LABELS[opt.value] ? t(KPI_TAB_LABELS[opt.value] as Parameters<typeof t>[0]) : opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {plants.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0 ml-auto">
+              {plants.map((plant, i) => {
+                const isHovered = hoveredPlant === plant;
+                const isDimmed = hoveredPlant !== null && !isHovered;
+                const lv = lastValues[plant];
+                return (
+                  <button
+                    key={plant}
+                    className="flex items-center gap-1.5 transition-opacity cursor-default"
+                    style={{ opacity: isDimmed ? 0.35 : 1 }}
+                    onMouseEnter={() => onPlantHover?.(plant)}
+                    onMouseLeave={() => onPlantHover?.(null)}
+                  >
+                    <span
+                      className="w-4 h-0.5 rounded-full shrink-0"
+                      style={{ backgroundColor: PLANT_COLORS[i % PLANT_COLORS.length] }}
+                    />
+                    <span className={`text-[10px] font-medium tracking-tight ${isHovered ? "text-gray-700" : "text-gray-400"}`}>{plant}</span>
+                    {lv != null && (
+                      <span className="text-[10px] text-gray-400 tabular-nums">{lv.toFixed(1)}</span>
+                    )}
+                  </button>
+                );
+              })}
+              {hoveredPlant === null && onPlantHover && (
+                <span className="text-[9px] text-gray-300 italic">hover to isolate</span>
+              )}
+            </div>
+          )}
         </div>
-        {plants.length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0">
-            {plants.map((plant, i) => (
-              <div key={plant} className="flex items-center gap-1.5">
-                <span
-                  className="w-4 h-0.5 rounded-full shrink-0"
-                  style={{ backgroundColor: PLANT_COLORS[i % PLANT_COLORS.length] }}
-                />
-                <span className="text-[10px] font-medium text-gray-400 tracking-tight">{plant}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Chart */}
       <div className={fillHeight ? "flex-1 min-h-0" : ""} style={fillHeight ? undefined : { height: chartHeight }}>
@@ -280,10 +355,15 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
             onMouseMove={(point: any) => { activeXRef.current = String(point.data.x); }}
             onMouseLeave={() => { activeXRef.current = null; }}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            colors={(serie: any) => String(serie.color)}
+            colors={(serie: any) => {
+              if (hoveredPlant && String(serie.id) !== hoveredPlant) {
+                return hexToRgba(String(serie.color), 0.16);
+              }
+              return String(serie.color);
+            }}
             lineWidth={2.5}
             markers={markers}
-            layers={["grid", "axes", ControlZoneLayer, "lines", "crosshair", ActivePointsLayer, "mesh"]}
+            layers={["grid", "axes", ControlZoneLayer, "lines", "crosshair", ActivePointsLayer, ActiveLineLayer, "mesh"]}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             tooltip={({ point }: any) => {
               const x = String(point.data.x);

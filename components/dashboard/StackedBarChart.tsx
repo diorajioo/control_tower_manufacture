@@ -23,6 +23,13 @@ interface StackedBarChartProps {
   onKpiChange: (kpi: string) => void;
   chartHeight?: number;
   fillHeight?: boolean;
+  hideSelector?: boolean;
+  hoveredPlant?: string | null;
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
 const KPI_TAB_LABELS: Record<string, string> = {
@@ -47,7 +54,7 @@ const nivoTheme = {
   },
 };
 
-export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 180, fillHeight = false }: StackedBarChartProps) {
+export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 180, fillHeight = false, hideSelector = false, hoveredPlant = null }: StackedBarChartProps) {
   const [rawData,  setRawData]  = useState<Record<string, unknown>[]>([]);
   const [plants,   setPlants]   = useState<string[]>([]);
   const [loading,  setLoading]  = useState(false);
@@ -156,21 +163,23 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
       </div>
 
       {/* KPI tabs */}
-      <div className={cn("flex flex-wrap gap-1 mb-2", fillHeight && "shrink-0")}>
-        {KPI_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => onKpiChange(opt.value)}
-            className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
-              kpiType === opt.value
-                ? "bg-[#215AA8] text-white"
-                : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
-            }`}
-          >
-            {KPI_TAB_LABELS[opt.value] ? t(KPI_TAB_LABELS[opt.value] as Parameters<typeof t>[0]) : opt.label}
-          </button>
-        ))}
-      </div>
+      {!hideSelector && (
+        <div className={cn("flex flex-wrap gap-1 mb-2", fillHeight && "shrink-0")}>
+          {KPI_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => onKpiChange(opt.value)}
+              className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
+                kpiType === opt.value
+                  ? "bg-[#215AA8] text-white"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+              }`}
+            >
+              {KPI_TAB_LABELS[opt.value] ? t(KPI_TAB_LABELS[opt.value] as Parameters<typeof t>[0]) : opt.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Bar chart */}
       <div className={fillHeight ? "flex-1 min-h-0" : ""} style={fillHeight ? undefined : { height: chartHeight }}>
@@ -186,7 +195,12 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
             padding={0.38}
             borderRadius={5}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            colors={(bar: any) => String(bar.data.color)}
+            colors={(bar: any) => {
+              if (hoveredPlant && String(bar.data.plant) !== hoveredPlant) {
+                return hexToRgba(String(bar.data.color), 0.16);
+              }
+              return String(bar.data.color);
+            }}
             colorBy="indexValue"
             axisBottom={{
               tickSize: 0,

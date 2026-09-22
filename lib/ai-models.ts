@@ -1,23 +1,23 @@
 /**
- * ai-models.ts — Portable AI model registry for Groq-backed products
+ * ai-models.ts — Multi-provider AI model registry
  *
- * Drop this file into any project that uses Groq. Set GROQ_API_KEY, import
- * what you need, and the model metadata + fallback logic travels with it.
- *
- * To add a new model: append an entry to GROQ_MODELS below.
- * To support a new provider: implement the AIModelConfig shape for that
- * provider's IDs and wire a new client factory in ai-provider.ts.
+ * Supports DeepSeek (primary) and Groq (fallback/additional).
+ * DeepSeek V4 uses deepseek-chat model ID via api.deepseek.com (OpenAI-compatible).
+ * To add a new model: append an entry to AI_MODELS below.
  */
 
 export type ModelSpeed = "fast" | "balanced" | "thorough";
-export type ModelBadgeVariant = "indigo" | "emerald" | "amber" | "cyan";
+export type ModelBadgeVariant = "indigo" | "emerald" | "amber" | "cyan" | "violet";
+export type ModelProvider = "groq" | "deepseek";
 
 export interface AIModelConfig {
   /** Provider model ID passed to the API */
   id: string;
+  /** Which provider serves this model */
+  provider: ModelProvider;
   /** Short display name shown in UI */
   name: string;
-  /** One-word badge (Cepat / Smart / Seimbang) */
+  /** One-word badge (Cepat / Smart / Reasoning) */
   badge: string;
   /** Tailwind color stem for the badge */
   badgeVariant: ModelBadgeVariant;
@@ -27,101 +27,138 @@ export interface AIModelConfig {
   description: string;
   /** Rate-limit label for the account/tier */
   limit: string;
-  /** Relative speed characteristic — used to sort/recommend */
+  /** Relative speed characteristic */
   speed: ModelSpeed;
 }
 
 // ── Model registry ─────────────────────────────────────────────────────────────
-// Update this list whenever models are added or removed from the Groq account.
 
-export const GROQ_MODELS: AIModelConfig[] = [
+export const AI_MODELS: AIModelConfig[] = [
+  // ── DeepSeek models (primary provider) ──────────────────────────────────────
   {
-    id:          "openai/gpt-oss-120b",
-    name:        "GPT OSS 120B",
-    badge:       "Smart",
-    badgeVariant:"indigo",
-    tagline:     "Analisa mendalam & reasoning kompleks",
-    description: "Model terbesar yang tersedia. Terbaik untuk interpretasi data yang nuanced, laporan panjang, dan pertanyaan multi-step yang butuh konteks penuh.",
-    limit:       "1.000 req/hari",
-    speed:       "thorough",
-  },
-  {
-    id:          "qwen/qwen3.6-27b",
-    name:        "Qwen 3.6 (27B)",
+    id:          "deepseek-chat",
+    provider:    "deepseek",
+    name:        "DeepSeek V4",
     badge:       "Cepat",
     badgeVariant:"emerald",
-    tagline:     "Respon cepat, lookup data, analisa ringkas",
-    description: "27B model dengan TTFB lebih rendah dari model besar. Cocok untuk pertanyaan langsung, cek angka KPI, atau analisa singkat yang butuh respons cepat.",
+    tagline:     "Model utama — cepat, cerdas, token efisien",
+    description: "DeepSeek V4: model chat unggulan untuk analisa KPI, lookup data, dan percakapan manufaktur. Latensi rendah, biaya token paling efisien.",
+    limit:       "Sesuai plan DeepSeek",
+    speed:       "fast",
+  },
+  {
+    id:          "deepseek-reasoner",
+    provider:    "deepseek",
+    name:        "DeepSeek R1",
+    badge:       "Reasoning",
+    badgeVariant:"violet",
+    tagline:     "Chain-of-thought & analisa root-cause mendalam",
+    description: "DeepSeek R1: reasoning model terbaik untuk investigasi root-cause, perbandingan multi-KPI, dan pertanyaan yang butuh chain-of-thought step-by-step.",
+    limit:       "Sesuai plan DeepSeek",
+    speed:       "thorough",
+  },
+
+  // ── Groq models (backup + additional options) ────────────────────────────────
+  {
+    id:          "qwen/qwen3.6-27b",
+    provider:    "groq",
+    name:        "Qwen 3.6 (Groq)",
+    badge:       "Backup",
+    badgeVariant:"emerald",
+    tagline:     "Fallback andal — cepat via Groq",
+    description: "27B model Qwen via Groq. Fallback utama untuk summary dan chat apabila DeepSeek tidak tersedia. Latensi rendah.",
     limit:       "1.000 req/hari",
     speed:       "fast",
   },
   {
+    id:          "openai/gpt-oss-120b",
+    provider:    "groq",
+    name:        "GPT OSS 120B (Groq)",
+    badge:       "Smart",
+    badgeVariant:"indigo",
+    tagline:     "Model besar Groq untuk analisa mendalam",
+    description: "Model Groq terbesar. Terbaik untuk interpretasi data nuanced, laporan panjang, dan pertanyaan multi-step.",
+    limit:       "1.000 req/hari",
+    speed:       "thorough",
+  },
+  {
     id:          "groq/compound",
+    provider:    "groq",
     name:        "Groq Compound",
     badge:       "Seimbang",
     badgeVariant:"amber",
     tagline:     "Kecepatan & kualitas seimbang, no token limit",
-    description: "Model compound tanpa batas token. Pilihan terbaik untuk percakapan panjang, analisa multi-langkah, atau sesi yang butuh konteks besar.",
+    description: "Groq compound model tanpa batas token. Pilihan untuk percakapan panjang atau sesi yang butuh konteks besar.",
     limit:       "250 req/hari · no token limit",
     speed:       "balanced",
   },
   {
     id:          "qwen/qwen3.8-27b",
-    name:        "Qwen 3.8 (27B)",
+    provider:    "groq",
+    name:        "Qwen 3.8 (Groq)",
     badge:       "Cepat+",
     badgeVariant:"cyan",
-    tagline:     "Instruksi terstruktur & data terformat",
-    description: "Iterasi terbaru Qwen. Lebih baik dalam mengikuti instruksi kompleks dan memproses output terstruktur seperti tabel atau daftar.",
+    tagline:     "Instruksi terstruktur & output terformat",
+    description: "Iterasi terbaru Qwen via Groq. Lebih baik mengikuti instruksi kompleks dan memproses output terstruktur seperti tabel.",
     limit:       "1.000 req/hari",
     speed:       "fast",
   },
 ];
 
+// Backward-compat alias — FloatingChat.tsx imports GROQ_MODELS
+export const GROQ_MODELS = AI_MODELS;
+
 // ── Priority lists ─────────────────────────────────────────────────────────────
 
 /**
- * Summary uses quality-first order.
- * Cached for 5 hours so latency matters less than output quality.
- * Keep this short: 1 primary + 1 safety fallback.
+ * Summary priority: DeepSeek primary (fastest, fewest tokens), one Groq fallback.
+ * Cached 5 hours so latency matters less — but we still prefer the fastest model.
  */
 export const SUMMARY_MODEL_PRIORITY: string[] = [
-  "openai/gpt-oss-120b",
-  "groq/compound",
-  "qwen/qwen3.8-27b",
+  "deepseek-chat",      // primary: DeepSeek V4, fastest + lowest token cost
+  "qwen/qwen3.6-27b",  // fallback: one reliable Groq model
 ];
 
-/** Default model for interactive chat (speed > quality) */
-export const CHAT_DEFAULT_MODEL_ID = "qwen/qwen3.6-27b";
+/** Default model for interactive chat */
+export const CHAT_DEFAULT_MODEL_ID = "deepseek-chat";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 export function getModelConfig(id: string): AIModelConfig | undefined {
-  return GROQ_MODELS.find((m) => m.id === id);
+  return AI_MODELS.find((m) => m.id === id);
+}
+
+export function getProviderForModel(id: string): ModelProvider {
+  return AI_MODELS.find((m) => m.id === id)?.provider ?? "groq";
 }
 
 export function isValidModelId(id: string): boolean {
-  return GROQ_MODELS.some((m) => m.id === id);
+  return AI_MODELS.some((m) => m.id === id);
 }
 
 /**
- * Build the fallback priority list for a chat session.
- * If the user picked a specific model, try it first; remaining models
- * serve as ordered fallbacks so the session never hard-fails on one model.
+ * Build fallback priority list for a chat session.
+ * Preferred model goes first; all other models serve as ordered fallbacks.
  */
 export function buildChatModelPriority(preferredId?: string): string[] {
-  const all = GROQ_MODELS.map((m) => m.id);
+  const all = AI_MODELS.map((m) => m.id);
   if (!preferredId || !isValidModelId(preferredId)) {
-    // Default: fast models first
     return [CHAT_DEFAULT_MODEL_ID, ...all.filter((id) => id !== CHAT_DEFAULT_MODEL_ID)];
   }
   return [preferredId, ...all.filter((id) => id !== preferredId)];
 }
 
 /**
- * Returns true for Groq error codes that mean the model is unavailable
- * on this account tier — safe to skip and try the next fallback.
+ * Returns true for error codes that mean the model is unavailable on this
+ * account tier — safe to skip and try the next fallback.
+ * Handles both Groq error codes and OpenAI/DeepSeek HTTP errors.
  */
 export function isModelUnavailableError(err: unknown): boolean {
   const code = (err as { error?: { code?: string } })?.error?.code;
-  return code === "model_not_found" || code === "model_decommissioned";
+  if (code === "model_not_found" || code === "model_decommissioned") return true;
+  const status = (err as { status?: number })?.status;
+  if (status === 404) return true;
+  const msg = (err as { message?: string })?.message?.toLowerCase() ?? "";
+  if (msg.includes("model_not_found") || msg.includes("does not exist") || msg.includes("model not found")) return true;
+  return false;
 }

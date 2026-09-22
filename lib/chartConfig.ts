@@ -13,12 +13,12 @@ export const PLANT_COLORS = [
 
 // Daftar KPI untuk selector di chart — label dan unit harus sama di semua chart
 export const KPI_OPTIONS = [
-  { value: "leadtime",    label: "Lead Time",       unit: "days"   },
-  { value: "upstream",    label: "Upstream Prod.",   unit: "kg/mh"  },
-  { value: "downstream",  label: "Downstream Prod.", unit: "pcs/mh" },
-  { value: "e2e",         label: "E2E Prod.",        unit: "pcs/mh" },
-  { value: "output",      label: "Accepted Output",  unit: "pcs"    },
-  { value: "batch",       label: "Besar Batch",      unit: "kg"     },
+  { value: "leadtime", label: "Lead Time",  unit: "hari" },
+  { value: "output",   label: "Output FG",  unit: "pcs"  },
+  { value: "oee",      label: "OEE",        unit: "%"    },
+  { value: "ope",      label: "OPE",        unit: "%"    },
+  { value: "bulkloss", label: "Yield Loss", unit: "%"    },
+  { value: "rft",      label: "RFT",        unit: "%"    },
 ] as const;
 
 export type KpiValue = (typeof KPI_OPTIONS)[number]["value"];

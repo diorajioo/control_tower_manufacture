@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import Groq from "groq-sdk";
-import { GROQ_MODEL_PRIORITY, isGroqModelUnavailable } from "@/lib/ai-provider";
+import { GROQ_MODEL_PRIORITY, isAIModelUnavailable, getClientForModel } from "@/lib/ai-provider";
+import type Groq from "groq-sdk";
+import type OpenAI from "openai";
 
 export const maxDuration = 60;
 
@@ -22,43 +23,47 @@ Aturan ketat:
 Target ≥ OEE 65%, Bulk Loss < 3%, Pack Loss < 1%, RFT ≥ 95%.
 Analisis hanya dari data yang diberikan.`;
 
-async function createStreamWithFallback(
-  groq: Groq,
-  messages: Groq.Chat.ChatCompletionMessageParam[]
-) {
+type AnyMessage = Groq.Chat.ChatCompletionMessageParam | OpenAI.Chat.ChatCompletionMessageParam;
+
+async function createStreamWithFallback(messages: AnyMessage[]) {
   let lastErr: unknown;
-  for (const model of GROQ_MODEL_PRIORITY) {
+  for (const modelId of GROQ_MODEL_PRIORITY) {
     try {
-      return await groq.chat.completions.create({
-        model,
+      const client = getClientForModel(modelId);
+      // Both Groq and OpenAI SDK share the same create() signature
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return await (client as any).chat.completions.create({
+        model: modelId,
         max_tokens: 600,
-        stream: true as const,
+        stream: true,
         messages,
       });
     } catch (err) {
-      if (isGroqModelUnavailable(err)) { lastErr = err; continue; }
+      if (isAIModelUnavailable(err)) { lastErr = err; continue; }
       throw err;
     }
   }
-  throw lastErr ?? new Error("Tidak ada Groq model yang tersedia");
+  throw lastErr ?? new Error("Tidak ada AI model yang tersedia untuk summary");
 }
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!process.env.GROQ_API_KEY) {
-    return NextResponse.json({ error: "GROQ_API_KEY not configured" }, { status: 503 });
+  const hasDeepSeek = !!process.env.DEEPSEEK_API_KEY;
+  const hasGroq = !!process.env.GROQ_API_KEY;
+  if (!hasDeepSeek && !hasGroq) {
+    return NextResponse.json({ error: "Tidak ada API key AI yang dikonfigurasi" }, { status: 503 });
   }
 
   const body = await req.json();
   const { kpi, filters } = body;
 
   const trendText = [
-    kpi.leadTime?.grossTrend   != null ? `Lead Time MoM: ${kpi.leadTime.grossTrend > 0 ? "+" : ""}${kpi.leadTime.grossTrend}%`           : null,
-    kpi.rightFirstTime?.trend  != null ? `RFT MoM: ${kpi.rightFirstTime.trend > 0 ? "+" : ""}${kpi.rightFirstTime.trend}%`               : null,
-    kpi.oee?.trend             != null ? `OEE MoM: ${kpi.oee.trend > 0 ? "+" : ""}${kpi.oee.trend}%`                                     : null,
-    kpi.yield?.bulkLossTrend   != null ? `Bulk Loss MoM: ${kpi.yield.bulkLossTrend > 0 ? "+" : ""}${kpi.yield.bulkLossTrend}%`           : null,
+    kpi.leadTime?.grossTrend   != null ? `Lead Time MoM: ${kpi.leadTime.grossTrend > 0 ? "+" : ""}${kpi.leadTime.grossTrend}%`         : null,
+    kpi.rightFirstTime?.trend  != null ? `RFT MoM: ${kpi.rightFirstTime.trend > 0 ? "+" : ""}${kpi.rightFirstTime.trend}%`             : null,
+    kpi.oee?.trend             != null ? `OEE MoM: ${kpi.oee.trend > 0 ? "+" : ""}${kpi.oee.trend}%`                                   : null,
+    kpi.yield?.bulkLossTrend   != null ? `Bulk Loss MoM: ${kpi.yield.bulkLossTrend > 0 ? "+" : ""}${kpi.yield.bulkLossTrend}%`         : null,
   ].filter(Boolean).join(", ");
 
   const userMessage = `Data KPI periode ${filters.startDate} s/d ${filters.endDate}, Plant: ${filters.plant || "Semua Plant"}:
@@ -74,30 +79,28 @@ Produktivitas E2E: ${kpi.productivity?.e2e ?? "—"} pcs/manhour${trendText ? `\
 Buat ringkasan eksekutif singkat:`;
 
   try {
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const messages: Groq.Chat.ChatCompletionMessageParam[] = [
+    const messages: AnyMessage[] = [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: userMessage },
+      { role: "user",   content: userMessage },
     ];
 
-    const stream = await createStreamWithFallback(groq, messages);
+    const stream = await createStreamWithFallback(messages);
 
     const encoder = new TextEncoder();
-    // Plain-text sentinel — appended only when the model finishes cleanly.
-    // The client strips this before display and uses it to detect truncation.
-    // Must not contain null bytes (filtered by some HTTP proxies/edges).
+    // Sentinel appended when model finishes cleanly; client strips it to detect truncation.
     const DONE_SENTINEL = "\n​[DONE]​";
 
     const readable = new ReadableStream({
       async start(controller) {
         try {
           for await (const chunk of stream) {
-            const text = chunk.choices[0]?.delta?.content ?? "";
+            const text = (chunk as { choices?: [{ delta?: { content?: string } }] })
+              .choices?.[0]?.delta?.content ?? "";
             if (text) controller.enqueue(encoder.encode(text));
           }
           controller.enqueue(encoder.encode(DONE_SENTINEL));
         } catch {
-          // Stream error — omit sentinel so client knows it was cut
+          // Stream error — omit sentinel so client detects truncation
         } finally {
           controller.close();
         }

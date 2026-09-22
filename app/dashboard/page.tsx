@@ -4,17 +4,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useI18n } from "@/lib/i18n";
 import { useRouter } from "next/navigation";
-import { Clock, Droplets, ShieldCheck, Package, Gauge, Activity, Users } from "lucide-react";
+import { Clock, Droplets, Package, Gauge, Zap, Users } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
 import { SecurityOverlay } from "@/components/dashboard/SecurityOverlay";
-import { KPICard, MiniStat, CircularGauge, TrendBadge } from "@/components/dashboard/KPICard";
+import { KPICard, CircularGauge, TrendBadge, Sparkline } from "@/components/dashboard/KPICard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
-import { StackedBarChart } from "@/components/dashboard/StackedBarChart";
 import { SkeletonCard } from "@/components/dashboard/SkeletonCard";
+import { AIRisksPanel } from "@/components/dashboard/AIRisksPanel";
 import { AISummary } from "@/components/dashboard/AISummary";
 import { AlertPanel } from "@/components/dashboard/AlertPanel";
 import { FloatingChat } from "@/components/dashboard/FloatingChat";
+import { OutputKPICard } from "@/components/dashboard/OutputKPICard";
+import { LeadTimeKPICard } from "@/components/dashboard/LeadTimeKPICard";
 import { formatThousands, cn } from "@/lib/utils";
 import { computeAlerts, type KPIAlert } from "@/lib/alerts";
 
@@ -26,6 +28,7 @@ interface KPIResponse {
     nettTrend: number | null;
     byPositionNett: { position: string; avgHours: number }[];
     byPositionGross: { position: string; avgHours: number }[];
+    sparkline: number[];
   };
   yield: {
     bulkLossPct: number;
@@ -33,13 +36,16 @@ interface KPIResponse {
     bulkLossKg: number;
     bulkLossTrend: number | null;
     packLossTrend: number | null;
+    sparkline: number[];
   };
-  rightFirstTime: { value: number; trend: number | null };
+  rightFirstTime: { value: number; trend: number | null; sparkline: number[] };
   output: {
     bulkQty: number;
     fgQty: number;
     fgTrend: number | null;
     bulkTrend: number | null;
+    sparkline: number[];
+    bulkSparkline: number[];
   };
   oee: { value: number; quality: number; performance: number; byPlant: { PLANT: string; OEE: number }[]; trend: number | null; sparkline: number[] };
   productivity: {
@@ -63,20 +69,16 @@ interface Filters {
 }
 
 
-// ── Section divider ────────────────────────────────────────────────────────────
 
-function SectionDivider({ label, accentColor = "#6366f1" }: { label: string; accentColor?: string }) {
+function OutlineBadge({ children, color }: { children: React.ReactNode; color: "red" | "green" | "amber" }) {
+  const cls =
+    color === "red"   ? "text-red-600 border-red-200"
+    : color === "green" ? "text-emerald-600 border-emerald-300"
+    : "text-[#b45309] border-[#fcd34d]";
   return (
-    <div className="flex items-center gap-3 mb-4">
-      <div className="h-px flex-1 bg-gray-100" />
-      <span
-        className="text-[10px] font-bold tracking-widest uppercase shrink-0"
-        style={{ color: accentColor, opacity: 0.7 }}
-      >
-        {label}
-      </span>
-      <div className="h-px flex-1 bg-gray-100" />
-    </div>
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-[3.5px] rounded-md border-[1.5px] w-fit ${cls}`}>
+      {children}
+    </span>
   );
 }
 
@@ -92,8 +94,7 @@ export default function DashboardPage() {
   const [alerts,        setAlerts]        = useState<KPIAlert[]>([]);
   const [dismissedIds,  setDismissedIds]  = useState<Set<string>>(new Set());
   const [alertPanelOpen, setAlertPanelOpen] = useState(false);
-  const [leadTimeUnit,  setLeadTimeUnit]  = useState<"days" | "hours">("days");
-  const [leadTimeType,  setLeadTimeType]  = useState<"gross" | "nett">("gross");
+  const [activeView,    setActiveView]    = useState<"strategic" | "tactical">("strategic");
   const [kpiType,       setKpiType]       = useState("leadtime");
   const [fetchError,    setFetchError]    = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(() => {
@@ -172,6 +173,7 @@ export default function DashboardPage() {
       const [kpiRes] = await Promise.all([
         fetch(`/api/dashboard/kpi?${params}`).then((r) => r.json()),
       ]);
+      if (!kpiRes?.leadTime) throw new Error(kpiRes?.error ?? "Invalid KPI response shape");
       setKpi(kpiRes);
       setLastUpdated(new Date());
       setRefreshCount((n) => n + 1);
@@ -182,6 +184,7 @@ export default function DashboardPage() {
         oee:          { value: kpiRes.oee?.value ?? 100, trend: kpiRes.oee?.trend ?? null },
       });
       setAlerts(newAlerts);
+      setDismissedIds(new Set());
 
       // Auto-send new critical alerts to Teams (if configured).
       // Only sends alert IDs not yet sent this session — prevents spam on every hourly refresh.
@@ -207,8 +210,9 @@ export default function DashboardPage() {
     } catch (err) {
       console.error("Dashboard fetch error:", err);
       setFetchError(
-        err instanceof Error ? err.message : "Gagal memuat data — coba refresh"
+        err instanceof Error ? err.message : "Failed to load data — try refreshing"
       );
+      setLastUpdated(new Date());
     } finally {
       setLoading(false);
     }
@@ -249,14 +253,7 @@ export default function DashboardPage() {
 
   const visibleAlerts = alerts.filter((a) => !dismissedIds.has(a.id));
 
-  const leadTimeRawDays   = leadTimeType === "gross" ? (kpi?.leadTime?.grossDays ?? 0) : (kpi?.leadTime?.nettDays ?? 0);
-  const leadTimeRawTrend  = leadTimeType === "gross" ? kpi?.leadTime?.grossTrend : kpi?.leadTime?.nettTrend;
-  const leadTimeTrendInverted  = leadTimeRawTrend  != null ? -leadTimeRawTrend  : undefined;
   const bulkLossTrendInverted  = kpi?.yield?.bulkLossTrend  != null ? -kpi.yield.bulkLossTrend  : undefined;
-  const packLossTrendInverted  = kpi?.yield?.packLossTrend  != null ? -kpi.yield.packLossTrend  : undefined;
-
-  const rftValue  = kpi?.rightFirstTime?.value ?? 0;
-  const opeValue  = kpi ? (kpi.oee?.value ?? 0) * 0.8 : null;
 
   if (status === "loading") {
     return (
@@ -269,16 +266,16 @@ export default function DashboardPage() {
   const monitorUrl = `/monitor?page=strategic&plant=${encodeURIComponent(filters.plant)}&period=${encodeURIComponent(filters.period)}&startDate=${filters.startDate}&endDate=${filters.endDate}&dataLevel=${filters.dataLevel}`;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100">
+    <div className="flex h-screen overflow-hidden bg-[#F7F8FA]">
       <Sidebar />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Header
           plants={plants}
           onFilterChange={handleFilterChange}
-          views={[]}
-          activeView=""
-          onViewChange={() => {}}
+          views={[{ key: "strategic", label: "Strategic" }, { key: "tactical", label: "Tactical" }]}
+          activeView={activeView}
+          onViewChange={(v) => setActiveView(v as "strategic" | "tactical")}
           onRefresh={handleRefresh}
           isLoading={loading}
           lastUpdated={lastUpdated}
@@ -289,455 +286,360 @@ export default function DashboardPage() {
           onMonitorMode={() => router.push(monitorUrl)}
         />
 
-        <main className="flex-1 p-5 overflow-y-auto min-h-0" onClick={() => setHighlightedKpi(null)}>
+        <main className="flex-1 px-5 py-4 overflow-y-auto min-h-0 flex flex-col gap-3.5" onClick={() => setHighlightedKpi(null)}>
           {fetchError && (
-            <div className="mb-3 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between gap-3">
+            <div className="px-4 py-2.5 rounded-lg bg-red-50 border border-red-200 flex items-center justify-between gap-3">
               <span className="text-[12px] text-red-600 font-medium">{fetchError}</span>
               <button onClick={() => setFetchError(null)} className="text-red-400 hover:text-red-600 text-xs shrink-0">✕</button>
             </div>
           )}
           <AISummary kpi={kpi} filters={filters} ready={!loading && kpi !== null} />
 
-          {(alertPanelOpen || visibleAlerts.some((a) => a.severity === "critical")) && (
-            <AlertPanel
-              alerts={visibleAlerts}
-              onDismiss={handleDismissAlert}
-              plant={filters.plant}
-              period={filters.period}
-            />
-          )}
+          <AlertPanel
+            alerts={visibleAlerts}
+            onDismiss={handleDismissAlert}
+            plant={filters.plant}
+            period={filters.period}
+          />
 
-          {/* ── Hero OEE ────────────────────────────────────────────────── */}
+          {activeView === "strategic" && (<>
+
+          {/* ── Row 1: Lead Time + Output ── */}
+          <div className="grid grid-cols-2 gap-3.5">
           {loading ? (
-              <div className="mb-4 rounded-xl border border-slate-200 bg-white h-[92px] animate-pulse" />
-            ) : kpi ? (() => {
-              const oeeVal  = kpi.oee?.value       ?? 0;
-              const perfVal = kpi.oee?.performance ?? 0;
-              const qualVal = kpi.oee?.quality     ?? 0;
-              const availVal = perfVal > 0 && qualVal > 0
-                ? ((oeeVal / 100) / ((perfVal / 100) * (qualVal / 100))) * 100
-                : null;
-              const isGood = oeeVal >= 65;
-              const accent = isGood ? "bg-emerald-500" : "bg-red-500";
-              const valCls = isGood ? "text-emerald-600" : "text-red-600";
-              return (
-                <div className={cn("mb-4 bg-white rounded-xl border border-slate-200 flex overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.06)] transition-all duration-200", highlightedKpi !== null && highlightedKpi !== "oee" && "opacity-30 scale-[0.99]")}>
-                  <div className={cn("w-[5px] shrink-0", accent)} />
-                  <div className="flex-1 px-6 py-[18px] flex items-center gap-10 flex-wrap">
-                    <div className="shrink-0">
-                      <p className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2">OEE — Overall Equipment Effectiveness</p>
-                      <div className="flex items-baseline gap-1 leading-none">
-                        <span className={cn("text-[3.25rem] font-bold tabular-nums tracking-tight leading-none", valCls)}>
-                          {oeeVal.toFixed(1)}
-                        </span>
-                        <span className={cn("text-xl font-bold", valCls)}>%</span>
-                      </div>
-                      <p className="text-[12px] text-slate-500 mt-1.5">
-                        {isGood
-                          ? "Meets target (≥65%)"
-                          : `Gap ${(65 - oeeVal).toFixed(1)} pts below target 65%`}
-                      </p>
-                    </div>
-                    <div className="w-px h-14 bg-slate-100 shrink-0" />
-                    <div className="flex gap-9">
-                      {availVal !== null && (
-                        <div>
-                          <p className="text-[11px] text-slate-400 mb-1.5">Availability</p>
-                          <p className={cn("text-2xl font-bold leading-none tabular-nums", availVal >= 80 ? "text-emerald-600" : "text-amber-600")}>
-                            {availVal.toFixed(1)}<span className="text-[13px] font-medium text-slate-400 ml-0.5">%</span>
-                          </p>
-                          <p className={cn("text-[11px] font-semibold mt-1.5", availVal >= 80 ? "text-emerald-600" : "text-amber-600")}>
-                            {availVal >= 80 ? "✓ On target" : "Below target"}
-                          </p>
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-[11px] text-slate-400 mb-1.5">Performance</p>
-                        <p className={cn("text-2xl font-bold leading-none tabular-nums", perfVal >= 80 ? "text-emerald-600" : "text-amber-600")}>
-                          {perfVal.toFixed(1)}<span className="text-[13px] font-medium text-slate-400 ml-0.5">%</span>
-                        </p>
-                        <p className={cn("text-[11px] font-semibold mt-1.5", perfVal >= 80 ? "text-emerald-600" : "text-amber-600")}>
-                          {perfVal >= 80 ? "✓ On target" : "Below target"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] text-slate-400 mb-1.5">Quality</p>
-                        <p className={cn("text-2xl font-bold leading-none tabular-nums", qualVal >= 95 ? "text-emerald-600" : "text-amber-600")}>
-                          {qualVal.toFixed(1)}<span className="text-[13px] font-medium text-slate-400 ml-0.5">%</span>
-                        </p>
-                        <p className={cn("text-[11px] font-semibold mt-1.5", qualVal >= 95 ? "text-emerald-600" : "text-amber-600")}>
-                          {qualVal >= 95 ? "✓ Excellent" : "Needs attention"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })() : null
-          }
+            Array.from({ length: 2 }).map((_, i) => <SkeletonCard key={i} />)
+          ) : (<>
+            <LeadTimeKPICard
+              grossDays={kpi?.leadTime?.grossDays ?? 0}
+              nettDays={kpi?.leadTime?.nettDays ?? 0}
+              grossTrend={kpi?.leadTime?.grossTrend ?? null}
+              nettTrend={kpi?.leadTime?.nettTrend ?? null}
+              byPositionGross={kpi?.leadTime?.byPositionGross ?? []}
+              byPositionNett={kpi?.leadTime?.byPositionNett ?? []}
+              sparkline={kpi?.leadTime?.sparkline ?? []}
+              hasAlert={visibleAlerts.some((a) => a.id.startsWith("leadtime"))}
+            />
+            <OutputKPICard
+              fgQty={kpi?.output?.fgQty ?? 0}
+              bulkQty={kpi?.output?.bulkQty ?? 0}
+              fgTrend={kpi?.output?.fgTrend ?? null}
+              bulkTrend={kpi?.output?.bulkTrend ?? null}
+              sparkline={kpi?.output?.sparkline ?? []}
+              bulkSparkline={kpi?.output?.bulkSparkline ?? []}
+            />
+          </>)}
+          </div>
 
-          <div>
-          {/* ── Operation KPIs ─────────────────────────────────────────── */}
-          <SectionDivider label={t("section_operation_kpis")} accentColor="#215AA8" />
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-[14px] mb-5">
+          {/* ── Row 2: OEE + OPE + Yield + RFT compact ── */}
+          <div className="grid grid-cols-4 gap-3.5">
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
             ) : (
               <>
-                {/* Lead Time */}
+                {/* OEE compact */}
                 <KPICard
-                  dimmed={highlightedKpi !== null && highlightedKpi !== "leadtime"}
-                  flashKey={refreshCount}
-                  title={t("card_leadtime")}
-                  tooltip="Waktu dari PO dibuat hingga produk diterima NDC. Gross = total proses; Nett = waktu aktual produksi."
-                  icon={<Clock size={16} />}
-                  iconColor="#3b82f6"
-                  value={
-                    kpi
-                      ? leadTimeUnit === "hours"
-                        ? (leadTimeRawDays * 24).toFixed(1)
-                        : leadTimeRawDays.toFixed(2)
-                      : "—"
-                  }
-                  unit={leadTimeUnit === "days" ? "days" : "hrs"}
-                  subtitle={leadTimeType === "gross" ? t("lt_subtitle_gross") : t("lt_subtitle_nett")}
-                  trend={leadTimeTrendInverted}
-                  trendLabel={t("lt_vs_prev")}
-                  alert={visibleAlerts.some((a) => a.id.startsWith("leadtime"))}
-                >
-                  <div className="flex gap-1.5 pt-0.5">
-                    <div className="flex gap-1">
-                      {(["gross", "nett"] as const).map((lt) => (
-                        <button
-                          key={lt}
-                          onClick={() => setLeadTimeType(lt)}
-                          className={cn(
-                            "text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors",
-                            leadTimeType === lt
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                          )}
-                        >
-                          {lt === "gross" ? t("lt_gross") : t("lt_nett")}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="w-px bg-gray-100 self-stretch" />
-                    <div className="flex gap-1">
-                      {(["days", "hours"] as const).map((u) => (
-                        <button
-                          key={u}
-                          onClick={() => setLeadTimeUnit(u)}
-                          className={cn(
-                            "text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors",
-                            leadTimeUnit === u
-                              ? "bg-slate-700 text-white"
-                              : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                          )}
-                        >
-                          {u === "days" ? t("lt_daily") : t("lt_hourly")}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {(() => {
-                    const positions = leadTimeType === "gross"
-                      ? (kpi?.leadTime?.byPositionGross ?? [])
-                      : (kpi?.leadTime?.byPositionNett ?? []);
-                    if (positions.length === 0) return null;
-                    const max = positions[0].avgHours || 1;
-                    const toDisplay = (h: number) =>
-                      leadTimeUnit === "days" ? (h / 24).toFixed(2) : h.toFixed(1);
-                    const unitLabel = leadTimeUnit === "days" ? "d" : "h";
-                    return (
-                      <div className="pt-2 border-t border-gray-100 space-y-1.5 max-h-20 overflow-y-auto">
-                        {positions.map((p) => (
-                          <div key={p.position} className="flex items-center gap-2">
-                            <span className="text-[10px] text-gray-500 w-24 shrink-0 truncate tracking-tight" title={p.position}>
-                              {p.position}
-                            </span>
-                            <div className="flex-1 bg-gray-100 rounded-full h-1 overflow-hidden">
-                              <div
-                                className="h-full bg-blue-400 rounded-full"
-                                style={{ width: `${(p.avgHours / max) * 100}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-gray-400 w-10 text-right shrink-0 tabular-nums">
-                              {toDisplay(p.avgHours)}{unitLabel}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </KPICard>
-
-                {/* Yield */}
-                <KPICard
-                  dimmed={highlightedKpi !== null && highlightedKpi !== "yield"}
-                  flashKey={refreshCount}
-                  title={t("card_yield")}
-                  tooltip="Persentase bahan baku yang hilang dalam proses produksi. Bulk Loss = proses olah; Pack Loss = proses kemas."
-                  icon={<Droplets size={16} />}
-                  iconColor="#f59e0b"
-                  alert={visibleAlerts.some((a) => a.id.startsWith("bulkloss") || a.id.startsWith("packloss"))}
-                >
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-baseline gap-1 mb-0.5">
-                        <span className="text-[1.75rem] font-bold text-slate-900 tabular-nums tracking-tight">
-                          {kpi?.yield?.bulkLossPct?.toFixed(1) ?? "—"}
-                        </span>
-                        <span className="text-[11px] text-gray-400">%</span>
-                      </div>
-                      <p className="text-[10px] text-gray-400">{t("yield_bulk_loss")}</p>
-                      {bulkLossTrendInverted !== undefined && (
-                        <span className={`text-[10px] font-semibold ${bulkLossTrendInverted >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                          {bulkLossTrendInverted >= 0 ? "↓" : "↑"} {Math.abs(bulkLossTrendInverted).toFixed(1)}%
-                        </span>
-                      )}
-                    </div>
-                    <div className="w-px bg-gray-100 self-stretch" />
-                    <div className="flex-1">
-                      <div className="flex items-baseline gap-1 mb-0.5">
-                        <span className="text-[1.75rem] font-bold text-slate-900 tabular-nums tracking-tight">
-                          {kpi?.yield?.packLossPct?.toFixed(1) ?? "—"}
-                        </span>
-                        <span className="text-[11px] text-gray-400">%</span>
-                      </div>
-                      <p className="text-[10px] text-gray-400">{t("yield_pack_loss")}</p>
-                      {packLossTrendInverted !== undefined && (
-                        <span className={`text-[10px] font-semibold ${packLossTrendInverted >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                          {packLossTrendInverted >= 0 ? "↓" : "↑"} {Math.abs(packLossTrendInverted).toFixed(1)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {kpi && (
-                    <p className="text-[10px] text-gray-400 pt-2 border-t border-gray-100">
-                      ~{formatThousands(kpi.yield?.bulkLossKg ?? 0)} {t("yield_loss_volume")}
-                    </p>
-                  )}
-                </KPICard>
-
-                {/* Right First Time */}
-                <KPICard
-                  dimmed={highlightedKpi !== null && highlightedKpi !== "rft"}
-                  flashKey={refreshCount}
-                  title={t("card_rft")}
-                  tooltip="Persentase batch yang lulus QC tanpa rework atau rejection pada percobaan pertama. Target: ≥95%."
-                  icon={<ShieldCheck size={16} />}
-                  iconColor="#22c55e"
-                  trend={kpi?.rightFirstTime?.trend ?? undefined}
-                  trendLabel="vs periode sebelumnya"
-                  alert={visibleAlerts.some((a) => a.id.startsWith("rft"))}
-                >
-                  <div className="flex items-center gap-4">
-                    <CircularGauge
-                      value={rftValue}
-                      color={rftValue >= 95 ? "#22c55e" : rftValue >= 90 ? "#f59e0b" : "#ef4444"}
-                      ariaLabel={`Right First Time: ${rftValue.toFixed(1)}% dari target 95%`}
-                    />
-                    <div>
-                      <p className="text-[11px] text-gray-500 leading-snug">{t("rft_passed_rate")}</p>
-                      {rftValue >= 95 ? (
-                        <p className="text-[11px] text-emerald-600 font-semibold mt-1">{t("rft_meets")}</p>
-                      ) : rftValue > 0 ? (
-                        <p className="text-[11px] text-amber-600 font-semibold mt-1">{t("rft_below")}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                </KPICard>
-
-                {/* Output */}
-                <KPICard
-                  dimmed={highlightedKpi !== null && highlightedKpi !== "output"}
-                  flashKey={refreshCount}
-                  title={t("card_output")}
-                  tooltip="Jumlah produk yang berhasil diproduksi dalam periode ini. FG = produk jadi (pcs); Bulk = produk setengah jadi."
-                  icon={<Package size={16} />}
-                  iconColor="#6366f1"
-                >
-                  <div className="space-y-3">
-                    <div>
-                      <div className="flex items-baseline justify-between gap-2">
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-[1.75rem] font-bold text-slate-900 tabular-nums tracking-tight">
-                            {kpi ? formatThousands(kpi.output?.fgQty ?? 0) : "—"}
-                          </span>
-                          <span className="text-[11px] text-gray-400 font-medium">pcs</span>
-                        </div>
-                        {kpi?.output?.fgTrend != null && <TrendBadge trend={kpi.output.fgTrend} />}
-                      </div>
-                      <p className="text-[10px] text-gray-400 mt-0.5">{t("output_fg")}</p>
-                    </div>
-                    <div className="h-px bg-gray-100" />
-                    <div>
-                      <div className="flex items-baseline justify-between gap-2">
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-[1.75rem] font-bold text-slate-900 tabular-nums tracking-tight">
-                            {kpi ? formatThousands(kpi.output?.bulkQty ?? 0) : "—"}
-                          </span>
-                          <span className="text-[11px] text-gray-400 font-medium">kg</span>
-                        </div>
-                        {kpi?.output?.bulkTrend != null && <TrendBadge trend={kpi.output.bulkTrend} />}
-                      </div>
-                      <p className="text-[10px] text-gray-400 mt-0.5">{t("output_bulk")}</p>
-                    </div>
-                  </div>
-                </KPICard>
-              </>
-            )}
-          </div>
-
-          </div>
-
-          <div>
-          {/* ── Equipment & People ──────────────────────────────────────── */}
-          <SectionDivider label={t("section_equipment_people")} accentColor="#8b5cf6" />
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-[14px] mb-5">
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
-            ) : (
-              <>
-                {/* OEE */}
-                <KPICard
+                  compact
                   dimmed={highlightedKpi !== null && highlightedKpi !== "oee"}
                   flashKey={refreshCount}
                   title={t("card_oee")}
-                  tooltip="Overall Equipment Effectiveness: efisiensi penggunaan mesin (Performance × Quality). Target: ≥65%."
+                  tooltip="Overall Equipment Effectiveness: machine efficiency (Performance × Quality). Target: ≥65%."
                   icon={<Gauge size={16} />}
                   iconColor="#8b5cf6"
                   value={kpi?.oee?.value?.toFixed(1) ?? "—"}
                   unit="%"
-                  trend={kpi?.oee?.trend ?? undefined}
-                  trendLabel={t("lt_vs_prev")}
-                  subtitle={t("oee_subtitle")}
-                  badge={(kpi?.oee?.value ?? 100) < 65 ? t("badge_critical") : t("badge_on_track")}
-                  badgeColor={(kpi?.oee?.value ?? 100) < 65 ? "red" : "green"}
+                  valueColor={(kpi?.oee?.value ?? 100) < 65 ? "#dc2626" : "#16a34a"}
                   alert={visibleAlerts.some((a) => a.id.startsWith("oee"))}
                   sparkline={kpi?.oee?.sparkline}
                   sparklineColor={(kpi?.oee?.value ?? 100) < 65 ? "#ef4444" : "#22c55e"}
                 >
-                  {kpi && (
-                    <>
-                      <div className="space-y-1.5">
-                        <div className="flex justify-between text-[11px]">
-                          <span className="text-gray-400">{t("oee_vs_target")} 65.0%</span>
-                          {(kpi.oee?.value ?? 100) < 65 && (
-                            <span className="text-red-500 font-semibold">{t("oee_gap")} {(65 - kpi.oee.value).toFixed(1)} {t("oee_pts")}</span>
-                          )}
-                        </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className={(kpi.oee?.value ?? 0) >= 65 ? "h-full bg-emerald-400 rounded-full transition-all" : "h-full bg-red-400 rounded-full transition-all"}
-                            style={{ width: `${Math.min(((kpi.oee?.value ?? 0) / 65) * 100, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-3 pt-2 border-t border-gray-100">
-                        <div>
-                          <p className="text-[10px] text-gray-400">{t("oee_performance")}</p>
-                          <p className="text-sm font-bold text-slate-700 tabular-nums">{kpi.oee.performance.toFixed(1)}<span className="text-[10px] font-normal text-gray-400 ml-0.5">%</span></p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-gray-400">{t("oee_quality")}</p>
-                          <p className="text-sm font-bold text-slate-700 tabular-nums">{kpi.oee.quality.toFixed(1)}<span className="text-[10px] font-normal text-gray-400 ml-0.5">%</span></p>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </KPICard>
-
-                {/* OPE */}
-                <KPICard
-                  dimmed={highlightedKpi !== null && highlightedKpi !== "ope"}
-                  flashKey={refreshCount}
-                  title={t("card_ope")}
-                  tooltip="Overall Plant Effectiveness: estimasi performa seluruh pabrik, dihitung sebagai OEE × 0.8."
-                  icon={<Activity size={16} />}
-                  iconColor="#06b6d4"
-                  value={opeValue !== null ? opeValue.toFixed(1) : "—"}
-                  unit="%"
-                  subtitle={t("ope_subtitle")}
-                  badge={(opeValue ?? 100) < 60 ? t("badge_below_target") : t("badge_on_track")}
-                  badgeColor={(opeValue ?? 100) < 60 ? "amber" : "green"}
-                  sparkline={kpi?.oee?.sparkline?.map((v) => Number((v * 0.8).toFixed(1)))}
-                  sparklineColor={(opeValue ?? 100) < 60 ? "#f59e0b" : "#22c55e"}
-                >
-                  {kpi && opeValue !== null && (
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-gray-400">{t("oee_vs_target")} 60.0%</span>
-                        {opeValue < 60 && (
-                          <span className="text-amber-500 font-semibold">{t("oee_gap")} {(60 - opeValue).toFixed(1)} {t("oee_pts")}</span>
+                  {kpi && (() => {
+                    const v = kpi.oee.value; const target = 65; const delta = v - target; const bad = v < target;
+                    const lowestPlant = kpi.oee.byPlant?.slice().sort((a, b) => a.OEE - b.OEE)[0];
+                    return (
+                      <>
+                        <p className="text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap -mt-1">
+                          <span className={`font-bold ${bad ? "text-red-600" : "text-emerald-600"}`}>{bad ? "" : "+"}{delta.toFixed(1)}pp</span>
+                          <span className="text-slate-400">({bad ? "" : "+"}{((delta / target) * 100).toFixed(1)}%)</span>
+                          <span>vs ≥ {target}%</span>
+                        </p>
+                        <OutlineBadge color={bad ? "red" : "green"}>{bad ? "↓ Below Target" : "✓ On Track"}</OutlineBadge>
+                        {kpi.oee.trend != null && (
+                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap">
+                            {kpi.oee.trend >= 0
+                              ? <span className="text-emerald-600 font-bold">▲ {Math.abs(kpi.oee.trend).toFixed(1)}% better</span>
+                              : <span className="text-red-600 font-bold">▼ {Math.abs(kpi.oee.trend).toFixed(1)}% worse</span>}
+                            <span>vs previous period</span>
+                          </p>
                         )}
-                      </div>
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={opeValue >= 60 ? "h-full bg-emerald-400 rounded-full transition-all" : "h-full bg-amber-400 rounded-full transition-all"}
-                          style={{ width: `${Math.min((opeValue / 60) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
+                        {lowestPlant && (
+                          <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-500">
+                            {lowestPlant.PLANT} lowest · {lowestPlant.OEE.toFixed(1)}%
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </KPICard>
 
-                {/* Productivity */}
+                {/* Productivity compact */}
                 <KPICard
+                  compact
                   dimmed={highlightedKpi !== null && highlightedKpi !== "productivity"}
                   flashKey={refreshCount}
                   title={t("card_productivity")}
-                  tooltip="Efisiensi tenaga kerja. E2E = pcs/manhour keseluruhan; Upstream = kg/manhour proses olah; Downstream = pcs/manhour proses kemas."
+                  tooltip="End-to-end productivity: total output relative to total manhours across all production stages."
                   icon={<Users size={16} />}
-                  iconColor="#10b981"
-                  value={kpi?.productivity?.e2e?.toFixed(1) ?? "—"}
+                  iconColor="#8b5cf6"
+                  value={kpi ? (kpi.productivity?.e2e ?? 0).toFixed(1) : "—"}
                   unit="pcs/mh"
-                  subtitle={t("prod_subtitle")}
-                  trend={kpi?.productivity?.e2eTrend ?? undefined}
-                  trendLabel={t("lt_vs_prev")}
-                  sparkline={kpi?.productivity?.sparkline}
-                  sparklineColor="#10b981"
+                  sparkline={kpi?.productivity?.sparkline?.length ? kpi.productivity.sparkline : undefined}
+                  sparklineColor={(kpi?.productivity?.e2eTrend ?? 0) >= 0 ? "#22c55e" : "#ef4444"}
+                  alert={visibleAlerts.some((a) => a.id.startsWith("productivity"))}
                 >
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-2 border-t border-gray-100">
-                    <MiniStat label={t("prod_upstream")}    value={kpi ? formatThousands(kpi.productivity?.upstream ?? 0) : "—"} unit=" kg/mh"  />
-                    <MiniStat label={t("prod_downstream")}  value={kpi?.productivity?.downstream?.toFixed(1) ?? "—"} unit=" pcs/mh" />
-                    <MiniStat label={t("prod_manhours")}    value={kpi ? formatThousands(Math.round(kpi.productivity?.manhours ?? 0)) : "—"} unit=" mh" />
-                    <MiniStat label={t("prod_avg_operator")} value={kpi?.productivity?.avgOperators ?? "—"} unit=" opr" />
+                  {kpi && (() => {
+                    const trend = kpi.productivity?.e2eTrend ?? null;
+                    return (
+                      <>
+                        {trend != null && (
+                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap -mt-1">
+                            {trend >= 0
+                              ? <span className="text-emerald-600 font-bold">▲ {Math.abs(trend).toFixed(1)}% better</span>
+                              : <span className="text-red-600 font-bold">▼ {Math.abs(trend).toFixed(1)}% worse</span>}
+                            <span>vs previous period</span>
+                          </p>
+                        )}
+                        <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-500">
+                          {kpi.productivity?.manhours ? `${Math.round(kpi.productivity.manhours).toLocaleString()} manhours · ${Math.round(kpi.productivity?.avgOperators ?? 0)} operators` : "No breakdown available"}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </KPICard>
+
+                {/* Yield Loss compact */}
+                <KPICard
+                  compact
+                  dimmed={highlightedKpi !== null && highlightedKpi !== "yield"}
+                  flashKey={refreshCount}
+                  title={t("card_yield")}
+                  tooltip="Percentage of raw material lost in production. Bulk Loss = processing stage; Pack Loss = packaging stage."
+                  icon={<Droplets size={16} />}
+                  iconColor="#f59e0b"
+                  value={kpi?.yield?.bulkLossPct?.toFixed(1) ?? "—"}
+                  unit="%"
+                  sparkline={kpi?.yield?.sparkline?.length ? kpi.yield.sparkline : undefined}
+                  sparklineColor={(kpi?.yield?.bulkLossTrend ?? 0) > 0 ? "#ef4444" : "#22c55e"}
+                  alert={visibleAlerts.some((a) => a.id.startsWith("bulkloss") || a.id.startsWith("packloss"))}
+                >
+                  {kpi && (() => {
+                    const bulk = kpi.yield.bulkLossPct; const pack = kpi.yield.packLossPct;
+                    const target = 3; const delta = bulk - target; const bad = bulk > target; const critical = bulk > 5;
+                    const badgeColor: "red" | "amber" | "green" = critical ? "red" : bad ? "amber" : "green";
+                    const badgeLabel = critical ? "↑ Exceeds Limit" : bad ? "⚠ Near Limit" : "✓ Within Limit";
+                    return (
+                      <>
+                        <p className="text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap -mt-1">
+                          <span className={`font-bold ${bad ? "text-amber-600" : "text-emerald-600"}`}>{bad ? "+" : ""}{delta.toFixed(1)}pp</span>
+                          <span className="text-slate-400">({bad ? "+" : ""}{((delta / target) * 100).toFixed(1)}%)</span>
+                          <span>vs ≤ {target}%</span>
+                        </p>
+                        <OutlineBadge color={badgeColor}>{badgeLabel}</OutlineBadge>
+                        {bulkLossTrendInverted !== undefined && (
+                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap">
+                            {bulkLossTrendInverted >= 0
+                              ? <span className="text-emerald-600 font-bold">▼ {Math.abs(bulkLossTrendInverted).toFixed(1)}% improved</span>
+                              : <span className="text-amber-600 font-bold">▲ {Math.abs(bulkLossTrendInverted).toFixed(1)}% worsened</span>}
+                            <span>vs previous period</span>
+                          </p>
+                        )}
+                        <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-500">
+                          Pack loss {pack.toFixed(1)}% · {pack <= 3 ? "within limit" : "exceeds limit"}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </KPICard>
+
+                {/* Energy compact */}
+                <KPICard
+                  compact
+                  dimmed={highlightedKpi !== null && highlightedKpi !== "energy"}
+                  flashKey={refreshCount}
+                  title="Energy"
+                  tooltip="Energy consumption per unit of output. Lower is better."
+                  icon={<Zap size={16} />}
+                  iconColor="#eab308"
+                  value="—"
+                  unit="kWh/unit"
+                >
+                  <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-400 italic">
+                    Data not yet available
                   </div>
                 </KPICard>
               </>
             )}
           </div>
 
-          </div>
-
-          <div>
-          {/* ── Trend & Benchmark ────────────────────────────────────────── */}
-          <SectionDivider label={t("section_trend_benchmark")} accentColor="#3b82f6" />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* ── Row 3: Trend chart + AI Risks panel ── */}
+          <div className="grid gap-3.5" style={{ gridTemplateColumns: "2fr 1fr", height: "420px" }}>
             {loading ? (
               <>
-                <div className="bg-white rounded-2xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] border border-gray-100/80 h-72 animate-pulse">
-                  <div className="h-3.5 bg-gray-100 rounded-full w-1/3 mb-4" />
-                  <div className="h-56 bg-gray-50 rounded-xl" />
-                </div>
-                <div className="bg-white rounded-2xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] border border-gray-100/80 h-72 animate-pulse">
-                  <div className="h-3.5 bg-gray-100 rounded-full w-1/3 mb-4" />
-                  <div className="h-56 bg-gray-50 rounded-xl" />
-                </div>
+                <div className="bg-white rounded-lg border border-[#EBEBEB] h-full animate-pulse" />
+                <div className="bg-white rounded-lg border border-[#EBEBEB] h-full animate-pulse" />
               </>
             ) : (
               <>
-                <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} />
-                <StackedBarChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} />
+                <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} fillHeight />
+                <AIRisksPanel
+                  kpi={kpi}
+                  alerts={visibleAlerts}
+                  filters={filters}
+                  ready={!loading && kpi !== null}
+                />
               </>
             )}
           </div>
-          </div>
+
+          </>)}
+
+          {/* ── Tactical view ── */}
+          {activeView === "tactical" && (
+            <div className="bg-white rounded-lg border border-[#EBEBEB] overflow-hidden shrink-0">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-[#EBEBEB]">
+                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider w-[180px]">KPI</th>
+                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Value</th>
+                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Target</th>
+                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">vs Target</th>
+                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Trend MoM</th>
+                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {(() => {
+                    if (loading) return (
+                      Array.from({ length: 6 }).map((_, i) => (
+                        <tr key={i}>
+                          {Array.from({ length: 6 }).map((__, j) => (
+                            <td key={j} className="px-4 py-3">
+                              <div className="h-3 bg-gray-100 rounded animate-pulse w-3/4" />
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    );
+                    const rows: { icon: React.ReactNode; name: string; value: string; unit: string; target: string; delta: string; deltaColor: string; trend: number | null; alertId: string }[] = [
+                      {
+                        icon: <Clock size={13} className="text-blue-500" />,
+                        name: "Lead Time",
+                        value: kpi ? (kpi.leadTime?.grossDays ?? 0).toFixed(2) : "—",
+                        unit: "days",
+                        target: "≤ 13",
+                        delta: kpi ? `${(kpi.leadTime?.grossDays ?? 0) > 13 ? "+" : ""}${((kpi.leadTime?.grossDays ?? 0) - 13).toFixed(2)}d` : "—",
+                        deltaColor: kpi && (kpi.leadTime?.grossDays ?? 0) > 13 ? "text-red-600" : "text-emerald-600",
+                        trend: kpi?.leadTime?.grossTrend ?? null,
+                        alertId: "leadtime",
+                      },
+                      {
+                        icon: <Package size={13} className="text-teal-500" />,
+                        name: "Output (FG)",
+                        value: kpi ? formatThousands(kpi.output?.fgQty ?? 0) : "—",
+                        unit: "pcs",
+                        target: "—",
+                        delta: kpi?.output?.fgTrend != null ? `${kpi.output.fgTrend >= 0 ? "+" : ""}${kpi.output.fgTrend.toFixed(1)}%` : "—",
+                        deltaColor: kpi && (kpi.output?.fgTrend ?? 0) >= 0 ? "text-emerald-600" : "text-red-600",
+                        trend: kpi?.output?.fgTrend ?? null,
+                        alertId: "output",
+                      },
+                      {
+                        icon: <Gauge size={13} className="text-red-500" />,
+                        name: "OEE",
+                        value: kpi ? (kpi.oee?.value ?? 0).toFixed(1) : "—",
+                        unit: "%",
+                        target: "≥ 65%",
+                        delta: kpi ? `${(kpi.oee?.value ?? 0) - 65 >= 0 ? "+" : ""}${((kpi.oee?.value ?? 0) - 65).toFixed(1)}pp` : "—",
+                        deltaColor: kpi && (kpi.oee?.value ?? 0) >= 65 ? "text-emerald-600" : "text-red-600",
+                        trend: kpi?.oee?.trend ?? null,
+                        alertId: "oee",
+                      },
+                      {
+                        icon: <Users size={13} className="text-violet-500" />,
+                        name: "Productivity",
+                        value: kpi ? (kpi.productivity?.e2e ?? 0).toFixed(1) : "—",
+                        unit: "pcs/mh",
+                        target: "—",
+                        delta: kpi?.productivity?.e2eTrend != null ? `${kpi.productivity.e2eTrend >= 0 ? "+" : ""}${kpi.productivity.e2eTrend.toFixed(1)}%` : "—",
+                        deltaColor: kpi && (kpi.productivity?.e2eTrend ?? 0) >= 0 ? "text-emerald-600" : "text-red-600",
+                        trend: kpi?.productivity?.e2eTrend ?? null,
+                        alertId: "productivity",
+                      },
+                      {
+                        icon: <Droplets size={13} className="text-amber-500" />,
+                        name: "Bulk Loss",
+                        value: kpi ? (kpi.yield?.bulkLossPct ?? 0).toFixed(1) : "—",
+                        unit: "%",
+                        target: "≤ 3%",
+                        delta: kpi ? `${(kpi.yield?.bulkLossPct ?? 0) - 3 >= 0 ? "+" : ""}${((kpi.yield?.bulkLossPct ?? 0) - 3).toFixed(1)}pp` : "—",
+                        deltaColor: kpi && (kpi.yield?.bulkLossPct ?? 0) <= 3 ? "text-emerald-600" : "text-red-600",
+                        trend: kpi?.yield?.bulkLossTrend ?? null,
+                        alertId: "bulkloss",
+                      },
+                      {
+                        icon: <Zap size={13} className="text-yellow-500" />,
+                        name: "Energy",
+                        value: "—",
+                        unit: "kWh/unit",
+                        target: "—",
+                        delta: "—",
+                        deltaColor: "text-gray-400",
+                        trend: null,
+                        alertId: "energy",
+                      },
+                    ];
+                    return rows.map((row) => {
+                      const hasAlert = visibleAlerts.some((a) => a.id.startsWith(row.alertId));
+                      const trendGood = row.trend != null && (
+                        ["oee","ope","rft","output"].includes(row.alertId) ? row.trend >= 0 : row.trend <= 0
+                      );
+                      return (
+                        <tr key={row.name} className={cn("hover:bg-gray-50/50 transition-colors", hasAlert && "bg-red-50/40")}>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {row.icon}
+                              <span className="text-[12px] font-semibold text-gray-800">{row.name}</span>
+                              {hasAlert && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-[13px] font-bold text-gray-900 tabular-nums">{row.value}</span>
+                            <span className="text-[10px] text-gray-400 ml-1">{row.unit}</span>
+                          </td>
+                          <td className="px-4 py-3 text-[11px] text-gray-500">{row.target}</td>
+                          <td className="px-4 py-3">
+                            <span className={cn("text-[11px] font-semibold tabular-nums", row.deltaColor)}>{row.delta}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.trend != null ? (
+                              <span className={cn("text-[11px] font-semibold tabular-nums", trendGood ? "text-emerald-600" : "text-red-500")}>
+                                {row.trend > 0 ? "▲" : "▼"} {Math.abs(row.trend).toFixed(1)}%
+                              </span>
+                            ) : <span className="text-[11px] text-gray-300">—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            {hasAlert
+                              ? <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-700">⚠ Alert</span>
+                              : <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">✓ OK</span>
+                            }
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          )}
         </main>
       </div>
 
