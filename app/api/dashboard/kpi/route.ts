@@ -199,6 +199,7 @@ async function runKPIQueries(
     },
     productivity: {
       e2e:          e2e.avgE2EProd,
+      e2ePrev:      prevE2E.avgE2EProd,
       upstream:     upstream.avgUpstreamProd,
       downstream:   downstream.avgDownstreamProd,
       e2eTrend:     delta(e2e.avgE2EProd, prevE2E.avgE2EProd),

@@ -11,6 +11,7 @@ import { AISummary } from "@/components/dashboard/AISummary";
 import { SkeletonCard } from "@/components/dashboard/SkeletonCard";
 import { computeAlerts, type KPIAlert } from "@/lib/alerts";
 import { formatThousands, cn } from "@/lib/utils";
+import { FitToScreen } from "@/components/ui/FitToScreen";
 
 interface KPIResponse {
   leadTime: {
@@ -49,7 +50,7 @@ function OutlineBadge({ children, color }: { children: React.ReactNode; color: "
     : color === "green" ? "text-emerald-600 border-emerald-300"
     : "text-[#b45309] border-[#fcd34d]";
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-[3.5px] rounded-md border-[1.5px] w-fit ${cls}`}>
+    <span className={`inline-flex items-center gap-1.5 text-[14px] font-bold px-2.5 py-[3.5px] rounded-md border-[1.5px] w-fit ${cls}`}>
       {children}
     </span>
   );
@@ -103,8 +104,8 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
   const opeValue  = kpi ? (kpi.oee?.value ?? 0) * 0.8 : null;
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="px-5 py-4 space-y-3.5">
+    <FitToScreen className="h-full" resetKey={loading ? "loading" : "loaded"}>
+      <div className="px-5 py-2 space-y-2">
 
         <AISummary kpi={kpi} filters={filters} ready={!loading && kpi !== null} />
 
@@ -113,7 +114,7 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
         )}
 
         {/* Row 1: Lead Time + Output */}
-        <div className="grid grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-2 gap-2">
           {loading ? (
             Array.from({ length: 2 }).map((_, i) => <SkeletonCard key={i} />)
           ) : (
@@ -133,7 +134,7 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
                   const pct = (delta / target) * 100; const bad = delta > 0;
                   return (
                     <>
-                      <p className="text-[11.5px] text-slate-500 flex items-center gap-1 flex-wrap -mt-1">
+                      <p className="text-[14.5px] text-slate-500 flex items-center gap-1 flex-wrap -mt-1">
                         <span className={`font-bold ${bad ? "text-red-600" : "text-emerald-600"}`}>
                           {bad ? "+" : ""}{delta.toFixed(2)} days
                         </span>
@@ -145,7 +146,7 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
                   );
                 })()}
                 {kpi && leadTimeTrendInverted !== undefined && (
-                  <p className="text-[11.5px] text-slate-500 flex items-center gap-1">
+                  <p className="text-[14.5px] text-slate-500 flex items-center gap-1">
                     {leadTimeTrendInverted >= 0
                       ? <span className="text-emerald-600 font-bold">▲ {Math.abs(leadTimeTrendInverted).toFixed(1)}% better</span>
                       : <span className="text-red-600 font-bold">▼ {Math.abs(leadTimeTrendInverted).toFixed(1)}% worse</span>}
@@ -157,18 +158,18 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
                   const top = pos[0];
                   const total = pos.reduce((s, p) => s + p.avgHours, 0) || 1;
                   return top ? (
-                    <div className="bg-[#F7F8FA] rounded-md px-2.5 py-1.5 text-[11px] text-slate-500">
+                    <div className="bg-[#F7F8FA] rounded-md px-2.5 py-1.5 text-[14px] text-slate-500">
                       {top.position} {(top.avgHours / 24).toFixed(2)} days · {Math.round((top.avgHours / total) * 100)}% of total
                     </div>
                   ) : null;
                 })()}
-                <Link href="/lead-time" className="text-[11.5px] font-bold text-[#215AA8] hover:text-[#1A4886] transition-colors w-fit">View feature →</Link>
+                <Link href="/lead-time" className="text-[14.5px] font-bold text-[#215AA8] hover:text-[#1A4886] transition-colors w-fit">View feature →</Link>
                 <div className="flex gap-1.5 pt-1 border-t border-gray-100">
                   <div className="flex gap-1">
                     {(["gross", "nett"] as const).map((lt) => (
                       <button key={lt} onClick={() => setLeadTimeType(lt)}
-                        className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors",
-                          leadTimeType === lt ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200")}>
+                        className={cn("text-[13px] px-2 py-0.5 rounded-full font-semibold transition-colors",
+                          leadTimeType === lt ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
                         {lt === "gross" ? "Gross" : "Nett"}
                       </button>
                     ))}
@@ -177,8 +178,8 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
                   <div className="flex gap-1">
                     {(["days", "hours"] as const).map((u) => (
                       <button key={u} onClick={() => setLeadTimeUnit(u)}
-                        className={cn("text-[10px] px-2 py-0.5 rounded-full font-semibold transition-colors",
-                          leadTimeUnit === u ? "bg-slate-700 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200")}>
+                        className={cn("text-[13px] px-2 py-0.5 rounded-full font-semibold transition-colors",
+                          leadTimeUnit === u ? "bg-slate-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200")}>
                         {u === "days" ? "Daily" : "Hourly"}
                       </button>
                     ))}
@@ -206,7 +207,7 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
                   const t2 = kpi.output.fgTrend; const bad = t2 < 0;
                   return (
                     <>
-                      <p className="text-[11.5px] text-slate-500 flex items-center gap-1">
+                      <p className="text-[14.5px] text-slate-500 flex items-center gap-1">
                         <span className={`font-bold ${bad ? "text-red-600" : "text-emerald-600"}`}>{bad ? "" : "+"}{t2.toFixed(1)}%</span>
                         <span>vs previous period</span>
                       </p>
@@ -220,18 +221,18 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
                     <span className="text-[1.5rem] font-bold text-slate-900 tabular-nums tracking-tight">
                       {kpi ? formatThousands(kpi.output?.bulkQty ?? 0) : "—"}
                     </span>
-                    <span className="text-[11px] text-gray-400 font-medium">kg</span>
+                    <span className="text-[14px] text-gray-400 font-medium">kg</span>
                   </div>
                   {kpi?.output?.bulkTrend != null && <TrendBadge trend={kpi.output.bulkTrend} />}
                 </div>
-                <p className="text-[10px] text-gray-400 -mt-1">Accepted Bulk</p>
+                <p className="text-[13px] text-gray-400 -mt-1">Accepted Bulk</p>
               </KPICard>
             </>
           )}
         </div>
 
         {/* Row 2: OEE + OPE + Yield + RFT */}
-        <div className="grid grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-4 gap-2">
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
           ) : (
@@ -248,13 +249,13 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
                   const lowestPlant = kpi.oee.byPlant?.slice().sort((a, b) => a.OEE - b.OEE)[0];
                   return (
                     <>
-                      <p className="text-[10.5px] text-slate-500 flex items-center gap-1 -mt-1">
+                      <p className="text-[13.5px] text-slate-500 flex items-center gap-1 -mt-1">
                         <span className={`font-bold ${bad ? "text-red-600" : "text-emerald-600"}`}>{bad ? "" : "+"}{delta.toFixed(1)}pp</span>
                         <span>vs ≥ {target}%</span>
                       </p>
                       <OutlineBadge color={bad ? "red" : "green"}>{bad ? "↓ Below Target" : "✓ On Track"}</OutlineBadge>
                       {lowestPlant && (
-                        <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-500">
+                        <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[13px] text-slate-500">
                           {lowestPlant.PLANT} lowest · {lowestPlant.OEE.toFixed(1)}%
                         </div>
                       )}
@@ -274,12 +275,12 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
                   const target = 60; const delta = opeValue - target; const bad = opeValue < target;
                   return (
                     <>
-                      <p className="text-[10.5px] text-slate-500 flex items-center gap-1 -mt-1">
+                      <p className="text-[13.5px] text-slate-500 flex items-center gap-1 -mt-1">
                         <span className={`font-bold ${bad ? "text-amber-600" : "text-emerald-600"}`}>{bad ? "" : "+"}{delta.toFixed(1)}pp</span>
                         <span>vs ≥ {target}%</span>
                       </p>
                       <OutlineBadge color={bad ? "amber" : "green"}>{bad ? "↓ Below Target" : "✓ On Track"}</OutlineBadge>
-                      <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-500">Derived: OEE × 0.8</div>
+                      <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[13px] text-slate-500">Derived: OEE × 0.8</div>
                     </>
                   );
                 })()}
@@ -299,20 +300,20 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
                   const badgeLabel = critical ? "↑ Exceeds Limit" : bad ? "⚠ Near Limit" : "✓ Within Limit";
                   return (
                     <>
-                      <p className="text-[10.5px] text-slate-500 flex items-center gap-1 -mt-1">
+                      <p className="text-[13.5px] text-slate-500 flex items-center gap-1 -mt-1">
                         <span className={`font-bold ${bad ? "text-amber-600" : "text-emerald-600"}`}>{bad ? "+" : ""}{delta.toFixed(1)}pp</span>
                         <span>vs ≤ {target}%</span>
                       </p>
                       <OutlineBadge color={badgeColor}>{badgeLabel}</OutlineBadge>
                       {bulkLossTrendInverted !== undefined && (
-                        <p className="text-[10.5px] text-slate-500 flex items-center gap-1">
+                        <p className="text-[13.5px] text-slate-500 flex items-center gap-1">
                           {bulkLossTrendInverted >= 0
                             ? <span className="text-emerald-600 font-bold">▼ {Math.abs(bulkLossTrendInverted).toFixed(1)}% improved</span>
                             : <span className="text-amber-600 font-bold">▲ {Math.abs(bulkLossTrendInverted).toFixed(1)}% worsened</span>}
                           <span>vs previous period</span>
                         </p>
                       )}
-                      <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-500">
+                      <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[13px] text-slate-500">
                         Pack loss {pack.toFixed(1)}% · {pack <= 3 ? "within limit" : "exceeds limit"}
                       </div>
                     </>
@@ -332,12 +333,12 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
                   const target = 95; const delta = rftValue - target; const good = rftValue >= target;
                   return (
                     <>
-                      <p className="text-[10.5px] text-slate-500 flex items-center gap-1 -mt-1">
+                      <p className="text-[13.5px] text-slate-500 flex items-center gap-1 -mt-1">
                         <span className={`font-bold ${good ? "text-emerald-600" : "text-red-600"}`}>{good ? "+" : ""}{delta.toFixed(1)}pp</span>
                         <span>vs ≥ {target}%</span>
                       </p>
                       <OutlineBadge color={good ? "green" : "red"}>{good ? "✓ On Track" : "↓ Below Target"}</OutlineBadge>
-                      <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-500">First Time Passed Rate</div>
+                      <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[13px] text-slate-500">First Time Passed Rate</div>
                     </>
                   );
                 })()}
@@ -347,7 +348,7 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
         </div>
 
         {/* Row 3: Trend chart + AI Risks */}
-        <div className="grid gap-3.5" style={{ gridTemplateColumns: "2fr 1fr", height: "420px" }}>
+        <div className="grid gap-2" style={{ gridTemplateColumns: "2fr 1fr", height: "260px" }}>
           {loading ? (
             <>
               <div className="bg-white rounded-lg border border-[#EBEBEB] h-full animate-pulse" />
@@ -362,6 +363,6 @@ export function StrategicMonitor({ filters, onExit }: { filters: MonitorFilters;
         </div>
 
       </div>
-    </div>
+    </FitToScreen>
   );
 }

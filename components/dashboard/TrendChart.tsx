@@ -44,7 +44,7 @@ const nivoTheme = {
   axis: {
     ticks: {
       line: { strokeWidth: 0 },
-      text: { fill: "#9ca3af", fontSize: 10, fontFamily: "inherit" },
+      text: { fill: "#9ca3af", fontSize: 11, fontFamily: "inherit" },
     },
     domain: { line: { strokeWidth: 0 } },
   },
@@ -194,21 +194,21 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       lineStyle: { stroke: "#ef4444", strokeDasharray: "5 3", strokeWidth: 1.5 },
       legend: `UCL ${ucl.toFixed(1)}`,
       legendOffsetX: -8, legendOffsetY: -8,
-      textStyle: { fill: "#ef4444", fontSize: 9, fontFamily: "inherit", fontWeight: 600 },
+      textStyle: { fill: "#ef4444", fontSize: 10, fontFamily: "inherit", fontWeight: 600 },
     });
     if (mean > 0) m.push({
       axis: "y", value: mean,
       lineStyle: { stroke: "#94a3b8", strokeDasharray: "4 2", strokeWidth: 1.5 },
       legend: `Mean ${mean.toFixed(1)}`,
       legendOffsetX: -8, legendOffsetY: -8,
-      textStyle: { fill: "#94a3b8", fontSize: 9, fontFamily: "inherit" },
+      textStyle: { fill: "#94a3b8", fontSize: 10, fontFamily: "inherit" },
     });
     if (lcl > 0) m.push({
       axis: "y", value: lcl,
       lineStyle: { stroke: "#ef4444", strokeDasharray: "5 3", strokeWidth: 1.5 },
       legend: `LCL ${lcl.toFixed(1)}`,
       legendOffsetX: -8, legendOffsetY: 12,
-      textStyle: { fill: "#ef4444", fontSize: 9, fontFamily: "inherit", fontWeight: 600 },
+      textStyle: { fill: "#ef4444", fontSize: 10, fontFamily: "inherit", fontWeight: 600 },
     });
     return m;
   }, [ucl, mean, lcl]);
@@ -258,14 +258,14 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       {/* Header */}
       <div className={cn("flex items-center justify-between mb-2", fillHeight && "shrink-0")}>
         <div className="flex items-center gap-2">
-          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">
+          <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">
             {t("chart_metric_trend")}
           </span>
           {loading && (
             <span className="w-3 h-3 border border-[#215AA8] border-t-transparent rounded-full animate-spin inline-block" />
           )}
         </div>
-        <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
+        <span className="text-[11px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
           {selectedKpi.label} · {selectedKpi.unit}
         </span>
       </div>
@@ -279,7 +279,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
                 <button
                   key={opt.value}
                   onClick={() => onKpiChange(opt.value)}
-                  className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
+                  className={`text-[11px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
                     kpiType === opt.value
                       ? "bg-[#215AA8] text-white"
                       : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
@@ -308,15 +308,15 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
                       className="w-4 h-0.5 rounded-full shrink-0"
                       style={{ backgroundColor: PLANT_COLORS[i % PLANT_COLORS.length] }}
                     />
-                    <span className={`text-[10px] font-medium tracking-tight ${isHovered ? "text-gray-700" : "text-gray-400"}`}>{plant}</span>
+                    <span className={`text-[11px] font-medium tracking-tight ${isHovered ? "text-gray-700" : "text-gray-400"}`}>{plant}</span>
                     {lv != null && (
-                      <span className="text-[10px] text-gray-400 tabular-nums">{lv.toFixed(1)}</span>
+                      <span className="text-[11px] text-gray-400 tabular-nums">{lv.toFixed(1)}</span>
                     )}
                   </button>
                 );
               })}
               {hoveredPlant === null && onPlantHover && (
-                <span className="text-[9px] text-gray-300 italic">hover to isolate</span>
+                <span className="text-[10px] text-gray-300 italic">hover to isolate</span>
               )}
             </div>
           )}
@@ -331,7 +331,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
           <ResponsiveLine
             data={nivoData}
             theme={nivoTheme}
-            margin={{ top: 4, right: 16, bottom: 24, left: 36 }}
+            margin={{ top: 4, right: 4, bottom: 28, left: 42 }}
             xScale={{ type: "point" }}
             yScale={{ type: "linear", min: "auto", max: "auto", stacked: false }}
             curve="linear"
@@ -383,13 +383,13 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
                   background: "#2A3D4A",
                   borderRadius: 10,
                   padding: "9px 13px",
-                  fontSize: 11,
+                  fontSize: 12,
                   minWidth: 190,
                   boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
                   fontFamily: "inherit",
                   animation: "chart-tooltip-in 0.15s ease-out",
                 }}>
-                  <p style={{ fontWeight: 500, marginBottom: 7, color: "#64748b", fontSize: 10, letterSpacing: "0.02em" }}>
+                  <p style={{ fontWeight: 500, marginBottom: 7, color: "#64748b", fontSize: 11, letterSpacing: "0.02em" }}>
                     {dateLabel}
                   </p>
                   {allAtX.map(({ plant, y, color }) => {
@@ -406,7 +406,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
                           </span>
                         </p>
                         {lim && (
-                          <p style={{ color: "#475569", margin: "3px 0 0 0", fontSize: 10 }}>
+                          <p style={{ color: "#475569", margin: "3px 0 0 0", fontSize: 11 }}>
                             Mean {lim.mean.toFixed(2)} · UCL{" "}
                             <span style={{ color: "#f87171" }}>{lim.ucl.toFixed(2)}</span> · LCL{" "}
                             <span style={{ color: "#f87171" }}>{lim.lcl.toFixed(2)}</span>

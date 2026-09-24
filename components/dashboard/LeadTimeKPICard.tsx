@@ -110,7 +110,7 @@ export function LeadTimeKPICard({
     <div
       style={{
         background: "white",
-        border: hasAlert ? "1px solid #ffd6d9" : "1px solid #e9eaee",
+        border: hasAlert ? "1px solid #fbd5d1" : "1px solid #e9eaee",
         borderRadius: 10,
         display: "flex",
         flexDirection: "column",
@@ -156,14 +156,14 @@ export function LeadTimeKPICard({
                 </span>
               </div>
 
-              {/* Primary value + unit + trend */}
+              {/* Primary value + unit + delta */}
               <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
                 <span
                   style={{
                     fontSize: 30,
                     fontWeight: 700,
                     letterSpacing: "-0.015em",
-                    color: deltaOver ? "#d92d20" : "#101828",
+                    color: "#101828",
                     fontFamily: "Lato, sans-serif",
                     fontVariantNumeric: "tabular-nums",
                     lineHeight: 1,
@@ -178,12 +178,12 @@ export function LeadTimeKPICard({
                   style={{
                     fontSize: 11.5,
                     fontWeight: 700,
-                    color: trendColor(primaryTrend),
+                    color: deltaOver ? "#d92d20" : "#067647",
                     fontFamily: "Lato, sans-serif",
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >
-                  {trendArrow(primaryTrend)} {trendLabel(primaryTrend)}
+                  {deltaOver ? "↗" : "↘"} {deltaOver ? "+" : ""}{delta.toFixed(2)} {unit === "hours" ? "hrs" : "days"}
                 </span>
               </div>
 
@@ -192,26 +192,11 @@ export function LeadTimeKPICard({
                 style={{
                   fontSize: 11.5,
                   color: "#667085",
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: 4,
-                  flexWrap: "wrap",
+                  fontFamily: "Lato, sans-serif",
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
-                <span
-                  style={{
-                    color: deltaOver ? "#d92d20" : "#067647",
-                    fontWeight: 700,
-                    fontFamily: "Lato, sans-serif",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {deltaOver ? "+" : ""}{delta.toFixed(2)} {unit === "hours" ? "hrs" : "days"}
-                </span>
-                <span>vs target</span>
-                <span style={{ fontFamily: "Lato, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                  {TARGET}.00 days ({deltaOver ? "+" : ""}{deltaPct.toFixed(1)}%)
-                </span>
+                vs target {TARGET}.00 days ({deltaOver ? "+" : ""}{deltaPct.toFixed(1)}%)
               </div>
 
               {/* Status pill */}
@@ -236,18 +221,10 @@ export function LeadTimeKPICard({
             {/* RIGHT column */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
 
-              {/* Toggles */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+              {/* Toggles — side by side */}
+              <div style={{ display: "flex", gap: 4 }}>
                 {/* Gross / Nett */}
-                <div
-                  style={{
-                    background: "#f2f3f6",
-                    borderRadius: 7,
-                    padding: 3,
-                    display: "flex",
-                    gap: 2,
-                  }}
-                >
+                <div style={{ background: "#f2f3f6", borderRadius: 7, padding: 3, display: "flex", gap: 2 }}>
                   {(["gross", "nett"] as const).map((t) => {
                     const active = type === t;
                     return (
@@ -274,15 +251,7 @@ export function LeadTimeKPICard({
                   })}
                 </div>
                 {/* Days / Hours */}
-                <div
-                  style={{
-                    background: "#f2f3f6",
-                    borderRadius: 7,
-                    padding: 3,
-                    display: "flex",
-                    gap: 2,
-                  }}
-                >
+                <div style={{ background: "#f2f3f6", borderRadius: 7, padding: 3, display: "flex", gap: 2 }}>
                   {(["days", "hours"] as const).map((u) => {
                     const active = unit === u;
                     return (
@@ -333,7 +302,7 @@ export function LeadTimeKPICard({
                 </div>
               ) : (
                 <div style={{ width: 150, height: 42, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ fontSize: 10, color: "#c5cad8", fontFamily: "Lato, sans-serif" }}>
+                  <span style={{ fontSize: 10, color: "#a3a8b5", fontFamily: "Lato, sans-serif" }}>
                     no sparkline data
                   </span>
                 </div>

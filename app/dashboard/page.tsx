@@ -8,7 +8,6 @@ import { Clock, Droplets, Package, Gauge, Zap, Users } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
 import { SecurityOverlay } from "@/components/dashboard/SecurityOverlay";
-import { KPICard, CircularGauge, TrendBadge, Sparkline } from "@/components/dashboard/KPICard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { SkeletonCard } from "@/components/dashboard/SkeletonCard";
 import { AIRisksPanel } from "@/components/dashboard/AIRisksPanel";
@@ -17,6 +16,8 @@ import { AlertPanel } from "@/components/dashboard/AlertPanel";
 import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { OutputKPICard } from "@/components/dashboard/OutputKPICard";
 import { LeadTimeKPICard } from "@/components/dashboard/LeadTimeKPICard";
+import { LiteKPICard } from "@/components/dashboard/LiteKPICard";
+import { FitToScreen } from "@/components/ui/FitToScreen";
 import { formatThousands, cn } from "@/lib/utils";
 import { computeAlerts, type KPIAlert } from "@/lib/alerts";
 
@@ -50,6 +51,7 @@ interface KPIResponse {
   oee: { value: number; quality: number; performance: number; byPlant: { PLANT: string; OEE: number }[]; trend: number | null; sparkline: number[] };
   productivity: {
     e2e: number;
+    e2ePrev?: number;
     upstream: number;
     downstream: number;
     byPlant: { PLANT: string }[];
@@ -69,18 +71,6 @@ interface Filters {
 }
 
 
-
-function OutlineBadge({ children, color }: { children: React.ReactNode; color: "red" | "green" | "amber" }) {
-  const cls =
-    color === "red"   ? "text-red-600 border-red-200"
-    : color === "green" ? "text-emerald-600 border-emerald-300"
-    : "text-[#b45309] border-[#fcd34d]";
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-[3.5px] rounded-md border-[1.5px] w-fit ${cls}`}>
-      {children}
-    </span>
-  );
-}
 
 export default function DashboardPage() {
   const { status } = useSession();
@@ -336,146 +326,50 @@ export default function DashboardPage() {
               Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
             ) : (
               <>
-                {/* OEE compact */}
-                <KPICard
-                  compact
-                  dimmed={highlightedKpi !== null && highlightedKpi !== "oee"}
-                  flashKey={refreshCount}
-                  title={t("card_oee")}
-                  tooltip="Overall Equipment Effectiveness: machine efficiency (Performance × Quality). Target: ≥65%."
-                  icon={<Gauge size={16} />}
-                  iconColor="#8b5cf6"
-                  value={kpi?.oee?.value?.toFixed(1) ?? "—"}
+                {/* OEE — no data yet (CT_MANUF_KEMAS not connected) */}
+                <LiteKPICard
+                  label="OEE"
+                  icon={<Gauge size={13} color="#8b5cf6" strokeWidth={1.75} />}
+                  value="—"
                   unit="%"
-                  valueColor={(kpi?.oee?.value ?? 100) < 65 ? "#dc2626" : "#16a34a"}
-                  alert={visibleAlerts.some((a) => a.id.startsWith("oee"))}
-                  sparkline={kpi?.oee?.sparkline}
-                  sparklineColor={(kpi?.oee?.value ?? 100) < 65 ? "#ef4444" : "#22c55e"}
-                >
-                  {kpi && (() => {
-                    const v = kpi.oee.value; const target = 65; const delta = v - target; const bad = v < target;
-                    const lowestPlant = kpi.oee.byPlant?.slice().sort((a, b) => a.OEE - b.OEE)[0];
-                    return (
-                      <>
-                        <p className="text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap -mt-1">
-                          <span className={`font-bold ${bad ? "text-red-600" : "text-emerald-600"}`}>{bad ? "" : "+"}{delta.toFixed(1)}pp</span>
-                          <span className="text-slate-400">({bad ? "" : "+"}{((delta / target) * 100).toFixed(1)}%)</span>
-                          <span>vs ≥ {target}%</span>
-                        </p>
-                        <OutlineBadge color={bad ? "red" : "green"}>{bad ? "↓ Below Target" : "✓ On Track"}</OutlineBadge>
-                        {kpi.oee.trend != null && (
-                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap">
-                            {kpi.oee.trend >= 0
-                              ? <span className="text-emerald-600 font-bold">▲ {Math.abs(kpi.oee.trend).toFixed(1)}% better</span>
-                              : <span className="text-red-600 font-bold">▼ {Math.abs(kpi.oee.trend).toFixed(1)}% worse</span>}
-                            <span>vs previous period</span>
-                          </p>
-                        )}
-                        {lowestPlant && (
-                          <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-500">
-                            {lowestPlant.PLANT} lowest · {lowestPlant.OEE.toFixed(1)}%
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </KPICard>
+                  target="≥ 65%"
+                  attainment={0}
+                  noData
+                />
 
-                {/* Productivity compact */}
-                <KPICard
-                  compact
-                  dimmed={highlightedKpi !== null && highlightedKpi !== "productivity"}
-                  flashKey={refreshCount}
-                  title={t("card_productivity")}
-                  tooltip="End-to-end productivity: total output relative to total manhours across all production stages."
-                  icon={<Users size={16} />}
-                  iconColor="#8b5cf6"
+                {/* E2E Productivity */}
+                <LiteKPICard
+                  label="E2E Productivity"
+                  icon={<Users size={13} color="#8b5cf6" strokeWidth={1.75} />}
                   value={kpi ? (kpi.productivity?.e2e ?? 0).toFixed(1) : "—"}
-                  unit="pcs/mh"
-                  sparkline={kpi?.productivity?.sparkline?.length ? kpi.productivity.sparkline : undefined}
-                  sparklineColor={(kpi?.productivity?.e2eTrend ?? 0) >= 0 ? "#22c55e" : "#ef4444"}
-                  alert={visibleAlerts.some((a) => a.id.startsWith("productivity"))}
-                >
-                  {kpi && (() => {
-                    const trend = kpi.productivity?.e2eTrend ?? null;
-                    return (
-                      <>
-                        {trend != null && (
-                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap -mt-1">
-                            {trend >= 0
-                              ? <span className="text-emerald-600 font-bold">▲ {Math.abs(trend).toFixed(1)}% better</span>
-                              : <span className="text-red-600 font-bold">▼ {Math.abs(trend).toFixed(1)}% worse</span>}
-                            <span>vs previous period</span>
-                          </p>
-                        )}
-                        <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-500">
-                          {kpi.productivity?.manhours ? `${Math.round(kpi.productivity.manhours).toLocaleString()} manhours · ${Math.round(kpi.productivity?.avgOperators ?? 0)} operators` : "No breakdown available"}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </KPICard>
+                  unit="pcs/manhour"
+                  target={kpi?.productivity?.e2ePrev ? `${kpi.productivity.e2ePrev.toFixed(1)} (prior period)` : "prior period"}
+                  attainment={kpi ? 100 + (kpi.productivity?.e2eTrend ?? 0) : 0}
+                  trend={kpi?.productivity?.e2eTrend ?? null}
+                  series={kpi?.productivity?.sparkline ?? []}
+                />
 
-                {/* Yield Loss compact */}
-                <KPICard
-                  compact
-                  dimmed={highlightedKpi !== null && highlightedKpi !== "yield"}
-                  flashKey={refreshCount}
-                  title={t("card_yield")}
-                  tooltip="Percentage of raw material lost in production. Bulk Loss = processing stage; Pack Loss = packaging stage."
-                  icon={<Droplets size={16} />}
-                  iconColor="#f59e0b"
-                  value={kpi?.yield?.bulkLossPct?.toFixed(1) ?? "—"}
+                {/* Yield Loss — no data yet (CT_MANUF_KEMAS not connected) */}
+                <LiteKPICard
+                  label="Yield Loss"
+                  icon={<Droplets size={13} color="#f59e0b" strokeWidth={1.75} />}
+                  value="—"
                   unit="%"
-                  sparkline={kpi?.yield?.sparkline?.length ? kpi.yield.sparkline : undefined}
-                  sparklineColor={(kpi?.yield?.bulkLossTrend ?? 0) > 0 ? "#ef4444" : "#22c55e"}
-                  alert={visibleAlerts.some((a) => a.id.startsWith("bulkloss") || a.id.startsWith("packloss"))}
-                >
-                  {kpi && (() => {
-                    const bulk = kpi.yield.bulkLossPct; const pack = kpi.yield.packLossPct;
-                    const target = 3; const delta = bulk - target; const bad = bulk > target; const critical = bulk > 5;
-                    const badgeColor: "red" | "amber" | "green" = critical ? "red" : bad ? "amber" : "green";
-                    const badgeLabel = critical ? "↑ Exceeds Limit" : bad ? "⚠ Near Limit" : "✓ Within Limit";
-                    return (
-                      <>
-                        <p className="text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap -mt-1">
-                          <span className={`font-bold ${bad ? "text-amber-600" : "text-emerald-600"}`}>{bad ? "+" : ""}{delta.toFixed(1)}pp</span>
-                          <span className="text-slate-400">({bad ? "+" : ""}{((delta / target) * 100).toFixed(1)}%)</span>
-                          <span>vs ≤ {target}%</span>
-                        </p>
-                        <OutlineBadge color={badgeColor}>{badgeLabel}</OutlineBadge>
-                        {bulkLossTrendInverted !== undefined && (
-                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap">
-                            {bulkLossTrendInverted >= 0
-                              ? <span className="text-emerald-600 font-bold">▼ {Math.abs(bulkLossTrendInverted).toFixed(1)}% improved</span>
-                              : <span className="text-amber-600 font-bold">▲ {Math.abs(bulkLossTrendInverted).toFixed(1)}% worsened</span>}
-                            <span>vs previous period</span>
-                          </p>
-                        )}
-                        <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-500">
-                          Pack loss {pack.toFixed(1)}% · {pack <= 3 ? "within limit" : "exceeds limit"}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </KPICard>
+                  target="≤ 3%"
+                  attainment={0}
+                  noData
+                />
 
-                {/* Energy compact */}
-                <KPICard
-                  compact
-                  dimmed={highlightedKpi !== null && highlightedKpi !== "energy"}
-                  flashKey={refreshCount}
-                  title="Energy"
-                  tooltip="Energy consumption per unit of output. Lower is better."
-                  icon={<Zap size={16} />}
-                  iconColor="#eab308"
+                {/* Energy — no data yet */}
+                <LiteKPICard
+                  label="Energy"
+                  icon={<Zap size={13} color="#eab308" strokeWidth={1.75} />}
                   value="—"
                   unit="kWh/unit"
-                >
-                  <div className="bg-[#F7F8FA] rounded-md px-2 py-1 text-[10px] text-slate-400 italic">
-                    Data not yet available
-                  </div>
-                </KPICard>
+                  target="—"
+                  attainment={0}
+                  noData
+                />
               </>
             )}
           </div>

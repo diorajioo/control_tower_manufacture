@@ -221,6 +221,114 @@
         "value": "#a3a8b5",
         "createdAt": "2026-09-22T17:21:18.515Z",
         "reason": "Dim caption color"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#067647",
+        "createdAt": "2026-09-24T01:19:05.872Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f0fdf6",
+        "createdAt": "2026-09-24T01:19:06.180Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#bbf0d2",
+        "createdAt": "2026-09-24T01:19:06.471Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(6,118,71,.08)",
+        "createdAt": "2026-09-24T01:19:06.772Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#b45309",
+        "createdAt": "2026-09-24T01:19:07.046Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fffaeb",
+        "createdAt": "2026-09-24T01:19:07.316Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f0d58a",
+        "createdAt": "2026-09-24T01:19:07.584Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(180,83,9,.08)",
+        "createdAt": "2026-09-24T01:19:07.883Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#d92d20",
+        "createdAt": "2026-09-24T01:19:08.150Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fef4f3",
+        "createdAt": "2026-09-24T01:19:08.416Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fbd5d1",
+        "createdAt": "2026-09-24T01:19:08.693Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgba(217,45,32,.08)",
+        "createdAt": "2026-09-24T01:19:08.958Z",
+        "reason": "TONES system — same as OutputKPICard, confirmed canonical standard"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#8a90a0",
+        "createdAt": "2026-09-24T01:19:36.884Z",
+        "reason": "Eyebrow label color — used throughout dashboard components"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#d0d5dd",
+        "createdAt": "2026-09-24T01:19:37.172Z",
+        "reason": "No-data muted gray — intentional placeholder state"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#e4e7ec",
+        "createdAt": "2026-09-24T01:19:37.445Z",
+        "reason": "Neutral border — used throughout dashboard components"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f8f9fb",
+        "createdAt": "2026-09-24T01:19:37.729Z",
+        "reason": "Neutral background — used throughout dashboard components"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#98a2b3",
+        "createdAt": "2026-09-24T01:19:38.068Z",
+        "reason": "Unit/subtitle gray — used throughout dashboard components"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#101828",
+        "createdAt": "2026-09-24T01:19:38.353Z",
+        "reason": "Primary text color — used throughout dashboard components"
       }
     ]
   }
