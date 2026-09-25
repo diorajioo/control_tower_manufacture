@@ -45,7 +45,7 @@ app/
 ├── dashboard/
 │   ├── page.tsx                    # Strategic view — main KPI dashboard
 │   └── settings/page.tsx           # Settings page
-├── lead-time/page.tsx              # Lead Time page (3 views, mock data)
+├── lead-time/page.tsx              # Lead Time page (3 views; Strategic KPI cards real, rest mock)
 ├── monitor/page.tsx                # Fullscreen monitor mode
 └── api/
     ├── auth/[...nextauth]/route.ts # NextAuth handler

@@ -35,7 +35,7 @@ After: Managers open the dashboard and see current numbers directly from Snowfla
 | `/login` | Live | Azure AD SSO login page; typewriter animation, floating KPI icon cards |
 | `/dashboard` | Live | Strategic view — main KPI dashboard (live Snowflake data) |
 | `/dashboard/settings` | Live | Teams notification config, alert thresholds, display preferences |
-| `/lead-time` | Live (mock data) | Lead Time deep-dive — 3 views: Strategic / Tactical / Operational |
+| `/lead-time` | Live (partial real data) | Lead Time deep-dive — 3 views: Strategic / Tactical / Operational |
 | `/monitor` | Live | Fullscreen monitor mode with bottom navigation (Strategic + Lead Time views) |
 | `/dashboard/output` | Placeholder | Nav link exists; page not built |
 | `/dashboard/productivity` | Placeholder | Nav link exists; page not built |
@@ -72,7 +72,7 @@ After: Managers open the dashboard and see current numbers directly from Snowfla
 ## Current Product Status
 
 - `/dashboard` Strategic view: fully live with real Snowflake data
-- `/lead-time`: live UI with static mock data (not yet connected to Snowflake)
+- `/lead-time`: Strategic KPI cards read from Snowflake; charts, stage breakdown and Tactical/Operational views still use static mock data
 - `/monitor`: live, fullscreen mode with bottom navigation
 - `/dashboard/settings`: live (Teams config, alert thresholds)
 - Placeholder pages (Output, Productivity, OEE, Energy): nav links exist but pages are not built

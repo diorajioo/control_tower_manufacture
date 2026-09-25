@@ -4,6 +4,18 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-09-25
+
+### Changed
+- **Lead Time page: Strategic KPI cards on real data**
+  - Replaced the 3 mock Strategic cards with 5 `LiteKPICard`s: Lead Time · Value-Added · Necessary Non-Value-Added · Waste · Potential Saving.
+  - New query `getLeadTimeComposition()` in `lib/queries.ts` — per-PO `SUM(NET_LEADTIME)` by `ACTIVITY_CATEGORY` (VA/NNVA/UNVA) plus UNVA-WIP, averaged across POs.
+  - `/api/dashboard/kpi` now returns `leadTime.composition` (current, previous, trend); cache keys bumped to `v3`.
+  - Filters read from `ct-filters` (same as Overview).
+  - VA / NNVA / Waste / Potential Saving moved to a dedicated `components/dashboard/LeadTimeCategoryCard.tsx`: fixed green / amber / red / green, "% dari total" context line, description, info tooltip, monthly-average sparkline (`getLeadTimeCompositionMonthly()`); cache keys bumped to `v5`. Lead Time card stays `LiteKPICard`.
+
+---
+
 ## 2026-09-16
 
 ### Changed

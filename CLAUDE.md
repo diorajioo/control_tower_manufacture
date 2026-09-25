@@ -60,7 +60,7 @@ For implementation details not covered by docs: read the source directly.
 - Full design system spec: `docs/UI_UX.md`.
 
 ### Data
-- Lead Time page uses **static mock data** — not connected to Snowflake.
+- Lead Time page: **Strategic KPI cards use real data** (Lead Time = `LiteKPICard`; Value-Added / NNVA / Waste / Potential Saving = `LeadTimeCategoryCard` with fixed colors, no status rules — all from `/api/dashboard/kpi`, same filters as Overview). Everything else on the page (charts, stage breakdown, Top SKU, Tactical/Operational views) and the Lead Time Monitor are still **static mock data**.
 - All Snowflake queries use parameterized bindings (`?` placeholders) — no string interpolation for user input.
 - `DATAMART_PRODUCTION_OUTPUT_OLAH` has **no PLANT column** — plant filter is not applied for Bulk Output/Bulk Loss.
 

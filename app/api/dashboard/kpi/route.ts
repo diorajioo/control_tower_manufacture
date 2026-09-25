@@ -24,6 +24,8 @@ import {
   getBulkOutputWeekly,
   getYieldWeekly,
   getRFTWeekly,
+  getLeadTimeComposition,
+  getLeadTimeCompositionMonthly,
 } from "@/lib/queries";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -87,6 +89,7 @@ async function runKPIQueries(
     ltByPosRes, oeeWeeklyRes, e2eWeeklyRes,
     prevOutputRes, productivityDetailsRes, etlTimestampRes,
     leadTimeWeeklyRes, outputWeeklyRes, bulkOutputWeeklyRes, yieldWeeklyRes, rftWeeklyRes,
+    ltCompRes, prevLtCompRes, ltCompMonthlyRes,
   ] = await Promise.allSettled([
     getLeadTimeKPI(filters),
     getYieldKPI(filters),
@@ -112,6 +115,9 @@ async function runKPIQueries(
     getBulkOutputWeekly(filters),
     getYieldWeekly(filters),
     getRFTWeekly(filters),
+    getLeadTimeComposition(filters),
+    getLeadTimeComposition(prev),
+    getLeadTimeCompositionMonthly(filters),
   ]);
 
   const failures = [
@@ -149,6 +155,10 @@ async function runKPIQueries(
   const bulkOutputWeekly = val(bulkOutputWeeklyRes,  [] as { WEEK: string; TOTAL_BULK: number }[]);
   const yieldWeekly      = val(yieldWeeklyRes,       [] as { WEEK: string; BULK_LOSS_PCT: number }[]);
   const rftWeekly        = val(rftWeeklyRes,         [] as { WEEK: string; RFT_PCT: number }[]);
+  const emptyComp        = { va: 0, nnva: 0, unva: 0, wip: 0 };
+  const ltComp           = val(ltCompRes,            emptyComp);
+  const prevLtComp       = val(prevLtCompRes,        emptyComp);
+  const ltCompMonthly    = val(ltCompMonthlyRes,     [] as { MONTH: string; VA: number; NNVA: number; UNVA: number; WIP: number }[]);
 
   const avg = (arr: { OEE: number; QUALITY?: number; PERFORMANCE?: number }[], key: "OEE" | "QUALITY" | "PERFORMANCE") =>
     arr.length > 0 ? arr.reduce((s, r) => s + (r[key] ?? 0), 0) / arr.length : 0;
@@ -167,6 +177,24 @@ async function runKPIQueries(
       byPositionNett:  ltByPos.nett.map((r) => ({ position: r.POSITION, avgHours: Number(r.AVG_HOURS.toFixed(1)) })),
       byPositionGross: ltByPos.gross.map((r) => ({ position: r.POSITION, avgHours: Number(r.AVG_HOURS.toFixed(1)) })),
       sparkline: leadTimeWeekly.map((r) => Number((r.AVG_DAYS ?? 0).toFixed(2))),
+      composition: {
+        vaDays:     Number(ltComp.va.toFixed(2)),
+        nnvaDays:   Number(ltComp.nnva.toFixed(2)),
+        unvaDays:   Number(ltComp.unva.toFixed(2)),
+        wipDays:    Number(ltComp.wip.toFixed(2)),
+        vaPrev:     Number(prevLtComp.va.toFixed(2)),
+        nnvaPrev:   Number(prevLtComp.nnva.toFixed(2)),
+        unvaPrev:   Number(prevLtComp.unva.toFixed(2)),
+        wipPrev:    Number(prevLtComp.wip.toFixed(2)),
+        vaTrend:    delta(ltComp.va,   prevLtComp.va),
+        nnvaTrend:  delta(ltComp.nnva, prevLtComp.nnva),
+        unvaTrend:  delta(ltComp.unva, prevLtComp.unva),
+        wipTrend:   delta(ltComp.wip,  prevLtComp.wip),
+        vaMonthly:   ltCompMonthly.map((r) => Number((r.VA   ?? 0).toFixed(2))),
+        nnvaMonthly: ltCompMonthly.map((r) => Number((r.NNVA ?? 0).toFixed(2))),
+        unvaMonthly: ltCompMonthly.map((r) => Number((r.UNVA ?? 0).toFixed(2))),
+        wipMonthly:  ltCompMonthly.map((r) => Number((r.WIP  ?? 0).toFixed(2))),
+      },
     },
     yield: {
       bulkLossPct:   yield_.bulkLossPct,
@@ -234,7 +262,7 @@ const fetchByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runKPIQueries(plant, startDate, endDate, period);
   },
-  ["kpi-by-period-v2"],
+  ["kpi-by-period-v5"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 
@@ -242,7 +270,7 @@ const fetchByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string) => {
     return runKPIQueries(plant, startDate, endDate, undefined);
   },
-  ["kpi-by-dates-v2"],
+  ["kpi-by-dates-v5"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 

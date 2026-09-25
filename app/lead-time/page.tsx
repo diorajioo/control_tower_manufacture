@@ -9,15 +9,12 @@ import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { cn } from "@/lib/utils";
 import { ResponsiveBar } from "@nivo/bar";
 import { ResponsiveLine } from "@nivo/line";
-import { Clock, BarChart3, TrendingDown, AlertTriangle, Zap } from "lucide-react";
+import { Clock, AlertTriangle, Zap } from "lucide-react";
 import { FitToScreen } from "@/components/ui/FitToScreen";
+import { LiteKPICard } from "@/components/dashboard/LiteKPICard";
+import { LeadTimeCategoryCard } from "@/components/dashboard/LeadTimeCategoryCard";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-// 38 weeks YTD (W1–W38, Jan 1 – Sep 24 2026)
-const GROSS_LT_SPARKLINE  = [13.5, 13.8, 14.0, 14.2, 14.1, 14.3, 14.5, 14.8, 14.6, 15.0, 15.1, 14.9, 15.2, 15.5, 15.3, 15.6, 15.8, 16.0, 15.7, 15.9, 16.1, 16.2, 16.0, 16.3, 16.4, 16.2, 16.5, 16.3, 16.4, 16.5, 16.4, 16.6, 16.5, 16.3, 16.5, 16.4, 16.6, 16.67];
-const WASTE_SPARKLINE     = [56, 57, 58, 59, 58, 60, 61, 62, 61, 63, 62, 64, 63, 62, 63, 64, 63, 65, 64, 63, 64, 65, 63, 64, 64, 65, 64, 63, 64, 65, 64, 65, 64, 63, 65, 64, 65, 64];
-const SAVINGS_SPARKLINE   = [4.8, 4.6, 4.5, 4.4, 4.5, 4.3, 4.4, 4.2, 4.3, 4.1, 4.2, 4.0, 4.1, 3.9, 4.0, 3.9, 3.8, 3.9, 3.8, 3.7, 3.8, 3.7, 3.8, 3.7, 3.6, 3.7, 3.7, 3.8, 3.7, 3.6, 3.7, 3.6, 3.7, 3.8, 3.7, 3.7, 3.6, 3.67];
-const NETT_LT_SPARKLINE   = [7.8, 7.6, 7.7, 7.5, 7.6, 7.5, 7.4, 7.5, 7.3, 7.4, 7.4, 7.3, 7.2, 7.4, 7.3, 7.2, 7.3, 7.1, 7.2, 7.1, 7.2, 7.0, 7.1, 7.0, 7.1, 7.0, 7.1, 6.9, 7.0, 7.1, 7.0, 6.9, 7.0, 7.1, 7.0, 6.9, 7.0, 7.0];
 
 const VA_COLOR   = "#215AA8";
 const NNVA_COLOR = "#d97706";
@@ -895,352 +892,116 @@ function TacticalView() {
 
 // ── Lead Time Strategic card ─────────────────────────────────────────────────
 
-const LT_CARD_TONES = {
-  on:      { color: "#067647", bg: "#f0fdf6", border: "#bbf0d2", icon: "✓", label: "On Track"     },
-  risk:    { color: "#b45309", bg: "#fffaeb", border: "#f0d58a", icon: "!", label: "At Risk"       },
-  off:     { color: "#d92d20", bg: "#fef4f3", border: "#fbd5d1", icon: "↑", label: "Above Target" },
-  neutral: { color: "#667085", bg: "#f8f9fb", border: "#e4e7ec", icon: "—", label: "No Data"      },
-};
-
 const LT_CARD_TARGET = 13;
 
-const MOCK_BY_POS_GROSS = [
-  { position: "WIP Waiting",   avgHours: 8.97 * 24 },
-  { position: "PO & Approval", avgHours: 6.62 * 24 },
-  { position: "Produksi",      avgHours: 2.84 * 24 },
-  { position: "QC & NDC",      avgHours: 0.60 * 24 },
-];
-
-const MOCK_BY_POS_NETT = [
-  { position: "Produksi",      avgHours: 3.50 * 24 },
-  { position: "QC Hold",       avgHours: 1.80 * 24 },
-  { position: "Lab Test",      avgHours: 0.90 * 24 },
-  { position: "Transport/NDC", avgHours: 0.80 * 24 },
-];
-
-function ltToneFromDays(days: number): keyof typeof LT_CARD_TONES {
-  if (days === 0) return "neutral";
-  if (days <= LT_CARD_TARGET) return "on";
-  if (days <= LT_CARD_TARGET * 1.15) return "risk";
-  return "off";
+interface LeadTimeKPI {
+  grossDays: number;
+  grossTrend: number | null;
+  sparkline: number[];
+  composition?: {
+    vaDays: number; nnvaDays: number; unvaDays: number; wipDays: number;
+    vaPrev: number; nnvaPrev: number; unvaPrev: number; wipPrev: number;
+    vaTrend: number | null; nnvaTrend: number | null; unvaTrend: number | null; wipTrend: number | null;
+    vaMonthly: number[]; nnvaMonthly: number[]; unvaMonthly: number[]; wipMonthly: number[];
+  };
 }
 
-function LeadTimeStrategicCard() {
-  const [type, setType] = useState<"gross" | "nett">("gross");
-  const [unit, setUnit] = useState<"days" | "hours">("days");
 
-  const GROSS_DAYS = 16.67;
-  const NETT_DAYS  = 7.00;
-
-  const primaryDays    = type === "gross" ? GROSS_DAYS : NETT_DAYS;
-  const secondaryDays  = type === "gross" ? NETT_DAYS  : GROSS_DAYS;
-  const secondaryLabel = type === "gross" ? "Nett lead time this period" : "Gross lead time this period";
-
-  const tone      = LT_CARD_TONES[ltToneFromDays(primaryDays)];
-  const delta     = primaryDays - LT_CARD_TARGET;
-  const deltaPct  = (delta / LT_CARD_TARGET) * 100;
-  const deltaOver = delta > 0;
-
-  const positions     = type === "gross" ? MOCK_BY_POS_GROSS : MOCK_BY_POS_NETT;
-  const maxHours      = positions[0]?.avgHours || 1;
-  const sparklineData = type === "gross" ? GROSS_LT_SPARKLINE : NETT_LT_SPARKLINE;
-  const nivoData      = [{ id: "lt", data: sparklineData.map((y, x) => ({ x, y })) }];
-
-  const fmtVal = (days: number) => {
-    const val = unit === "hours" ? days * 24 : days;
-    return val.toFixed(unit === "hours" ? 1 : 2);
-  };
-  const unitLabel  = unit === "days" ? "days" : "hours";
-  const deltaLabel = unit === "hours"
-    ? `${deltaOver ? "+" : ""}${(delta * 24).toFixed(1)} hrs`
-    : `${deltaOver ? "+" : ""}${delta.toFixed(2)} days`;
-
-  return (
-    <div style={{ background: "white", border: "1px solid #e9eaee", borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden", width: "100%", fontFamily: "Lato, sans-serif", height: "100%" }}>
-      <div style={{ display: "flex", flex: 1 }}>
-        <div style={{ width: 6, background: tone.color, flexShrink: 0 }} />
-        <div style={{ flex: 1, padding: "14px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
-
-          {/* Header row */}
-          <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-
-            {/* LEFT column */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <Clock size={13} color="#d97706" strokeWidth={1.75} style={{ flexShrink: 0 }} />
-                <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.11em", color: "#8a90a0", textTransform: "uppercase" }}>
-                  LEAD TIME
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.015em", color: "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-                  {fmtVal(primaryDays)}
-                </span>
-                <span style={{ fontSize: 12, color: "#98a2b3" }}>{unitLabel}</span>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: deltaOver ? "#d92d20" : "#067647", fontVariantNumeric: "tabular-nums" }}>
-                  {deltaOver ? "↗" : "↘"} {deltaLabel}
-                </span>
-              </div>
-              <div style={{ fontSize: 11, color: "#667085", fontVariantNumeric: "tabular-nums" }}>
-                vs target {LT_CARD_TARGET}.00 days ({deltaOver ? "+" : ""}{deltaPct.toFixed(1)}%)
-              </div>
-              <div>
-                <span style={{ fontSize: 11.5, fontWeight: 700, background: tone.bg, border: `1px solid ${tone.border}`, color: tone.color, borderRadius: 5, padding: "2px 8px", display: "inline-block" }}>
-                  {tone.icon} {tone.label}
-                </span>
-              </div>
-            </div>
-
-            {/* RIGHT column */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-
-              {/* Toggles — side by side */}
-              <div style={{ display: "flex", gap: 4 }}>
-                <div style={{ background: "#f2f3f6", borderRadius: 7, padding: 3, display: "flex", gap: 2 }}>
-                  {(["gross", "nett"] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setType(t)}
-                      style={{
-                        fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 5,
-                        border: "none", cursor: "pointer", fontFamily: "Lato, sans-serif",
-                        background: type === t ? "white" : "transparent",
-                        color: type === t ? "#101828" : "#667085",
-                        boxShadow: type === t ? "0 1px 2px rgba(16,24,40,.08)" : "none",
-                        transition: "background 0.15s, color 0.15s",
-                      }}
-                    >
-                      {t === "gross" ? "Gross" : "Nett"}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ background: "#f2f3f6", borderRadius: 7, padding: 3, display: "flex", gap: 2 }}>
-                  {(["days", "hours"] as const).map((u) => (
-                    <button
-                      key={u}
-                      onClick={() => setUnit(u)}
-                      style={{
-                        fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 5,
-                        border: "none", cursor: "pointer", fontFamily: "Lato, sans-serif",
-                        background: unit === u ? "white" : "transparent",
-                        color: unit === u ? "#101828" : "#667085",
-                        boxShadow: unit === u ? "0 1px 2px rgba(16,24,40,.08)" : "none",
-                        transition: "background 0.15s, color 0.15s",
-                      }}
-                    >
-                      {u === "days" ? "Days" : "Hours"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sparkline */}
-              <div style={{ width: 150, height: 42 }}>
-                <ResponsiveLine
-                  data={nivoData}
-                  margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
-                  xScale={{ type: "point" }}
-                  yScale={{ type: "linear", min: "auto", max: "auto" }}
-                  enableArea
-                  areaOpacity={0.07}
-                  colors={[tone.color]}
-                  lineWidth={1.6}
-                  enablePoints={false}
-                  enableGridX={false}
-                  enableGridY={false}
-                  axisLeft={null}
-                  axisBottom={null}
-                  isInteractive={false}
-                  animate={false}
-                />
-              </div>
-              <div style={{ fontSize: 10, color: "#a3a8b5", marginTop: -4, textAlign: "right" }}>
-                {sparklineData.length} weeks · {unitLabel}
-              </div>
-            </div>
-          </div>
-
-          {/* Secondary metric */}
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eceef2", display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                <span style={{ fontSize: 20, fontWeight: 700, color: "#101828", fontVariantNumeric: "tabular-nums" }}>
-                  {fmtVal(secondaryDays)}
-                </span>
-                <span style={{ fontSize: 11, color: "#98a2b3" }}>{unitLabel}</span>
-              </div>
-              <div style={{ fontSize: 10.5, color: "#a3a8b5" }}>{secondaryLabel}</div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div style={{ background: "#f6f7f9", borderTop: "1px solid #eceef2", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 16px 7px 22px", borderRadius: "0 0 9px 9px" }}>
-        <span style={{ fontSize: 11, color: "#667085", fontFamily: "Lato, sans-serif" }}>
-          {type === "gross" ? "Total process PO → NDC receiving" : "Actual production time"}
-        </span>
-        <span style={{ fontSize: 10, color: "#a3a8b5", fontFamily: "Lato, sans-serif" }}>
-          Target ≤ {LT_CARD_TARGET} days
-        </span>
-      </div>
-    </div>
-  );
+// Same source and filters as the Overview Lead Time card (/api/dashboard/kpi, ct-filters)
+function useLeadTimeKPI() {
+  const [lt, setLt] = useState<LeadTimeKPI | null>(null);
+  useEffect(() => {
+    let f = {
+      plant:     "All Plant",
+      startDate: `${new Date().getFullYear()}-01-01`,
+      endDate:   new Date().toISOString().split("T")[0],
+      period:    "YTD",
+    };
+    try {
+      const stored = localStorage.getItem("ct-filters");
+      if (stored) f = { ...f, ...JSON.parse(stored) };
+    } catch { /* ignore */ }
+    const params = new URLSearchParams({ plant: f.plant, startDate: f.startDate, endDate: f.endDate, period: f.period });
+    fetch(`/api/dashboard/kpi?${params}`)
+      .then((r) => r.json())
+      .then((res) => { if (res?.leadTime) setLt(res.leadTime); })
+      .catch(() => { /* cards fall back to No Data */ });
+  }, []);
+  return lt;
 }
 
 // ── STRATEGIC VIEW ────────────────────────────────────────────────────────────
 
 function StrategicView() {
+  const lt   = useLeadTimeKPI();
+  const comp = lt?.composition;
+  // Share of VA + NNVA + Waste (activities overlap, so this is not a share of gross lead time)
+  const compTotal = comp ? comp.vaDays + comp.nnvaDays + comp.unvaDays : 0;
+  const share = (days?: number) => (compTotal > 0 && days ? Math.round((days / compTotal) * 100) : 0);
   return (
     <div className="flex flex-col gap-0 pt-5">
-      {/* 3 KPI cards */}
-      <div className="grid grid-cols-3 gap-3.5 px-5 mb-4">
-        <LeadTimeStrategicCard />
-        {/* WASTE PORTION (UNVA) */}
-        <div style={{ background: "white", border: "1px solid #e9eaee", borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden", width: "100%", fontFamily: "Lato, sans-serif", height: "100%" }}>
-          <div style={{ display: "flex", flex: 1 }}>
-            <div style={{ width: 6, background: "#d92d20", flexShrink: 0 }} />
-            <div style={{ flex: 1, padding: "14px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ color: "#b91c1c", display: "flex", alignItems: "center", flexShrink: 0 }}><BarChart3 size={13} /></span>
-                    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.11em", color: "#8a90a0", textTransform: "uppercase" }}>WASTE PORTION (UNVA)</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.015em", color: "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>64</span>
-                    <span style={{ fontSize: 12, color: "#98a2b3" }}>% of total LT</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: "#98a2b3" }}>non-value-added time</div>
-                  <div>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, background: "#fef4f3", border: "1px solid #fbd5d1", color: "#d92d20", borderRadius: 5, padding: "2px 8px", display: "inline-block" }}>
-                      ↓ Critical — Majority Waste
-                    </span>
-                  </div>
-                </div>
-                <div style={{ width: 150, height: 42, flexShrink: 0 }}>
-                  <ResponsiveLine
-                    data={[{ id: "waste", data: WASTE_SPARKLINE.map((y, x) => ({ x, y })) }]}
-                    margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
-                    xScale={{ type: "point" }}
-                    yScale={{ type: "linear", min: "auto", max: "auto" }}
-                    enableArea
-                    areaOpacity={0.07}
-                    colors={["#d92d20"]}
-                    lineWidth={1.6}
-                    enablePoints={false}
-                    enableGridX={false}
-                    enableGridY={false}
-                    axisLeft={null}
-                    axisBottom={null}
-                    isInteractive={false}
-                    animate={false}
-                  />
-                </div>
-              </div>
-              {/* Stacked bar */}
-              <div>
-                <div style={{ height: 8, borderRadius: 999, display: "flex", overflow: "hidden" }}>
-                  <div style={{ width: "14%", background: "#215AA8" }} />
-                  <div style={{ width: "22%", background: "#d97706" }} />
-                  <div style={{ width: "64%", background: "#b91c1c" }} />
-                </div>
-                <div style={{ display: "flex", gap: 10, marginTop: 5, fontSize: 10.5 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: "#215AA8", display: "inline-block" }} />
-                    <span style={{ color: "#667085" }}>VA 14%</span>
-                  </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: "#d97706", display: "inline-block" }} />
-                    <span style={{ color: "#667085" }}>NNVA 22%</span>
-                  </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: "#b91c1c", display: "inline-block" }} />
-                    <span style={{ color: "#667085" }}>UNVA 64%</span>
-                  </span>
-                </div>
-              </div>
-              {/* Secondary metric */}
-              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eceef2", display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: "#101828", fontVariantNumeric: "tabular-nums" }}>14%</span>
-                  </div>
-                  <div style={{ fontSize: 10.5, color: "#a3a8b5" }}>VA (value-added) share of total LT</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style={{ background: "#f6f7f9", borderTop: "1px solid #eceef2", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 16px 7px 22px", borderRadius: "0 0 9px 9px" }}>
-            <span style={{ fontSize: 11, color: "#667085", fontFamily: "Lato, sans-serif" }}>Lead time classified as non-value-added</span>
-            <span style={{ fontSize: 10, color: "#a3a8b5", fontFamily: "Lato, sans-serif" }}>NNVA 22% · VA 14%</span>
-          </div>
-        </div>
-
-        {/* SAVINGS POTENTIAL */}
-        <div style={{ background: "white", border: "1px solid #e9eaee", borderRadius: 10, display: "flex", flexDirection: "column", overflow: "hidden", width: "100%", fontFamily: "Lato, sans-serif", height: "100%" }}>
-          <div style={{ display: "flex", flex: 1 }}>
-            <div style={{ width: 6, background: "#067647", flexShrink: 0 }} />
-            <div style={{ flex: 1, padding: "14px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ color: "#10b981", display: "flex", alignItems: "center", flexShrink: 0 }}><TrendingDown size={13} /></span>
-                    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.11em", color: "#8a90a0", textTransform: "uppercase" }}>SAVINGS POTENTIAL</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.015em", color: "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>3.67</span>
-                    <span style={{ fontSize: 12, color: "#98a2b3" }}>days/batch</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: "#98a2b3" }}>if top-5 UNVA stages eliminated</div>
-                  <div>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, background: "#f0fdf6", border: "1px solid #bbf0d2", color: "#067647", borderRadius: 5, padding: "2px 8px", display: "inline-block" }}>
-                      ↑ Opportunity Identified
-                    </span>
-                  </div>
-                </div>
-                <div style={{ width: 150, height: 42, flexShrink: 0 }}>
-                  <ResponsiveLine
-                    data={[{ id: "savings", data: SAVINGS_SPARKLINE.map((y, x) => ({ x, y })) }]}
-                    margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
-                    xScale={{ type: "point" }}
-                    yScale={{ type: "linear", min: "auto", max: "auto" }}
-                    enableArea
-                    areaOpacity={0.07}
-                    colors={["#067647"]}
-                    lineWidth={1.6}
-                    enablePoints={false}
-                    enableGridX={false}
-                    enableGridY={false}
-                    axisLeft={null}
-                    axisBottom={null}
-                    isInteractive={false}
-                    animate={false}
-                  />
-                </div>
-              </div>
-              {/* Callout */}
-              <div style={{ borderLeft: "2px solid #bbf7d0", background: "#f0fdf4", borderRadius: "0 5px 5px 0", padding: "7px 10px", fontSize: 11.5, color: "#667085" }}>
-                Eliminating top-5 UNVA stages reduces lead time to ~13.0 days
-              </div>
-              {/* Secondary metric */}
-              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eceef2", display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: "#101828", fontVariantNumeric: "tabular-nums" }}>~13.0</span>
-                    <span style={{ fontSize: 11, color: "#98a2b3" }}>days</span>
-                  </div>
-                  <div style={{ fontSize: 10.5, color: "#a3a8b5" }}>Projected lead time after elimination</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style={{ background: "#f6f7f9", borderTop: "1px solid #eceef2", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 16px 7px 22px", borderRadius: "0 0 9px 9px" }}>
-            <span style={{ fontSize: 11, color: "#667085", fontFamily: "Lato, sans-serif" }}>If top-5 UNVA stages are eliminated</span>
-            <span style={{ fontSize: 10, color: "#a3a8b5", fontFamily: "Lato, sans-serif" }}>Current: 16.67 days</span>
-          </div>
-        </div>
+      {/* 5 KPI cards — CT_MANUF_LEADTIME via /api/dashboard/kpi.
+          VA / NNVA / Waste / Potential Saving use LeadTimeCategoryCard — fixed color, no status rules; sparkline = monthly avg. */}
+      <div className="grid grid-cols-5 gap-3.5 px-5 mb-4">
+        <LiteKPICard
+          label="Lead Time"
+          icon={<Clock size={13} color="#d97706" strokeWidth={1.75} />}
+          value={lt ? lt.grossDays.toFixed(1) : "—"}
+          unit="hari"
+          target={`≤ ${LT_CARD_TARGET} hari`}
+          attainment={lt && lt.grossDays > 0 ? (LT_CARD_TARGET / lt.grossDays) * 100 : 0}
+          trend={lt?.grossTrend ?? null}
+          series={lt?.sparkline ?? []}
+          noData={!lt}
+        />
+        <LeadTimeCategoryCard
+          category="va"
+          label="Value-Added"
+          value={comp ? comp.vaDays.toFixed(1) : "—"}
+          unit="hari"
+          context={`${share(comp?.vaDays)}% dari total`}
+          description="Terjadi pada Weighing, Olah, serta Filling & Packing"
+          info="Rata-rata per PO: SUM(NET_LEADTIME) aktivitas ACTIVITY_CATEGORY = VA"
+          trend={comp?.vaTrend ?? null}
+          series={comp?.vaMonthly ?? []}
+          noData={!comp}
+        />
+        <LeadTimeCategoryCard
+          category="nnva"
+          label="Necessary Non-Value-Added"
+          value={comp ? comp.nnvaDays.toFixed(1) : "—"}
+          unit="hari"
+          context={`${share(comp?.nnvaDays)}% dari total`}
+          description="Terjadi pada PO, cuci, unbox, dan receiving NDC"
+          info="Rata-rata per PO: SUM(NET_LEADTIME) aktivitas ACTIVITY_CATEGORY = NNVA"
+          trend={comp?.nnvaTrend ?? null}
+          series={comp?.nnvaMonthly ?? []}
+          noData={!comp}
+        />
+        <LeadTimeCategoryCard
+          category="waste"
+          label="Waste"
+          value={comp ? comp.unvaDays.toFixed(1) : "—"}
+          unit="hari"
+          context={`${share(comp?.unvaDays)}% dari total`}
+          description="Terdiri atas WIP dan waktu tunggu"
+          info="Rata-rata per PO: SUM(NET_LEADTIME) aktivitas ACTIVITY_CATEGORY = UNVA"
+          trend={comp?.unvaTrend ?? null}
+          series={comp?.unvaMonthly ?? []}
+          noData={!comp}
+        />
+        <LeadTimeCategoryCard
+          category="saving"
+          label="Potential Saving"
+          value={comp ? comp.wipDays.toFixed(1) : "—"}
+          unit="hari"
+          context={`${comp && comp.unvaDays > 0 ? Math.round((comp.wipDays / comp.unvaDays) * 100) : 0}% dari Waste berupa WIP`}
+          description="Dengan asumsi seluruh WIP dapat dihilangkan"
+          info="Rata-rata per PO: SUM(NET_LEADTIME) aktivitas UNVA dengan ACTIVITY_TYPE = WIP"
+          trend={comp?.wipTrend ?? null}
+          series={comp?.wipMonthly ?? []}
+          noData={!comp}
+        />
       </div>
 
       {/* Stage Group Chart */}

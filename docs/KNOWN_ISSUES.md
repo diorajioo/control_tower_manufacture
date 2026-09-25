@@ -6,7 +6,7 @@
 
 ### Lead Time Page: Static Mock Data
 
-**Status: Open**
+**Status: Partially resolved (2026-09-25)**
 **Severity: High**
 **Area: `/lead-time` page, `components/monitor/LeadTimeMonitor.tsx`**
 
@@ -16,7 +16,9 @@
 
 **Actual:** Data is hardcoded in `STAGE_GROUP_DATA`, `ACTIVITY_DATA`, `TOP_SKUS` constants in each file.
 
-**Workaround:** None. Data is always mock.
+**Progress:** Strategic KPI cards (Lead Time, Value-Added, NNVA, Waste, Potential Saving) now read from Snowflake via `/api/dashboard/kpi`.
+
+**Workaround:** None for the remaining sections — still mock.
 
 **What needs doing:** Wire `/api/dashboard/kpi` or a new `/api/lead-time/kpi` endpoint with a Lead Time position breakdown query (similar to Gross Lead Time in `lib/queries.ts`), then replace the hardcoded constants with fetched data.
 

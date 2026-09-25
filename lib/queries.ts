@@ -92,6 +92,68 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
   };
 }
 
+// Lead Time composition → CT_MANUF_LEADTIME.ACTIVITY_CATEGORY (VA / NNVA / UNVA)
+// Per PO: SUM(NET_LEADTIME) per category, then AVG across POs (days).
+// WIP = UNVA rows with ACTIVITY_TYPE = 'WIP' (potential saving if WIP is removed).
+// Activities run in parallel, so VA + NNVA + UNVA can exceed gross lead time.
+export async function getLeadTimeComposition(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const rows = await executeQuery<{ VA: number; NNVA: number; UNVA: number; WIP: number }>(`
+    SELECT
+      AVG(va_min)   / 1440.0 AS VA,
+      AVG(nnva_min) / 1440.0 AS NNVA,
+      AVG(unva_min) / 1440.0 AS UNVA,
+      AVG(wip_min)  / 1440.0 AS WIP
+    FROM (
+      SELECT
+        PROCESS_ORDER_FG,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'VA'   THEN NET_LEADTIME ELSE 0 END) AS va_min,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN NET_LEADTIME ELSE 0 END) AS nnva_min,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN NET_LEADTIME ELSE 0 END) AS unva_min,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' AND ACTIVITY_TYPE = 'WIP' THEN NET_LEADTIME ELSE 0 END) AS wip_min
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG
+    ) sub
+  `, dateBinds);
+  return {
+    va:   rows[0]?.VA   ?? 0,
+    nnva: rows[0]?.NNVA ?? 0,
+    unva: rows[0]?.UNVA ?? 0,
+    wip:  rows[0]?.WIP  ?? 0,
+  };
+}
+
+// Lead Time composition by month → sparklines for VA / NNVA / UNVA cards
+// Same per-PO logic as getLeadTimeComposition(), grouped by month of PO_FG_DONE_DATE.
+export async function getLeadTimeCompositionMonthly(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ MONTH: string; VA: number; NNVA: number; UNVA: number; WIP: number }>(`
+    SELECT
+      MONTH,
+      AVG(va_min)   / 1440.0 AS VA,
+      AVG(nnva_min) / 1440.0 AS NNVA,
+      AVG(unva_min) / 1440.0 AS UNVA,
+      AVG(wip_min)  / 1440.0 AS WIP
+    FROM (
+      SELECT
+        DATE_TRUNC('month', MAX(PO_FG_DONE_DATE)::DATE) AS MONTH,
+        PROCESS_ORDER_FG,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'VA'   THEN NET_LEADTIME ELSE 0 END) AS va_min,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN NET_LEADTIME ELSE 0 END) AS nnva_min,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN NET_LEADTIME ELSE 0 END) AS unva_min,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' AND ACTIVITY_TYPE = 'WIP' THEN NET_LEADTIME ELSE 0 END) AS wip_min
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG
+    ) sub
+    GROUP BY MONTH
+    ORDER BY MONTH
+  `, dateBinds);
+}
+
 export async function getLeadTimeByPosition(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const plantFilter = plantWhere(filters.plant);

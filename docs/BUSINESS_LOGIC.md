@@ -183,7 +183,22 @@ Used in the Lead Time page stage breakdown:
 | **NNVA** (Non-Necessary Value-Adding) | `#d97706` (amber) | Required but non-transforming activities (QC, transport) |
 | **UNVA** (Unnecessary Non-Value-Adding) | `#b91c1c` (red) | Pure waste: waiting, rework, approval queues |
 
-Lead Time page uses static mock data — VA/NNVA/UNVA classification is hardcoded in `components/monitor/LeadTimeMonitor.tsx` and `app/lead-time/page.tsx`.
+Classification comes from `CT_MANUF_LEADTIME.ACTIVITY_CATEGORY` (values `VA` / `NNVA` / `UNVA`).
+
+**Lead Time page — Strategic KPI cards** (`getLeadTimeComposition()` in `lib/queries.ts`, served via `leadTime.composition` in `/api/dashboard/kpi`):
+
+| Card | Formula |
+|---|---|
+| Value-Added | `AVG(SUM(NET_LEADTIME) per PO WHERE ACTIVITY_CATEGORY = 'VA') / 1440` |
+| Necessary Non-Value-Added | Same, `ACTIVITY_CATEGORY = 'NNVA'` |
+| Waste | Same, `ACTIVITY_CATEGORY = 'UNVA'` |
+| Potential Saving | Same, `ACTIVITY_CATEGORY = 'UNVA' AND ACTIVITY_TYPE = 'WIP'` (time saved if all WIP were removed) |
+
+Date column `PO_FG_DONE_DATE`, plant filter applied. Trend = % change vs previous period.
+
+**Card color is fixed, not rule-based** (`components/dashboard/LeadTimeCategoryCard.tsx`): Value-Added = green, NNVA = amber, Waste = red, Potential Saving = green. No status pill, no target; trend arrow follows the sign of the change vs previous period. "% dari total" = category / (VA + NNVA + Waste); Potential Saving shows WIP as % of Waste. Sparkline = monthly average per category (`getLeadTimeCompositionMonthly()`, month of `PO_FG_DONE_DATE`). Activities run in parallel, so VA + NNVA + Waste can exceed Gross Lead Time — values are raw durations, not shares of lead time.
+
+The rest of the Lead Time page (charts, stage breakdown, Tactical/Operational views) and `components/monitor/LeadTimeMonitor.tsx` still use static mock data.
 
 ---
 
