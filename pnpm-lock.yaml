@@ -87,6 +87,9 @@ importers:
         specifier: ^2.4.0
         version: 2.6.1
     devDependencies:
+      '@types/d3-shape':
+        specifier: ^3.2.0
+        version: 3.2.0
       '@types/node':
         specifier: ^20
         version: 20.19.43
@@ -939,8 +942,8 @@ packages:
   '@types/d3-scale@4.0.9':
     resolution: {integrity: sha512-dLmtwB8zkAeO/juAMfnV+sItKjlsw2lKdZVVy6LRr0cBmegxSABiLEpGVmSJJ8O08i4+sGR6qQtb6WtuwJdvVw==}
 
-  '@types/d3-shape@3.1.8':
-    resolution: {integrity: sha512-lae0iWfcDeR7qt7rA88BNiqdvPS5pFVPpo5OfjElwNaT2yyekbM0C9vK+yqBqEmHr6lDkRnYNoTBYlAgJa7a4w==}
+  '@types/d3-shape@3.2.0':
+    resolution: {integrity: sha512-kVd74ta9eof3eJOvbNd1vGKS/XERRyQbT26Og63hIsvDO84cjD5gEOhsXf26w3FSoNlPVz84DOFcKv/oou+fMw==}
 
   '@types/d3-time-format@2.3.4':
     resolution: {integrity: sha512-xdDXbpVO74EvadI3UDxjxTdR6QIxm1FKzEA/+F8tL4GWWUg/hgvBqf6chql64U5A9ZUGWo7pEu4eNlyLwbKdhg==}
@@ -3847,7 +3850,7 @@ snapshots:
       '@nivo/tooltip': 0.99.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@react-spring/web': 10.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/d3-scale': 4.0.9
-      '@types/d3-shape': 3.1.8
+      '@types/d3-shape': 3.2.0
       d3-scale: 4.0.2
       d3-shape: 3.2.0
       lodash: 4.18.1
@@ -3877,7 +3880,7 @@ snapshots:
       '@nivo/theming': 0.99.0(react@18.3.1)
       '@nivo/tooltip': 0.99.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@react-spring/web': 10.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@types/d3-shape': 3.1.8
+      '@types/d3-shape': 3.2.0
       d3-color: 3.1.0
       d3-format: 1.4.5
       d3-interpolate: 3.0.1
@@ -3916,7 +3919,7 @@ snapshots:
       '@nivo/tooltip': 0.99.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@nivo/voronoi': 0.99.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@react-spring/web': 10.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@types/d3-shape': 3.1.8
+      '@types/d3-shape': 3.2.0
       d3-shape: 3.2.0
       react: 18.3.1
     transitivePeerDependencies:
@@ -3947,7 +3950,7 @@ snapshots:
       '@nivo/voronoi': 0.99.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@react-spring/web': 10.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/d3-scale': 4.0.9
-      '@types/d3-shape': 3.1.8
+      '@types/d3-shape': 3.2.0
       d3-scale: 4.0.2
       d3-shape: 3.2.0
       lodash: 4.18.1
@@ -4437,7 +4440,7 @@ snapshots:
     dependencies:
       '@types/d3-time': 3.0.4
 
-  '@types/d3-shape@3.1.8':
+  '@types/d3-shape@3.2.0':
     dependencies:
       '@types/d3-path': 3.1.1
 
@@ -5231,7 +5234,7 @@ snapshots:
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.10
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(eslint@8.57.1))(eslint@8.57.1)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@7.2.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@7.2.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.57.1)
       eslint-plugin-react: 7.37.5(eslint@8.57.1)
       eslint-plugin-react-hooks: 5.0.0-canary-7118f5dd7-20230705(eslint@8.57.1)
@@ -5261,7 +5264,7 @@ snapshots:
       tinyglobby: 0.2.17
       unrs-resolver: 1.12.2
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@7.2.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@7.2.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -5276,7 +5279,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@7.2.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@7.2.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.1.9
@@ -7063,7 +7066,7 @@ snapshots:
       '@types/d3-ease': 3.0.2
       '@types/d3-interpolate': 3.0.4
       '@types/d3-scale': 4.0.9
-      '@types/d3-shape': 3.1.8
+      '@types/d3-shape': 3.2.0
       '@types/d3-time': 3.0.4
       '@types/d3-timer': 3.0.2
       d3-array: 3.2.4
