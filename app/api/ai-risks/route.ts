@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDeepSeekClient, isDeepSeekConfigured } from "@/lib/deepseek";
 
+// Allow up to 60 s on Vercel — the default limit cut the streamed answer short (fewer risks/actions than local).
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

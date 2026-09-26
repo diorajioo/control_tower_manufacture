@@ -8,6 +8,9 @@ import { buildSystemPrompt, type KPISnapshot } from "@/lib/diagnostic-prompt";
 import { executeQuery } from "@/lib/snowflake";
 import type OpenAI from "openai";
 
+// Allow up to 60 s on Vercel — tool calls to Snowflake + a streamed answer can exceed the default limit.
+export const maxDuration = 60;
+
 type ChatMessage = {
   role: "user" | "assistant" | "system" | "tool";
   content: string;

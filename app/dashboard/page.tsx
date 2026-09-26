@@ -393,8 +393,8 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* ── Row 3: Trend chart + AI Risks panel ── */}
-          <div className="grid gap-3.5" style={{ gridTemplateColumns: "2fr 1fr", height: "420px" }}>
+          {/* ── Row 3: Trend chart + AI Risks panel — shrink-0 so the flex column scrolls instead of squashing the chart ── */}
+          <div className="grid gap-3.5 shrink-0" style={{ gridTemplateColumns: "2fr 1fr", height: "420px" }}>
             {loading ? (
               <>
                 <div className="bg-white rounded-lg border border-[#EBEBEB] h-full animate-pulse" />

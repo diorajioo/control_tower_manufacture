@@ -54,7 +54,8 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
         const age = Number(localStorage.getItem(cacheTime) ?? 0);
         if (txt && Date.now() - age < 3 * 60 * 60 * 1000) {
           const p = JSON.parse(txt);
-          setRisks(p.risks); setActions(p.actions); return;
+          // Skip incomplete entries cached before the fix
+          if (p.risks?.length > 0 && p.actions?.length > 0) { setRisks(p.risks); setActions(p.actions); return; }
         }
       } catch { /* ignore */ }
     }
@@ -85,10 +86,13 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
 
       const parsed = parseRisksAndActions(acc);
       setRisks(parsed.risks); setActions(parsed.actions);
-      try {
-        localStorage.setItem(cacheKey,  JSON.stringify(parsed));
-        localStorage.setItem(cacheTime, String(Date.now()));
-      } catch { /* ignore */ }
+      // Cache only a complete answer — a cut-off stream would otherwise stick for 3 hours
+      if (parsed.risks.length > 0 && parsed.actions.length > 0) {
+        try {
+          localStorage.setItem(cacheKey,  JSON.stringify(parsed));
+          localStorage.setItem(cacheTime, String(Date.now()));
+        } catch { /* ignore */ }
+      }
     } catch (err) {
       if (err instanceof Error && err.name !== "AbortError") setError(true);
     } finally {
