@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext } from "react";
 
 export type Lang = "id" | "en";
 
@@ -354,49 +354,14 @@ const I18nContext = createContext<I18nContextValue>({
   t: (key) => dict.en[key] as string,
 });
 
+// UI language is fixed to English (2026-09-26). The `id` dictionary is kept in
+// code, but a stored "id" preference in "ct-display-settings" is ignored and
+// setLang is a no-op.
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("en");
+  const lang: Lang = "en";
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("ct-display-settings");
-      if (raw) {
-        const parsed = JSON.parse(raw) as { language?: Lang };
-        if (parsed.language === "en" || parsed.language === "id") {
-          setLangState(parsed.language);
-        }
-      }
-    } catch { /* ignore */ }
-
-    // Listen for changes made in the settings page (same tab)
-    const handler = (e: StorageEvent) => {
-      if (e.key === "ct-display-settings" && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue) as { language?: Lang };
-          if (parsed.language === "en" || parsed.language === "id") {
-            setLangState(parsed.language);
-          }
-        } catch { /* ignore */ }
-      }
-    };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, []);
-
-  const setLang = (l: Lang) => {
-    setLangState(l);
-    // Persist into existing display settings
-    try {
-      const raw = localStorage.getItem("ct-display-settings");
-      const existing = raw ? JSON.parse(raw) : {};
-      localStorage.setItem("ct-display-settings", JSON.stringify({ ...existing, language: l }));
-      // Dispatch so other tabs pick it up
-      window.dispatchEvent(new StorageEvent("storage", {
-        key: "ct-display-settings",
-        newValue: JSON.stringify({ ...existing, language: l }),
-      }));
-    } catch { /* ignore */ }
-  };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const setLang = (_l: Lang) => { /* language is fixed to English */ };
 
   const t = (key: TranslationKey): string => (dict[lang][key] as string) ?? (dict.id[key] as string);
 

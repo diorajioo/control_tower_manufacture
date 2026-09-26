@@ -12,5 +12,5 @@ export function formatNumber(value: number, decimals = 0): string {
 }
 
 export function formatThousands(value: number): string {
-  return new Intl.NumberFormat("id-ID").format(Math.round(value));
+  return new Intl.NumberFormat("en-US").format(Math.round(value));
 }

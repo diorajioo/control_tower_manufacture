@@ -9,7 +9,7 @@ const TEST_ALERT = {
   id:        "test-001",
   severity:  "warning" as const,
   kpi:       "Test Connection",
-  message:   "Pesan test dari Control Tower dashboard. Jika ini muncul di Teams, integrasi berhasil!",
+  message:   "Test message from the Control Tower dashboard. If you can see this in Teams, the integration works!",
   value:     null,
   threshold: "—",
   trend:     null,
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { error: "Set TEAMS_RECIPIENTS (Graph API) atau TEAMS_WEBHOOK_URL (webhook) di .env" },
+    { error: "Set TEAMS_RECIPIENTS (Graph API) or TEAMS_WEBHOOK_URL (webhook) in .env" },
     { status: 503 }
   );
 }

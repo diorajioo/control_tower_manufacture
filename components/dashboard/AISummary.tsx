@@ -65,7 +65,7 @@ function SummaryText({ text }: { text: string }) {
               e.stopPropagation(); // prevent main onClick from clearing highlight
               window.dispatchEvent(new CustomEvent("kpi-highlight", { detail: { kpi: seg.kpi } }));
             }}
-            title={`Highlight di dashboard`}
+            title={`Highlight on dashboard`}
             className="font-bold text-[#215AA8] underline decoration-[#A6BDDC] underline-offset-2 hover:decoration-[#215AA8] transition-colors cursor-pointer"
           >
             {seg.text}
@@ -89,8 +89,9 @@ interface AISummaryProps {
   ready: boolean;
 }
 
-const CACHE_TEXT = "ai_summary_text";
-const CACHE_TIME = "ai_summary_time";
+// "_en" suffix: invalidates summaries cached before the UI switched to English.
+const CACHE_TEXT = "ai_summary_text_en";
+const CACHE_TIME = "ai_summary_time_en";
 const TTL_MS    = 5 * 60 * 60 * 1000; // 5 hours
 
 export function AISummary({ kpi, filters, ready }: AISummaryProps) {
@@ -185,9 +186,9 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
   const cachedTime = typeof window !== "undefined"
     ? Number(localStorage.getItem(CACHE_TIME) ?? 0) : 0;
   const ageHours = cachedTime ? Math.floor((Date.now() - cachedTime) / (60 * 60 * 1000)) : null;
-  const ageLabel = ageHours === 0 ? "baru saja"
-    : ageHours === 1 ? "1 jam lalu"
-    : ageHours != null ? `${ageHours} jam lalu`
+  const ageLabel = ageHours === 0 ? "just now"
+    : ageHours === 1 ? "1 hour ago"
+    : ageHours != null ? `${ageHours} hours ago`
     : null;
 
   return (
@@ -212,14 +213,14 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
               <SummaryText text={summary} />
               {loading && <span className="inline-block w-0.5 h-3 bg-[#215AA8] ml-0.5 animate-pulse align-middle" />}
               {truncated && !loading && (
-                <span className="ml-1.5 text-[#D1A400] text-[10px]">— terpotong, klik Refresh</span>
+                <span className="ml-1.5 text-[#D1A400] text-[10px]">— truncated, click Refresh</span>
               )}
             </p>
           )}
           {error && (
             <div className="flex items-center gap-1.5 text-[11px] text-[#E6001C]">
               <AlertCircle size={11} />
-              <span>{errorMsg || "Gagal memuat ringkasan AI"}</span>
+              <span>{errorMsg || "Failed to load AI summary"}</span>
             </div>
           )}
         </div>

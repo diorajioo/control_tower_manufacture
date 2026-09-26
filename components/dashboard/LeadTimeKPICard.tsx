@@ -56,6 +56,8 @@ function fmtDays(days: number, unit: "days" | "hours"): string {
 // ---------------------------------------------------------------------------
 
 export interface LeadTimeKPICardProps {
+  /** Compact spacing (≈80% padding/gaps/sparkline, regular fonts) for 3-per-row grids */
+  compact?:       boolean;
   grossDays:       number;
   nettDays:        number;
   grossTrend:      number | null;
@@ -64,6 +66,8 @@ export interface LeadTimeKPICardProps {
   byPositionNett:  { position: string; avgHours: number }[];
   sparkline:       number[];
   hasAlert?:       boolean;
+  /** Show the per-position breakdown bars (default true). Overview hides it so all KPI cards share one height. */
+  showBreakdown?:  boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +83,11 @@ export function LeadTimeKPICard({
   byPositionNett,
   sparkline,
   hasAlert,
+  compact = false,
+  showBreakdown = true,
 }: LeadTimeKPICardProps) {
+  // Size scale for spacing/sparkline: 1 = regular, 0.8 = compact. Font sizes are always regular.
+  const z = (n: number) => (compact ? Math.round(n * 0.8 * 2) / 2 : n);
   const [type, setType] = useState<"gross" | "nett">("gross");
   const [unit, setUnit] = useState<"days" | "hours">("days");
 
@@ -129,19 +137,19 @@ export function LeadTimeKPICard({
         <div
           style={{
             flex: 1,
-            padding: "14px 16px 0",
+            padding: `${z(14)}px ${z(16)}px 0`,
             display: "flex",
             flexDirection: "column",
           }}
         >
           {/* ── Header row ── */}
-          <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ display: "flex", gap: z(16), alignItems: "flex-start" }}>
 
             {/* LEFT column */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: z(8) }}>
 
               {/* Eyebrow */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: z(6) }}>
                 <Clock size={13} color="#3b82f6" strokeWidth={1.75} style={{ flexShrink: 0 }} />
                 <span
                   style={{
@@ -157,7 +165,7 @@ export function LeadTimeKPICard({
               </div>
 
               {/* Primary value + unit + delta */}
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: z(6), flexWrap: "wrap" }}>
                 <span
                   style={{
                     fontSize: 30,
@@ -200,7 +208,7 @@ export function LeadTimeKPICard({
               </div>
 
               {/* Status pill */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: z(8) }}>
                 <span
                   style={{
                     fontSize: 11.5,
@@ -209,7 +217,7 @@ export function LeadTimeKPICard({
                     border: `1px solid ${tone.border}`,
                     color: tone.color,
                     borderRadius: 5,
-                    padding: "2px 8px",
+                    padding: `${z(2)}px ${z(8)}px`,
                     fontFamily: "Lato, sans-serif",
                   }}
                 >
@@ -219,12 +227,13 @@ export function LeadTimeKPICard({
             </div>
 
             {/* RIGHT column */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: z(8) }}>
 
               {/* Toggles — side by side */}
-              <div style={{ display: "flex", gap: 4 }}>
+              {/* Gap between the two toggles: wider in compact so they don't read as one control */}
+              <div style={{ display: "flex", gap: compact ? 8 : 4 }}>
                 {/* Gross / Nett */}
-                <div style={{ background: "#f2f3f6", borderRadius: 7, padding: 3, display: "flex", gap: 2 }}>
+                <div style={{ background: "#f2f3f6", borderRadius: 7, padding: z(3), display: "flex", gap: z(2) }}>
                   {(["gross", "nett"] as const).map((t) => {
                     const active = type === t;
                     return (
@@ -234,7 +243,7 @@ export function LeadTimeKPICard({
                         style={{
                           fontSize: 11,
                           fontWeight: 600,
-                          padding: "4px 10px",
+                          padding: `${z(4)}px ${z(10)}px`,
                           borderRadius: 5,
                           border: "none",
                           cursor: "pointer",
@@ -251,7 +260,7 @@ export function LeadTimeKPICard({
                   })}
                 </div>
                 {/* Days / Hours */}
-                <div style={{ background: "#f2f3f6", borderRadius: 7, padding: 3, display: "flex", gap: 2 }}>
+                <div style={{ background: "#f2f3f6", borderRadius: 7, padding: z(3), display: "flex", gap: z(2) }}>
                   {(["days", "hours"] as const).map((u) => {
                     const active = unit === u;
                     return (
@@ -261,7 +270,7 @@ export function LeadTimeKPICard({
                         style={{
                           fontSize: 11,
                           fontWeight: 600,
-                          padding: "4px 10px",
+                          padding: `${z(4)}px ${z(10)}px`,
                           borderRadius: 5,
                           border: "none",
                           cursor: "pointer",
@@ -281,7 +290,7 @@ export function LeadTimeKPICard({
 
               {/* Sparkline */}
               {hasSparkline ? (
-                <div style={{ width: 150, height: 42 }}>
+                <div style={{ width: z(150), height: z(42) }}>
                   <ResponsiveLine
                     data={nivoData}
                     margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
@@ -301,7 +310,7 @@ export function LeadTimeKPICard({
                   />
                 </div>
               ) : (
-                <div style={{ width: 150, height: 42, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ width: z(150), height: z(42), display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <span style={{ fontSize: 10, color: "#a3a8b5", fontFamily: "Lato, sans-serif" }}>
                     no sparkline data
                   </span>
@@ -313,7 +322,7 @@ export function LeadTimeKPICard({
                   fontSize: 10,
                   color: "#a3a8b5",
                   fontFamily: "Lato, sans-serif",
-                  marginTop: -4,
+                  marginTop: z(-4),
                   textAlign: "right",
                 }}
               >
@@ -325,17 +334,17 @@ export function LeadTimeKPICard({
           {/* ── Secondary metric row ── */}
           <div
             style={{
-              marginTop: 10,
-              paddingTop: 10,
+              marginTop: z(10),
+              paddingTop: z(10),
               borderTop: "1px solid #eceef2",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              paddingBottom: 10,
+              paddingBottom: z(10),
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: z(2) }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: z(4) }}>
                 <span
                   style={{
                     fontSize: 20,
@@ -365,7 +374,7 @@ export function LeadTimeKPICard({
                   border: `1px solid ${secondaryTrend <= 0 ? "#bbf0d2" : "#fbd5d1"}`,
                   color: trendColor(secondaryTrend),
                   borderRadius: 5,
-                  padding: "3px 9px",
+                  padding: `${z(3)}px ${z(9)}px`,
                   fontFamily: "Lato, sans-serif",
                   fontVariantNumeric: "tabular-nums",
                 }}
@@ -376,24 +385,24 @@ export function LeadTimeKPICard({
           </div>
 
           {/* ── Position breakdown ── */}
-          {positions.length > 0 && (
+          {showBreakdown && positions.length > 0 && (
             <div
               style={{
-                marginBottom: 12,
+                marginBottom: z(12),
                 maxHeight: 63,
                 overflowY: "auto",
                 display: "flex",
                 flexDirection: "column",
-                gap: 5,
+                gap: z(5),
               }}
             >
               {positions.map((p) => (
-                <div key={p.position} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div key={p.position} style={{ display: "flex", alignItems: "center", gap: z(8) }}>
                   <span
                     style={{
                       fontSize: 10,
                       color: "#475569",
-                      width: 90,
+                      width: z(90),
                       flexShrink: 0,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -426,7 +435,7 @@ export function LeadTimeKPICard({
                     style={{
                       fontSize: 10,
                       color: "#64748b",
-                      width: 36,
+                      width: z(36),
                       textAlign: "right",
                       flexShrink: 0,
                       fontFamily: "Lato, sans-serif",
@@ -450,7 +459,7 @@ export function LeadTimeKPICard({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "7px 16px 7px 22px",
+          padding: `${z(7)}px ${z(16)}px ${z(7)}px ${z(22)}px`,
           borderRadius: "0 0 9px 9px",
         }}
       >

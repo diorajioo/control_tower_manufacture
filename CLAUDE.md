@@ -56,16 +56,25 @@ For implementation details not covered by docs: read the source directly.
 - **Shell color: Paragon Blue `#215AA8`** — header bg, sidebar active item, primary CTAs. Never used for KPI health signals.
 - **Card border: `border-[#EBEBEB]`** on dashboard cards — not `border-slate-200`.
 - **Card shape: `rounded-lg`** on dashboard KPI cards; `rounded-xl` on Monitor components.
-- **Charts: Nivo only** (`@nivo/line`, `@nivo/bar`) — do not switch to Recharts or any other library.
+- **Charts: Nivo only** (`@nivo/line`, `@nivo/bar`, `@nivo/scatterplot`) — do not switch to Recharts or any other library.
+- **Line charts: the standard is `components/charts/StandardLine.tsx`** — same role as TONES for KPI cards. Every Nivo line chart must use it; never define a local theme, tooltip or legend. Spec + rules: `docs/UI_UX.md` → Standard Line Chart.
+  - Minimal-modern: smooth `monotoneX` 2px lines, no resting points, dashed horizontal hairline grid only, no axis lines/titles.
+  - Colors: `SERIES_COLORS` (`lib/chartConfig.ts`) by fixed entity order, never by rank; 9th+ series → gray `#98a2b3`; aggregate "Total" → Paragon Blue `#215AA8` (never black).
+  - Hover: hairline crosshair + solid 4px points with white ring; tooltip = `LineTooltip`; sub-lines (e.g. Mean · UCL · LCL) 9.5px, never wrap.
+  - Legend (`LineLegend`): below the plot, centered, 9.5px, dot · name · last value, hover isolates.
+  - SPC UCL/Mean/LCL only where the calculation exists (Overview TrendChart) — hairline markers, no shaded band.
+- **Tooltips: `LineTooltip` is the standard for every chart** (line, bar, scatter) — translucent slate card (`TOOLTIP_COLORS` in `StandardLine.tsx`), rows never wrap, optional `subtitle` / `footer` / `nowrap`. Never define a local tooltip.
+- **Toggles: `components/ui/SegmentedToggle.tsx`** is the standard (same style as the Overview KPI card toggles). Chart card titles: 11.5px bold uppercase `text-slate-500`.
 - Full design system spec: `docs/UI_UX.md`.
 
 ### Data
-- Lead Time page: **Strategic KPI cards use real data** (Lead Time = `LiteKPICard`; Value-Added / NNVA / Waste / Potential Saving = `LeadTimeCategoryCard` with fixed colors, no status rules — all from `/api/dashboard/kpi`, same filters as Overview). Everything else on the page (charts, stage breakdown, Top SKU, Tactical/Operational views) and the Lead Time Monitor are still **static mock data**.
+- Lead Time page: **Strategic KPI cards use real data** (Lead Time = `LiteKPICard`; Value-Added / NNVA / Waste / Potential Saving = `LeadTimeCategoryCard` with fixed colors, no status rules — all from `/api/dashboard/kpi`, driven by the page's own Header filters). The "Lead time trend" (weekly, overall + per `POSITION`), "Lead time and PO count per SKU" scatter, and "Lead time per stage" Pareto (VA/NNVA/UNVA per `POSITION`, cumulative %) and "Top 10 SKU by lead time" (Composition / P10–P90 Range, SKUs with ≥5 POs) charts are also real (`/api/lead-time/charts`). The mock Top/Bottom SKU by volume tables, On-Time PO Trend and SKU Pareto are no longer rendered in Strategic (code kept for reuse). Everything else on the page (Tactical/Operational views) and the Lead Time Monitor are still **static mock data**. POSITION codes are shown with English names from `lib/leadTimeStages.ts`.
 - All Snowflake queries use parameterized bindings (`?` placeholders) — no string interpolation for user input.
 - `DATAMART_PRODUCTION_OUTPUT_OLAH` has **no PLANT column** — plant filter is not applied for Bulk Output/Bulk Loss.
 
 ### Language
-- All UI copy is in **Bahasa Indonesia**. Do not change this unless explicitly asked.
+- All UI copy is in **English** on every page (changed 2026-09-26 at the user's request) — including alert messages, AI Summary / AI Risks output, Teams/email notifications, and the chat default reply language (chat still replies in the user's language if they write in another one).
+- `lib/i18n.tsx` keeps the `id` dictionary in code, but `I18nProvider` is fixed to `"en"` (a stored `"id"` preference is ignored, `setLang` is a no-op) and the Settings → Display language picker is hidden (`SHOW_LANGUAGE_PICKER = false`).
 
 ### Deployment
 - Production: Vercel from branch `main`.

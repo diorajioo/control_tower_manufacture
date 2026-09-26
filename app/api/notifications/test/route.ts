@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "RESEND_API_KEY belum dikonfigurasi. Tambahkan ke .env.local untuk mengaktifkan email.",
+          "RESEND_API_KEY is not configured. Add it to .env.local to enable email.",
       },
       { status: 503 }
     );
@@ -24,18 +24,18 @@ export async function POST(req: NextRequest) {
 
   if (!Array.isArray(recipients) || recipients.length === 0) {
     return NextResponse.json(
-      { error: "Tidak ada penerima yang ditentukan" },
+      { error: "No recipients specified" },
       { status: 400 }
     );
   }
 
-  const userName = session.user?.name ?? "Pengguna";
+  const userName = session.user?.name ?? "User";
 
   const { data, error } = await getResend().emails.send({
     from: FROM_EMAIL,
     to: recipients,
     replyTo: REPLY_TO,
-    subject: "Test Notifikasi — Control Tower Manufacture",
+    subject: "Test Notification — Control Tower Manufacture",
     html: testEmailHtml(userName),
   });
 

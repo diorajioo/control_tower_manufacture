@@ -75,6 +75,13 @@
 
 ## Technical Limitations
 
+### E2E Productivity Has No Prior-Period Trend for YTD
+
+**Status: Open (data limitation)**
+**Area: Overview E2E Productivity card, `getE2EProductivity()`**
+
+`CT_MANUF_E2E` only contains 2026 data. For YTD the prior period falls in 2025, which is empty, so `delta()` returns `null`: the card shows the value with trend `—` and status **"No Prior Data"** (`RegularKPICard` distinguishes this from "No Data"). Resolves once the table has a full prior window (or for shorter periods like 30D/90D inside 2026).
+
 ### Azure AD Plant-Level Access Control Not Implemented
 
 **Status: Open (planned)**

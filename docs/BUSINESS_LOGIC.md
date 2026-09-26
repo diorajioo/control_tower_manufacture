@@ -198,7 +198,22 @@ Date column `PO_FG_DONE_DATE`, plant filter applied. Trend = % change vs previou
 
 **Card color is fixed, not rule-based** (`components/dashboard/LeadTimeCategoryCard.tsx`): Value-Added = green, NNVA = amber, Waste = red, Potential Saving = green. No status pill, no target; trend arrow follows the sign of the change vs previous period. "% dari total" = category / (VA + NNVA + Waste); Potential Saving shows WIP as % of Waste. Sparkline = monthly average per category (`getLeadTimeCompositionMonthly()`, month of `PO_FG_DONE_DATE`). Activities run in parallel, so VA + NNVA + Waste can exceed Gross Lead Time — values are raw durations, not shares of lead time.
 
-The rest of the Lead Time page (charts, stage breakdown, Tactical/Operational views) and `components/monitor/LeadTimeMonitor.tsx` still use static mock data.
+**Lead Time page — Strategic charts** (`/api/lead-time/charts`, cached 1 h, tag `kpi`):
+
+| Chart | Formula |
+|---|---|
+| Tren lead time — Total | `getLeadTimeWeekly()`: weekly AVG gross lead time per PO (same as the Lead Time card sparkline) |
+| Tren lead time — per `POSITION` | `getLeadTimeWeeklyByPosition()`: per PO + POSITION `SUM(NET_LEADTIME)`, AVG across POs that have that position, per week of `PO_FG_DONE_DATE` |
+| Lead time vs jumlah PO per SKU | `getLeadTimeBySku()`: per `PRODUCT_CODE`, X = `COUNT(DISTINCT PROCESS_ORDER_FG)`, Y = AVG gross lead time (days); only SKUs with fewer than 100 POs in the period (the former ≥10 lower bound was removed 2026-09-26) (info icon on the chart explains the limits) |
+| Top 10 SKU by lead time | `getLeadTimeTopSku()`: per PO gross lead time (PO start → RECEIVE NDC stop) + SUM(NET_LEADTIME) per `ACTIVITY_CATEGORY`; per `PRODUCT_CODE` with **≥5 POs**: AVG / P10 / P90 (`PERCENTILE_CONT`) of gross days, AVG VA / NNVA / UNVA. Top 10 by AVG gross. Composition view splits the average gross proportionally by the VA / NNVA / UNVA share (category sums overlap because activities run in parallel, often exceeding gross). Range view = P10–P90 with average marker |
+
+**Lead time per stage (Pareto)** — `getLeadTimeByStageCategory()`, component `components/dashboard/LeadTimeStageChart.tsx`:
+- Per `POSITION` × `ACTIVITY_CATEGORY` (VA / NNVA / UNVA): `SUM(NET_LEADTIME) / COUNT(DISTINCT PROCESS_ORDER_FG in period) / 1440` = days per PO, so bars add up to the average total per PO (≈ VA + NNVA + Waste of the cards).
+- WIP rows (`WIP AFTER <activity>`) are mapped to the stage of that activity. **Stage** view folds WIP into that stage (as UNVA); **Stage + WIP** view shows WIP as its own bar.
+- Category filter (UNVA / NNVA / VA / All) keeps only that segment and re-sorts. Bars sorted descending; line = cumulative % of the shown total (right axis).
+- Date `PO_FG_DONE_DATE`, plant filter applied. Stage display names: `lib/leadTimeStages.ts`.
+
+The rest of the Lead Time page (Top/Bottom SKU tables, on-time trend, SKU Pareto, Tactical/Operational views) and `components/monitor/LeadTimeMonitor.tsx` still use static mock data.
 
 ---
 

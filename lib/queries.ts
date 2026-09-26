@@ -9,8 +9,11 @@ interface QueryFilters {
   timeUnit?: string;     // "Daily" | "Hourly"
 }
 
-const plantWhere = (plant?: string, col = "PLANT") =>
-  plant && plant !== "All Plant" ? `AND ${col} = '${plant}'` : "";
+// Plant filter as a parameterized predicate: plantWhere() gives the SQL (with ?),
+// plantBinds() the matching values — append them after the date binds.
+const hasPlant = (plant?: string): plant is string => !!plant && plant !== "All Plant";
+const plantWhere = (plant?: string, col = "PLANT") => (hasPlant(plant) ? `AND ${col} = ?` : "");
+const plantBinds = (plant?: string): unknown[] => (hasPlant(plant) ? [plant] : []);
 
 // Translates the Tableau Period calc filter to a parameterized Snowflake WHERE predicate.
 // Returns { sql, binds } — sql uses ? placeholders, binds holds the values.
@@ -70,7 +73,7 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
         HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
           AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
       ) sub
-    `, dateBinds),
+    `, [...dateBinds, ...plantBinds(filters.plant)]),
     executeQuery<{ AVG_NETT: number }>(`
       SELECT AVG(nett_minutes) / 1440.0 AS AVG_NETT
       FROM (
@@ -82,7 +85,7 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG
       ) sub
-    `, dateBinds),
+    `, [...dateBinds, ...plantBinds(filters.plant)]),
   ]);
 
   return {
@@ -116,7 +119,7 @@ export async function getLeadTimeComposition(filters: QueryFilters) {
         ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_FG
     ) sub
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
   return {
     va:   rows[0]?.VA   ?? 0,
     nnva: rows[0]?.NNVA ?? 0,
@@ -151,7 +154,145 @@ export async function getLeadTimeCompositionMonthly(filters: QueryFilters) {
     ) sub
     GROUP BY MONTH
     ORDER BY MONTH
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+}
+
+// Lead Time trend per POSITION → weekly line chart on /lead-time
+// Per PO + POSITION: SUM(NET_LEADTIME), then AVG across POs that have that position, per week of PO_FG_DONE_DATE.
+export async function getLeadTimeWeeklyByPosition(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ WEEK: string; POSITION: string; AVG_DAYS: number }>(`
+    SELECT WEEK, POSITION, AVG(pos_minutes) / 1440.0 AS AVG_DAYS
+    FROM (
+      SELECT
+        DATE_TRUNC('week', MAX(PO_FG_DONE_DATE)::DATE) AS WEEK,
+        PROCESS_ORDER_FG,
+        POSITION,
+        SUM(NET_LEADTIME) AS pos_minutes
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        AND POSITION IS NOT NULL
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG, POSITION
+    ) sub
+    GROUP BY WEEK, POSITION
+    ORDER BY WEEK, POSITION
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+}
+
+// Lead Time vs PO count per SKU → scatter plot on /lead-time
+// X = COUNT(DISTINCT PROCESS_ORDER_FG), Y = AVG gross lead time (PO start → RECEIVE NDC stop) in days.
+// Limited to SKUs with fewer than 100 POs in the period (100+ = few outliers that compress the axis).
+// Lead time per stage (POSITION) × ACTIVITY_CATEGORY → Pareto stacked bar on /lead-time
+// DAYS = SUM(NET_LEADTIME) / COUNT(DISTINCT PO in period) / 1440 — contribution per PO, so bars add up.
+// WIP rows ("WIP AFTER <activity>") are also mapped to the stage of that activity (ATTACHED_STAGE),
+// so the chart can show WIP either as its own bar or folded into the stage it follows.
+export async function getLeadTimeByStageCategory(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ STAGE: string; ATTACHED_STAGE: string; CATEGORY: string; DAYS: number }>(`
+    WITH base AS (
+      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_CATEGORY, NET_LEADTIME
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        AND POSITION IS NOT NULL
+        ${plantWhere(filters.plant)}
+    ),
+    act_pos AS (
+      SELECT ACTIVITY, MAX(POSITION) AS POSITION
+      FROM base
+      WHERE POSITION <> 'WIP'
+      GROUP BY ACTIVITY
+    ),
+    po AS (SELECT COUNT(DISTINCT PROCESS_ORDER_FG) AS N FROM base)
+    SELECT
+      b.POSITION AS STAGE,
+      CASE WHEN b.POSITION = 'WIP' THEN COALESCE(ap.POSITION, 'WIP') ELSE b.POSITION END AS ATTACHED_STAGE,
+      b.ACTIVITY_CATEGORY AS CATEGORY,
+      SUM(b.NET_LEADTIME) / 1440.0 / NULLIF(MAX(po.N), 0) AS DAYS
+    FROM base b
+    LEFT JOIN act_pos ap
+      ON b.POSITION = 'WIP' AND ap.ACTIVITY = REGEXP_REPLACE(b.ACTIVITY, '^WIP AFTER ', '')
+    CROSS JOIN po
+    WHERE b.ACTIVITY_CATEGORY IN ('VA', 'NNVA', 'UNVA')
+    GROUP BY 1, 2, 3
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+}
+
+export async function getLeadTimeBySku(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ PRODUCT_CODE: string; PRODUCT_NAME: string; PO_COUNT: number; AVG_DAYS: number }>(`
+    SELECT
+      PRODUCT_CODE,
+      MAX(PRODUCT_NAME)                     AS PRODUCT_NAME,
+      COUNT(DISTINCT PROCESS_ORDER_FG)      AS PO_COUNT,
+      AVG(gross_minutes) / 1440.0           AS AVG_DAYS
+    FROM (
+      SELECT
+        PROCESS_ORDER_FG,
+        MAX(PRODUCT_CODE) AS PRODUCT_CODE,
+        MAX(PRODUCT_NAME) AS PRODUCT_NAME,
+        DATEDIFF('minute',
+          MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
+          MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
+        ) AS gross_minutes
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG
+      HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
+        AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
+    ) sub
+    WHERE PRODUCT_CODE IS NOT NULL
+    GROUP BY PRODUCT_CODE
+    HAVING COUNT(DISTINCT PROCESS_ORDER_FG) < 100
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+}
+
+// Top 10 SKU by lead time → composition / range chart on /lead-time
+// Per PO: gross lead time (PO start → RECEIVE NDC stop) + SUM(NET_LEADTIME) per ACTIVITY_CATEGORY.
+// Per SKU (≥5 POs): AVG / P10 / P90 of gross days, AVG VA / NNVA / UNVA days. Top 10 by AVG gross.
+export async function getLeadTimeTopSku(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{
+    PRODUCT_CODE: string; PRODUCT_NAME: string; PO_COUNT: number;
+    AVG_DAYS: number; P10_DAYS: number; P90_DAYS: number; VA: number; NNVA: number; UNVA: number;
+  }>(`
+    WITH po AS (
+      SELECT
+        PROCESS_ORDER_FG,
+        MAX(PRODUCT_CODE) AS PRODUCT_CODE,
+        MAX(PRODUCT_NAME) AS PRODUCT_NAME,
+        DATEDIFF('minute',
+          MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
+          MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
+        ) / 1440.0 AS gross_days,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'VA'   THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS va_days,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS nnva_days,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS unva_days
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG
+      HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
+        AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
+    )
+    SELECT
+      PRODUCT_CODE,
+      MAX(PRODUCT_NAME)                                          AS PRODUCT_NAME,
+      COUNT(*)                                                   AS PO_COUNT,
+      AVG(gross_days)                                            AS AVG_DAYS,
+      PERCENTILE_CONT(0.1) WITHIN GROUP (ORDER BY gross_days)    AS P10_DAYS,
+      PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY gross_days)    AS P90_DAYS,
+      AVG(va_days)                                               AS VA,
+      AVG(nnva_days)                                             AS NNVA,
+      AVG(unva_days)                                             AS UNVA
+    FROM po
+    WHERE PRODUCT_CODE IS NOT NULL
+    GROUP BY PRODUCT_CODE
+    HAVING COUNT(*) >= 5
+    ORDER BY AVG_DAYS DESC
+    LIMIT 10
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
 export async function getLeadTimeByPosition(filters: QueryFilters) {
@@ -172,7 +313,7 @@ export async function getLeadTimeByPosition(filters: QueryFilters) {
       GROUP BY POSITION
       ORDER BY AVG_HOURS DESC
       LIMIT 10
-    `, dateBinds),
+    `, [...dateBinds, ...plantBinds(filters.plant)]),
     executeQuery<{ POSITION: string; AVG_HOURS: number }>(`
       SELECT POSITION, AVG(pos_minutes) / 60.0 AS AVG_HOURS
       FROM (
@@ -186,7 +327,7 @@ export async function getLeadTimeByPosition(filters: QueryFilters) {
       GROUP BY POSITION
       ORDER BY AVG_HOURS DESC
       LIMIT 10
-    `, dateBinds),
+    `, [...dateBinds, ...plantBinds(filters.plant)]),
   ]);
 
   return { nett: nettRows, gross: grossRows };
@@ -199,12 +340,12 @@ export async function getLeadTimeTrend(filters: QueryFilters) {
       PLANT,
       DATEDIFF('minute', MIN(PO_CREATED), MIN(PO_FG_DONE_DATE)) / 1440.0 AS AVG_LEADTIME_DAYS
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
-    WHERE PO_FG_DONE_DATE::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    WHERE PO_FG_DONE_DATE::DATE BETWEEN ?::DATE AND ?::DATE
       AND LINE_CATEGORY IS NOT NULL
     ${plantWhere(filters.plant)}
     GROUP BY WEEK, PLANT, PROCESS_ORDER_FG
     ORDER BY 1
-  `);
+  `, [filters.startDate, filters.endDate, ...plantBinds(filters.plant)]);
 }
 
 // Right First Time → CT_MANUF_LEADTIME: non-ADJUST activities / total activities
@@ -218,7 +359,7 @@ export async function getRightFirstTime(filters: QueryFilters) {
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
     WHERE ${datePred}
     ${plantWhere(filters.plant)}
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
   return { rftPct: Number((rows[0]?.RFT_PCT ?? 0).toFixed(1)) };
 }
 
@@ -236,7 +377,7 @@ export async function getYieldKPI(filters: QueryFilters) {
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
       WHERE ${kemasDatePred}
       ${plantWhere(filters.plant)}
-    `, dateBinds),
+    `, [...dateBinds, ...plantBinds(filters.plant)]),
     executeQuery<{ TOTAL_REALIZATION: number; TOTAL_THEORETICAL: number }>(`
       SELECT
         SUM(REALIZATION_QUANTITY) AS TOTAL_REALIZATION,
@@ -297,7 +438,7 @@ export async function getE2EProductivity(filters: QueryFilters) {
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
     WHERE ${datePred}
     ${plantWhere(filters.plant)}
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
   return { avgE2EProd: Number((rows[0]?.AVG_E2E_PROD ?? 0).toFixed(1)) };
 }
 
@@ -346,7 +487,7 @@ export async function getUpstreamProductivity(filters: QueryFilters) {
       ) AS AVG_UPSTREAM_PROD
     FROM sfg_lvl
     WHERE max_release_bulk > 0
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
   return { avgUpstreamProd: Number((rows[0]?.AVG_UPSTREAM_PROD ?? 0).toFixed(1)) };
 }
 
@@ -368,7 +509,7 @@ export async function getDownstreamProductivity(filters: QueryFilters) {
       ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_FG
     ) sub
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
   return { avgDownstreamProd: Number((rows[0]?.AVG_DOWNSTREAM_PROD ?? 0).toFixed(1)) };
 }
 
@@ -392,7 +533,7 @@ export async function getOEEByPlant(filters: QueryFilters) {
     WHERE ${datePred}
     ${plantWhere(filters.plant)}
     GROUP BY PLANT
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
 // Productivity details → CT_MANUF_KEMAS: total manhours and avg operator count
@@ -406,7 +547,7 @@ export async function getProductivityDetails(filters: QueryFilters) {
     WHERE ${datePred}
       AND LEADTIME_IN_MINUTE > 0 AND OPERATOR_COUNT > 0
     ${plantWhere(filters.plant)}
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
   return {
     totalManhours: Math.round(rows[0]?.TOTAL_MANHOURS ?? 0),
     avgOperators:  Math.round(rows[0]?.AVG_OPERATORS  ?? 0),
@@ -430,7 +571,7 @@ export async function getOEEWeekly(filters: QueryFilters) {
     ${plantWhere(filters.plant)}
     GROUP BY 1
     ORDER BY 1
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
 // E2E Productivity weekly series → used for sparklines in dashboard cards
@@ -445,7 +586,7 @@ export async function getE2EWeekly(filters: QueryFilters) {
     ${plantWhere(filters.plant)}
     GROUP BY 1
     ORDER BY 1
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
 // Lead Time weekly series → sparkline for dashboard card
@@ -469,7 +610,7 @@ export async function getLeadTimeWeekly(filters: QueryFilters) {
     )
     GROUP BY 1
     ORDER BY 1
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
 // Output FG weekly series → sparkline for dashboard card
@@ -527,7 +668,7 @@ export async function getRFTWeekly(filters: QueryFilters) {
       ${plantWhere(filters.plant)}
     GROUP BY 1
     ORDER BY 1
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
 // Trend Line → CT_MANUF_TRENDS for charting (weekly aggregated)
@@ -546,11 +687,11 @@ export async function getTrendsData(filters: QueryFilters) {
       SUM(RELEASE_BULK)     AS RELEASE_BULK,
       SUM(RELEASE_FG)       AS RELEASE_FG
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_TRENDS
-    WHERE PO_FG_DONE_DATE::DATE BETWEEN '${filters.startDate}' AND '${filters.endDate}'
+    WHERE PO_FG_DONE_DATE::DATE BETWEEN ?::DATE AND ?::DATE
     ${plantWhere(filters.plant)}
     GROUP BY 1, 2
     ORDER BY 1
-  `);
+  `, [filters.startDate, filters.endDate, ...plantBinds(filters.plant)]);
 }
 
 // SPC Trend Chart — per-plant weekly KPI matching Tableau LOD expressions:
@@ -564,7 +705,7 @@ export async function getTrendKPIByPlant(
   filters: QueryFilters & { kpiType?: string }
 ) {
   const { startDate, endDate, plant, kpiType = "leadtime" } = filters;
-  const dateRange = `'${startDate}' AND '${endDate}'`;
+  const dateRange = "?::DATE AND ?::DATE";
   const pf = plantWhere(plant);
 
   switch (kpiType) {
@@ -591,7 +732,7 @@ export async function getTrendKPIByPlant(
         ) sub
         GROUP BY WEEK, PLANT
         ORDER BY WEEK
-      `);
+      `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "upstream":
       // Tableau LOD: {FIXED [Process Order Sfg]: MAX(Release_Bulk)/((SUM(Leadtime)/60)/SUM(Operators))} → AVG per week per plant
@@ -641,7 +782,7 @@ export async function getTrendKPIByPlant(
         WHERE max_release_bulk > 0
         GROUP BY WEEK, PLANT
         ORDER BY WEEK
-      `);
+      `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "downstream":
       // {FIXED [Process Order Fg]: SUM(QTY_FG_GOOD)/SUM(LT_HOURS)/MAX(OPERATORS)} → AVG per week
@@ -664,7 +805,7 @@ export async function getTrendKPIByPlant(
         ) sub
         GROUP BY WEEK, PLANT
         ORDER BY WEEK
-      `);
+      `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "e2e":
       // {FIXED [Process Order Fg]: AVG([E2E Productivity])} → AVG per week per plant
@@ -683,7 +824,7 @@ export async function getTrendKPIByPlant(
         ) sub
         GROUP BY WEEK, PLANT
         ORDER BY WEEK
-      `);
+      `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "output":
       // SUM({FIXED [Process Order Fg]: SUM([Release Fg])}) → SUM per week per plant
@@ -702,7 +843,7 @@ export async function getTrendKPIByPlant(
         ) sub
         GROUP BY WEEK, PLANT
         ORDER BY WEEK
-      `);
+      `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "oee":
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
@@ -717,7 +858,7 @@ export async function getTrendKPIByPlant(
           ${pf}
         GROUP BY WEEK, PLANT
         ORDER BY WEEK
-      `);
+      `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "rft":
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
@@ -729,7 +870,7 @@ export async function getTrendKPIByPlant(
           ${pf}
         GROUP BY WEEK, PLANT
         ORDER BY WEEK
-      `);
+      `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "bulkloss":
       // No PLANT column in this table — always returns "All Plant"
@@ -741,7 +882,7 @@ export async function getTrendKPIByPlant(
         WHERE CORRECTION_DATE::DATE BETWEEN ${dateRange}
         GROUP BY WEEK
         ORDER BY WEEK
-      `);
+      `, [startDate, endDate]);
 
     default:
       return [] as { WEEK: string; PLANT: string; KPI_VALUE: number }[];

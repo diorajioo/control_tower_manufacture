@@ -6,15 +6,15 @@
 
 ### Current behavior
 - Permanent Strategic layout — no view toggle. The dashboard always shows the Strategic view.
-- Sidebar nav item label: "Strategic" (was "Overview" in early versions).
+- Sidebar nav item label: "Overview".
 
 ### Layout (top to bottom)
 1. **AI Summary strip** — white card with AILabel gradient chip, 3-sentence executive summary, auto-generated from current KPI state.
 2. **Alert Panel** — shown only when there are active, undismissed alerts. Alert rows with dismiss (undo available 5 seconds).
-3. **Hero OEE card** — full-width featured card. 52px OEE value (red if < 65%, green if ≥ 65%). Sub-metrics: Availability (derived), Performance, Quality. 5px accent bar (red/green).
-4. **4 Operation KPIs** — 4-column grid: Lead Time · Yield Loss · Right First Time · Output. Each is a KPICard with accent bar, animated value, sub-stats, and optional trend badge.
-5. **Equipment & People** — 3-column grid: OEE · OPE · Productivity. KPICards with sparklines and sub-stats.
-6. **Charts** — 2-column grid: TrendChart (line, SPC limits) + StackedBarChart (bar by plant). Both share the same KPI selector — changing KPI in one updates the other.
+3. **KPI row 1** — 3-column grid: Lead Time (`LeadTimeKPICard`) · Output (`OutputKPICard`) · E2E Productivity (`RegularKPICard`).
+4. **KPI row 2** — 3-column grid: OEE · Yield Loss · Energy (`RegularKPICard`, no data yet).
+   All six use the regular card style (accent bar · value + trend · status pill · sparkline · secondary metric · footer) at `compact` size (padding, gaps and sparkline ≈80%, regular font sizes) so three fit per row.
+5. **Trend + AI Risks** — 2fr / 1fr grid: TrendChart (Standard Line Chart, SPC markers) + AIRisksPanel.
 
 ### User interactions
 - Header filter row: Period picker, Plant dropdown, Data Level selector. Changes trigger immediate re-fetch.
@@ -35,9 +35,8 @@
 #### Strategic View (default)
 - 3 KPI hero cards: Gross Lead Time · UNVA % · Savings Potential
 - Stage Group chart: VA/NNVA/UNVA breakdown by stage group (Nivo bar)
-- Top 5 SKU table + Bottom 5 SKU table (by lead time)
-- On-Time PO Trend line chart
-- Lead Time Pareto per SKU (Nivo bar + cumulative % custom layer)
+- Top 10 SKU by lead time — **real data** (`LeadTimeTopSkuChart`, toggle Composition / P10–P90 Range, SKUs with ≥5 POs)
+- ~~Top 5 / Bottom 5 SKU tables, On-Time PO Trend, Lead Time Pareto per SKU~~ — mock, removed from Strategic 2026-09-26 (components kept in `app/lead-time/page.tsx` for reuse)
 
 #### Tactical View
 - 4 KPI cards: Gross LT · Nett LT · UNVA Days · UNVA %
@@ -196,13 +195,8 @@ Only **critical** alerts are auto-sent to Teams via Graph API.
 
 **Status: Not built**
 
-Nav links in Sidebar exist for these routes, but no pages have been built:
+These Sidebar items are shown and hoverable but do nothing on click ("Coming soon" tooltip) until their pages exist:
 
-| Route | Nav Label |
-|---|---|
-| `/dashboard/output` | Output |
-| `/dashboard/productivity` | Productivity |
-| `/dashboard/oee` | OEE |
-| `/dashboard/energy` | Energy |
+Alert Center · Output · Productivity · Yield · Energy · OEE · Root Cause Analysis · Reports · AI Fusion · User Management · Guide
 
-Navigating to these routes results in a 404 (Next.js default not-found page).
+To enable one, add its `href` in `NAV_GROUPS` / `FOOTER_ITEMS` in `components/dashboard/Sidebar.tsx`.

@@ -83,7 +83,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) {
         setSendState("error");
-        setSendError(data.error ?? "Gagal mengirim ke Teams");
+        setSendError(data.error ?? "Failed to send to Teams");
         setTimeout(() => setSendState("idle"), 4000);
       } else {
         setSendState("sent");
@@ -126,10 +126,10 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
           onClick={handleSendToTeams}
           disabled={sendState === "sending" || sendState === "sent"}
           title={
-            sendState === "sent"   ? "Terkirim ke Teams" :
-            sendState === "error"  ? (sendError ?? "Gagal") :
+            sendState === "sent"   ? "Sent to Teams" :
+            sendState === "error"  ? (sendError ?? "Failed") :
             sendState === "sending"? "Mengirim..." :
-            "Kirim alert ke Microsoft Teams"
+            "Send alert to Microsoft Teams"
           }
           className={cn(
             "ml-3 flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all",
@@ -147,7 +147,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
             {sendState === "idle"    && "Teams"}
             {sendState === "sending" && "Sending..."}
             {sendState === "sent"    && "Terkirim"}
-            {sendState === "error"   && "Gagal"}
+            {sendState === "error"   && "Failed"}
           </span>
         </button>
       </div>

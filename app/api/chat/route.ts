@@ -22,7 +22,7 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "get_kpi_data",
-      description: "Ambil nilai KPI manufacturing dari Snowflake untuk periode dan plant tertentu.",
+      description: "Fetch manufacturing KPI values from Snowflake for a given period and plant.",
       parameters: {
         type: "object",
         properties: {
@@ -33,11 +33,11 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
               "output_bulk", "output_fg", "oee",
               "productivity_e2e", "productivity_upstream", "productivity_downstream",
             ],
-            description: "Jenis KPI yang ingin diambil",
+            description: "KPI type to fetch",
           },
-          start_date: { type: "string", description: "Format YYYY-MM-DD (default: awal tahun ini)" },
-          end_date:   { type: "string", description: "Format YYYY-MM-DD (default: hari ini)" },
-          plant:      { type: "string", description: "Nama plant spesifik, atau 'All Plant' untuk semua" },
+          start_date: { type: "string", description: "Format YYYY-MM-DD (default: start of this year)" },
+          end_date:   { type: "string", description: "Format YYYY-MM-DD (default: today)" },
+          plant:      { type: "string", description: "Specific plant name, or 'All Plant' for all plants" },
         },
         required: ["kpi_type"],
       },
@@ -47,18 +47,18 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "get_weekly_trend",
-      description: "Ambil data tren mingguan sebuah KPI untuk analisa pola dan anomali.",
+      description: "Fetch weekly trend data for a KPI to analyze patterns and anomalies.",
       parameters: {
         type: "object",
         properties: {
           kpi_type: {
             type: "string",
             enum: ["leadtime", "upstream", "downstream", "e2e", "oee", "rft", "output", "batch"],
-            description: "Jenis KPI untuk tren",
+            description: "KPI type for the trend",
           },
           start_date: { type: "string", description: "Format YYYY-MM-DD" },
           end_date:   { type: "string", description: "Format YYYY-MM-DD" },
-          plant:      { type: "string", description: "Nama plant atau 'All Plant'" },
+          plant:      { type: "string", description: "Plant name or 'All Plant'" },
         },
         required: ["kpi_type"],
       },
@@ -228,13 +228,13 @@ async function executeGetKpiData(args: {
         break;
       }
       default:
-        return JSON.stringify({ error: "kpi_type tidak dikenali" });
+        return JSON.stringify({ error: "Unrecognized kpi_type" });
     }
 
     return JSON.stringify({ kpi: args.kpi_type, period: `${startDate} to ${endDate}`, plant: plant || "All Plant", data: rows });
   } catch (err) {
     console.error("[chat] get_kpi_data query failed:", err);
-    return JSON.stringify({ error: "Query gagal. Silakan coba lagi." });
+    return JSON.stringify({ error: "Query failed. Please try again." });
   }
 }
 
@@ -341,21 +341,21 @@ async function executeGetWeeklyTrend(args: {
   };
 
   const sql = queryMap[args.kpi_type];
-  if (!sql) return JSON.stringify({ error: "kpi_type tren tidak dikenali" });
+  if (!sql) return JSON.stringify({ error: "Unrecognized trend kpi_type" });
 
   try {
     const rows = await executeQuery(sql, binds);
     return JSON.stringify({ kpi: args.kpi_type, period: `${startDate} to ${endDate}`, plant: plant || "All Plant", trend: rows });
   } catch (err) {
     console.error("[chat] get_weekly_trend query failed:", err);
-    return JSON.stringify({ error: "Query tren gagal. Silakan coba lagi." });
+    return JSON.stringify({ error: "Trend query failed. Please try again." });
   }
 }
 
 async function dispatchTool(name: string, args: Record<string, unknown>): Promise<string> {
   if (name === "get_kpi_data")    return executeGetKpiData(args as Parameters<typeof executeGetKpiData>[0]);
   if (name === "get_weekly_trend") return executeGetWeeklyTrend(args as Parameters<typeof executeGetWeeklyTrend>[0]);
-  return JSON.stringify({ error: `Tool '${name}' tidak dikenal` });
+  return JSON.stringify({ error: `Unknown tool '${name}'` });
 }
 
 // Generic completion call that works with both Groq and OpenAI/DeepSeek clients
@@ -373,7 +373,7 @@ export async function POST(req: NextRequest) {
   const hasDeepSeek = !!process.env.DEEPSEEK_API_KEY;
   const hasGroq     = !!process.env.GROQ_API_KEY;
   if (!hasDeepSeek && !hasGroq) {
-    return NextResponse.json({ error: "Tidak ada API key AI yang dikonfigurasi" }, { status: 503 });
+    return NextResponse.json({ error: "No AI API key configured" }, { status: 503 });
   }
 
   const body = await req.json();
@@ -437,7 +437,7 @@ export async function POST(req: NextRequest) {
           }
         }
         if (!response) {
-          const msg = lastErr instanceof Error ? lastErr.message : "Tidak ada AI model yang tersedia";
+          const msg = lastErr instanceof Error ? lastErr.message : "No AI model available";
           return NextResponse.json({ error: msg }, { status: 503 });
         }
       } else {
@@ -503,6 +503,6 @@ export async function POST(req: NextRequest) {
 
   } catch (err) {
     console.error("[chat] POST handler error:", err);
-    return NextResponse.json({ error: "AI chat gagal. Silakan coba lagi." }, { status: 500 });
+    return NextResponse.json({ error: "AI chat failed. Please try again." }, { status: 500 });
   }
 }

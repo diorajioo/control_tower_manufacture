@@ -17,7 +17,7 @@ export interface AIModelConfig {
   provider: ModelProvider;
   /** Short display name shown in UI */
   name: string;
-  /** One-word badge (Cepat / Smart / Reasoning) */
+  /** One-word badge (Fast / Smart / Reasoning) */
   badge: string;
   /** Tailwind color stem for the badge */
   badgeVariant: ModelBadgeVariant;
@@ -39,11 +39,11 @@ export const AI_MODELS: AIModelConfig[] = [
     id:          "deepseek-chat",
     provider:    "deepseek",
     name:        "DeepSeek V4",
-    badge:       "Cepat",
+    badge:       "Fast",
     badgeVariant:"emerald",
-    tagline:     "Model utama — cepat, cerdas, token efisien",
-    description: "DeepSeek V4: model chat unggulan untuk analisa KPI, lookup data, dan percakapan manufaktur. Latensi rendah, biaya token paling efisien.",
-    limit:       "Sesuai plan DeepSeek",
+    tagline:     "Primary model — fast, smart, token-efficient",
+    description: "DeepSeek V4: flagship chat model for KPI analysis, data lookups, and manufacturing conversations. Low latency, most efficient token cost.",
+    limit:       "Per DeepSeek plan",
     speed:       "fast",
   },
   {
@@ -52,9 +52,9 @@ export const AI_MODELS: AIModelConfig[] = [
     name:        "DeepSeek R1",
     badge:       "Reasoning",
     badgeVariant:"violet",
-    tagline:     "Chain-of-thought & analisa root-cause mendalam",
-    description: "DeepSeek R1: reasoning model terbaik untuk investigasi root-cause, perbandingan multi-KPI, dan pertanyaan yang butuh chain-of-thought step-by-step.",
-    limit:       "Sesuai plan DeepSeek",
+    tagline:     "Chain-of-thought & deep root-cause analysis",
+    description: "DeepSeek R1: best reasoning model for root-cause investigation, multi-KPI comparison, and questions that need step-by-step chain-of-thought.",
+    limit:       "Per DeepSeek plan",
     speed:       "thorough",
   },
 
@@ -65,9 +65,9 @@ export const AI_MODELS: AIModelConfig[] = [
     name:        "Qwen 3.6 (Groq)",
     badge:       "Backup",
     badgeVariant:"emerald",
-    tagline:     "Fallback andal — cepat via Groq",
-    description: "27B model Qwen via Groq. Fallback utama untuk summary dan chat apabila DeepSeek tidak tersedia. Latensi rendah.",
-    limit:       "1.000 req/hari",
+    tagline:     "Reliable fallback — fast via Groq",
+    description: "27B Qwen model via Groq. Main fallback for summary and chat when DeepSeek is unavailable. Low latency.",
+    limit:       "1,000 req/day",
     speed:       "fast",
   },
   {
@@ -76,31 +76,31 @@ export const AI_MODELS: AIModelConfig[] = [
     name:        "GPT OSS 120B (Groq)",
     badge:       "Smart",
     badgeVariant:"indigo",
-    tagline:     "Model besar Groq untuk analisa mendalam",
-    description: "Model Groq terbesar. Terbaik untuk interpretasi data nuanced, laporan panjang, dan pertanyaan multi-step.",
-    limit:       "1.000 req/hari",
+    tagline:     "Large Groq model for in-depth analysis",
+    description: "Largest Groq model. Best for nuanced data interpretation, long reports, and multi-step questions.",
+    limit:       "1,000 req/day",
     speed:       "thorough",
   },
   {
     id:          "groq/compound",
     provider:    "groq",
     name:        "Groq Compound",
-    badge:       "Seimbang",
+    badge:       "Balanced",
     badgeVariant:"amber",
-    tagline:     "Kecepatan & kualitas seimbang, no token limit",
-    description: "Groq compound model tanpa batas token. Pilihan untuk percakapan panjang atau sesi yang butuh konteks besar.",
-    limit:       "250 req/hari · no token limit",
+    tagline:     "Balanced speed & quality, no token limit",
+    description: "Groq compound model with no token limit. A good choice for long conversations or sessions that need a large context.",
+    limit:       "250 req/day · no token limit",
     speed:       "balanced",
   },
   {
     id:          "qwen/qwen3.8-27b",
     provider:    "groq",
     name:        "Qwen 3.8 (Groq)",
-    badge:       "Cepat+",
+    badge:       "Fast+",
     badgeVariant:"cyan",
-    tagline:     "Instruksi terstruktur & output terformat",
-    description: "Iterasi terbaru Qwen via Groq. Lebih baik mengikuti instruksi kompleks dan memproses output terstruktur seperti tabel.",
-    limit:       "1.000 req/hari",
+    tagline:     "Structured instructions & formatted output",
+    description: "Latest Qwen iteration via Groq. Better at following complex instructions and producing structured output such as tables.",
+    limit:       "1,000 req/day",
     speed:       "fast",
   },
 ];

@@ -23,7 +23,7 @@ export interface LeadTimeCategoryCardProps {
   label: string;
   value: string;
   unit: string;
-  /** Primary context line, e.g. "18% dari total" */
+  /** Primary context line, e.g. "18% of total" */
   context: string;
   /** Secondary description line */
   description: string;
@@ -98,7 +98,7 @@ export function LeadTimeCategoryCard({
           <span style={{ fontSize: 12, color: "#98a2b3" }}>{unit}</span>
           {!noData && (
             <span
-              title="vs periode lalu"
+              title="vs previous period"
               style={{ fontSize: 11, fontWeight: 700, color: hasTrend ? color : "#98a2b3", fontVariantNumeric: "tabular-nums" }}
             >
               {trendStr}
@@ -109,7 +109,7 @@ export function LeadTimeCategoryCard({
         {/* Context + description */}
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 11.5, color: noData ? "#d0d5dd" : "#475467", fontVariantNumeric: "tabular-nums" }}>
-            {noData ? "Data tidak tersedia" : context}
+            {noData ? "Data not available" : context}
           </span>
           <span style={{ fontSize: 11, color: "#98a2b3", lineHeight: 1.45 }}>{description}</span>
         </div>
@@ -137,7 +137,7 @@ export function LeadTimeCategoryCard({
               />
             </div>
             <div style={{ fontSize: 10, color: "#a3a8b5", textAlign: "right", marginTop: 2 }}>
-              {series.length} bulan · rata-rata bulanan
+              {series.length} months · monthly average
             </div>
           </div>
         )}

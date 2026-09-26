@@ -1,19 +1,28 @@
 // Single source of truth untuk semua konfigurasi chart
 // Semua komponen harus import dari sini — jangan define ulang di masing-masing file
 
-// Urutan warna per plant konsisten di seluruh dashboard (TrendChart, StackedBarChart, Header, dll)
-export const PLANT_COLORS = [
+// Standard categorical series palette for every line chart (validated: CVD + normal-vision separation).
+// Assign in fixed order per entity, never by rank. A 9th+ series folds to SERIES_OVERFLOW_COLOR.
+export const SERIES_COLORS = [
   "#3b82f6", // biru
   "#f59e0b", // amber
   "#ef4444", // merah
   "#10b981", // hijau
   "#8b5cf6", // ungu
   "#f97316", // oranye
+  "#06b6d4", // cyan
+  "#db2777", // pink
 ] as const;
+export const SERIES_OVERFLOW_COLOR = "#98a2b3";
+// Aggregate series (e.g. "Total") — Paragon Blue; separates from every SERIES_COLORS slot (validated)
+export const SERIES_TOTAL_COLOR = "#215AA8";
+
+// Urutan warna per plant konsisten di seluruh dashboard (TrendChart, StackedBarChart, Header, dll)
+export const PLANT_COLORS = SERIES_COLORS.slice(0, 6);
 
 // Daftar KPI untuk selector di chart — label dan unit harus sama di semua chart
 export const KPI_OPTIONS = [
-  { value: "leadtime", label: "Lead Time",  unit: "hari" },
+  { value: "leadtime", label: "Lead Time",  unit: "days" },
   { value: "output",   label: "Output FG",  unit: "pcs"  },
   { value: "oee",      label: "OEE",        unit: "%"    },
   { value: "ope",      label: "OPE",        unit: "%"    },

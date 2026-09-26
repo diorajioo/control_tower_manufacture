@@ -87,9 +87,9 @@ export function routeModel(
   const modelId = COMPLEXITY_MODEL_MAP[complexity];
 
   const reasons: Record<QuestionComplexity, string> = {
-    simple:   "Pertanyaan lookup langsung — model cepat dipilih untuk latensi rendah.",
-    moderate: "Analisa singkat — model balanced dipilih untuk output terstruktur.",
-    complex:  "Pertanyaan multi-step atau analisa mendalam — model terkuat dipilih.",
+    simple:   "Direct lookup question — fast model chosen for low latency.",
+    moderate: "Short analysis — balanced model chosen for structured output.",
+    complex:  "Multi-step question or in-depth analysis — strongest model chosen.",
   };
 
   // When downgrade is disabled (default), complex questions always get the

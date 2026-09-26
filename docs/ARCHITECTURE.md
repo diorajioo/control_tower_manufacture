@@ -96,7 +96,7 @@ lib/
 ├── email.ts                        # Resend email integration
 ├── settings.ts                     # Settings persistence
 ├── types.ts                        # Shared TypeScript types
-├── i18n.ts                         # Indonesian translation keys
+├── i18n.ts                         # Translation keys (id + en dicts; provider fixed to English)
 └── utils.ts                        # formatThousands, cn()
 ```
 

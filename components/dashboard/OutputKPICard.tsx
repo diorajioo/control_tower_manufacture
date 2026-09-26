@@ -49,6 +49,8 @@ function trendArrow(n: number | null): string {
 // ---------------------------------------------------------------------------
 
 export interface OutputKPICardProps {
+  /** Compact spacing (≈80% padding/gaps/sparkline, regular fonts) for 3-per-row grids */
+  compact?:       boolean;
   fgQty:        number;
   bulkQty:      number;
   fgTrend:      number | null;
@@ -68,7 +70,10 @@ export function OutputKPICard({
   bulkTrend,
   sparkline,
   bulkSparkline,
+  compact = false,
 }: OutputKPICardProps) {
+  // Size scale for spacing/sparkline: 1 = regular, 0.8 = compact. Font sizes are always regular.
+  const z = (n: number) => (compact ? Math.round(n * 0.8 * 2) / 2 : n);
   const [mode, setMode] = useState<"fg" | "bulk">("fg");
 
   const primaryValue = mode === "fg" ? fgQty     : bulkQty;
@@ -112,19 +117,19 @@ export function OutputKPICard({
         <div
           style={{
             flex: 1,
-            padding: "14px 16px 0",
+            padding: `${z(14)}px ${z(16)}px 0`,
             display: "flex",
             flexDirection: "column",
           }}
         >
           {/* ── Header row ── */}
-          <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ display: "flex", gap: z(16), alignItems: "flex-start" }}>
 
             {/* LEFT column */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: z(8) }}>
 
               {/* Eyebrow */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: z(6) }}>
                 <Package size={13} color="#6366f1" strokeWidth={1.75} style={{ flexShrink: 0 }} />
                 <span
                   style={{
@@ -140,7 +145,7 @@ export function OutputKPICard({
               </div>
 
               {/* Primary value + trend */}
-              <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: z(6), flexWrap: "wrap" }}>
                 <span
                   style={{
                     fontSize: 30,
@@ -188,7 +193,7 @@ export function OutputKPICard({
               </div>
 
               {/* Status pill */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: z(8) }}>
                 <span
                   style={{
                     fontSize: 11.5,
@@ -197,7 +202,7 @@ export function OutputKPICard({
                     border: `1px solid ${tone.border}`,
                     color: tone.color,
                     borderRadius: 5,
-                    padding: "2px 8px",
+                    padding: `${z(2)}px ${z(8)}px`,
                     fontFamily: "Lato, sans-serif",
                   }}
                 >
@@ -207,16 +212,16 @@ export function OutputKPICard({
             </div>
 
             {/* RIGHT column */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: z(8) }}>
 
               {/* Segmented toggle */}
               <div
                 style={{
                   background: "#f2f3f6",
                   borderRadius: 7,
-                  padding: 3,
+                  padding: z(3),
                   display: "flex",
-                  gap: 2,
+                  gap: z(2),
                 }}
               >
                 {(["fg", "bulk"] as const).map((m) => {
@@ -228,7 +233,7 @@ export function OutputKPICard({
                       style={{
                         fontSize: 11,
                         fontWeight: 600,
-                        padding: "4px 12px",
+                        padding: `${z(4)}px ${z(12)}px`,
                         borderRadius: 5,
                         border: "none",
                         cursor: "pointer",
@@ -247,7 +252,7 @@ export function OutputKPICard({
 
               {/* Sparkline (FG only) */}
               {hasSparkline ? (
-                <div style={{ width: 150, height: 42 }}>
+                <div style={{ width: z(150), height: z(42) }}>
                   <ResponsiveLine
                     data={nivoData}
                     margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
@@ -288,7 +293,7 @@ export function OutputKPICard({
                   fontSize: 10,
                   color: "#a3a8b5",
                   fontFamily: "Lato, sans-serif",
-                  marginTop: -4,
+                  marginTop: z(-4),
                   textAlign: "right",
                 }}
               >
@@ -300,17 +305,17 @@ export function OutputKPICard({
           {/* ── Secondary metric row ── */}
           <div
             style={{
-              marginTop: 10,
-              paddingTop: 10,
+              marginTop: z(10),
+              paddingTop: z(10),
               borderTop: "1px solid #eceef2",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              paddingBottom: 12,
+              paddingBottom: z(12),
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: z(2) }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: z(4) }}>
                 <span
                   style={{
                     fontSize: 20,
@@ -347,7 +352,7 @@ export function OutputKPICard({
                   border: `1px solid ${TONES[toneFromTrend(secondaryTrend)].border}`,
                   color: TONES[toneFromTrend(secondaryTrend)].color,
                   borderRadius: 5,
-                  padding: "3px 9px",
+                  padding: `${z(3)}px ${z(9)}px`,
                   fontFamily: "Lato, sans-serif",
                   fontVariantNumeric: "tabular-nums",
                 }}
@@ -367,7 +372,7 @@ export function OutputKPICard({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "7px 16px 7px 22px",
+          padding: `${z(7)}px ${z(16)}px ${z(7)}px ${z(22)}px`,
           borderRadius: "0 0 9px 9px",
         }}
       >

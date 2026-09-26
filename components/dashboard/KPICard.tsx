@@ -289,7 +289,7 @@ export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72, 
       className="relative flex items-center justify-center shrink-0"
       style={{ width: size, height: size }}
       role="img"
-      aria-label={ariaLabel ?? `${value.toFixed(1)}% dari ${max}%`}
+      aria-label={ariaLabel ?? `${value.toFixed(1)}% of ${max}%`}
     >
       <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
         <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#f3f4f6" strokeWidth={9} />

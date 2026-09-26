@@ -10,6 +10,9 @@
 
 Creative direction: "The Operations War Room." Dense but not cluttered. High-signal but not alarm-heavy. Color is signal, not decoration.
 
+### Language
+All UI copy is **English** on every page (changed 2026-09-26 at the user's request; previously Bahasa Indonesia with English exceptions for the Sidebar and Lead Time page). `lib/i18n.tsx` keeps the `id` dictionary in code, but `I18nProvider` is fixed to English and the Settings → Display language picker is hidden. Alert messages, AI Summary / AI Risks prompts and Teams/email notification templates are English too.
+
 ### Font
 
 **Lato exclusively.** Loaded from Google Fonts (weights 400 and 700 only). Fallback: `ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif`.
@@ -114,8 +117,12 @@ Plant 4 → #10b981   Plant 5 → #8b5cf6   Plant 6 → #f97316
 ### Sidebar (`components/dashboard/Sidebar.tsx`)
 - `w-56` (224px), white, `border-r border-slate-200`
 - Logo: `public/paragon-corp.98d5977b.png`
-- Nav items: Strategic · Lead Time · Output · Productivity · OEE · Energy · Settings (bottom)
-- Active state: `bg-[#D3DEEE] text-[#143665]` + right pip `bg-[#215AA8]`
+- Labels in **English** (like all UI copy)
+- Groups (divider between each): Overview · Alert Center | Lead Time · Output · Productivity · Yield · Energy · OEE · Root Cause Analysis | Reports · AI Fusion (BETA, purple)
+- Footer: Settings · User Management · Guide · Sign Out
+- Items without a page yet look and hover like normal items but do nothing on click (tooltip "Coming soon") — only Overview, Lead Time, Settings are links
+- Alert Center badge: active alert count from `computeAlerts()` on `/api/dashboard/kpi` (user's `ct-filters`); hidden when 0
+- Active state: `bg-[#E9EFF8] text-[#143665]`, bold label; icons 15px, labels 13px
 - Inactivity logout: 15-minute idle timer
 
 ### Header (`components/dashboard/Header.tsx`)
@@ -165,18 +172,48 @@ The view toggle only renders when `views` prop has 2+ items. On `/dashboard`, `v
 - Warning row: `bg-[#FFFBE4] border-l-4 border-l-[#D1A400]`
 - Dismiss with undo (5s countdown)
 
+### Standard Line Chart (`components/charts/StandardLine.tsx`)
+
+**Every Nivo line chart uses this module** — same role as the TONES object for KPI cards. Reference implementation: Overview `TrendChart`. Cleanest full example: `components/dashboard/LeadTimeTrendChart.tsx` (Lead Time page).
+
+| Aspect | Standard |
+|---|---|
+| Series colors | `SERIES_COLORS` (`lib/chartConfig.ts`) in fixed entity order, never by rank: `#3b82f6` `#f59e0b` `#ef4444` `#10b981` `#8b5cf6` `#f97316` `#06b6d4` `#db2777` (validated for CVD + normal-vision separation). 9th+ series → `SERIES_OVERFLOW_COLOR` `#98a2b3`. Aggregate series ("Total") → `SERIES_TOTAL_COLOR` Paragon Blue `#215AA8` (validated against every slot). `PLANT_COLORS` = first 6. |
+| Look | Minimal-modern: no axis lines, dashed horizontal hairline grid only (`#eef0f3`, 3 4), no vertical grid |
+| Line | `curve="monotoneX"`, 2px, round caps, no resting points (`LINE_DEFAULTS`) |
+| Theme | `LINE_THEME`: tick text `#a0a6b1` 10px tabular, 4 y-ticks as integers, crosshair hairline `#c4c9d2` |
+| Axes | point x-scale, auto y-scale, no axis titles |
+| Hover | mesh + x-crosshair; `makeActivePointsLayer` draws solid 4px points in the series color with a 2px white ring on every series at the hovered x |
+| Tooltip | `LineTooltip` — **standard for every chart tooltip** (line, bar, scatter): translucent slate card (`TOOLTIP_COLORS`: bg `rgba(42,61,74,0.82)` + 4px backdrop blur, 8% white border, radius 8), title 11px bold white, optional `subtitle` 9.5px `#94a3b8`, rows 11.5px = 6px dot (optional) · name `#cbd5e1` · value white bold tabular · unit 10.5px `#94a3b8`; optional sub-line 9.5px `#94a3b8`, `white-space: nowrap`; optional `footer` row above a hairline divider. UCL/LCL accents `#f5a39a`. Never define a local tooltip |
+| Legend | `LineLegend`: **below the plot**, centered, 9.5px — 6px dot · name `slate-500` · last value bold; hover isolates (other lines 12%, legend items 40%; hovered line redrawn on top, same curve) |
+| Card shell | `LineChartCard`: white `rounded-lg p-3 border-[#EBEBEB]`, hover shadow, uppercase 11.5px `slate-400` label + loading spinner, unit pill `bg-[#D3DEEE] text-[#143665]` on the right, 300px plot, legend row below the plot, "No data available" empty state |
+| Week axis | `evenWeekTicks()`: even ISO weeks only, every 4th when > 26 even weeks |
+| SPC | `limitsOf()` mean ± 3σ (LCL ≥ 0); `controlMarkers()` hairline dashed UCL/LCL `#f3b4ae` + Mean `#d0d5dd` with small labels at the right; tooltip sub-line `LimitsSub`. No shaded band. **Optional — Overview TrendChart only**; Lead Time trend has no SPC. |
+
+**Building a new line chart — checklist**
+1. Wrap it in `LineChartCard` (label, unit pill, loading, empty state, legend slot).
+2. Build `StandardSeries[]`; colors via `seriesColor(fixedIndex)` per entity (never by rank), aggregate via `SERIES_TOTAL_COLOR`.
+3. `<ResponsiveLine {...LINE_DEFAULTS} … />`, `colors` via `isolatedColor()`, `onMouseMove`/`onMouseLeave` setting an active-x ref.
+4. Layers: `["grid", "markers", "axes", "lines", "crosshair", ActivePointsLayer, ActiveLineLayer, "mesh"]` with `makeActivePointsLayer` / `makeActiveLineLayer`.
+5. Tooltip: `<LineTooltip title rows={rowsAtX(series, x, unit)} />` — bar and scatter charts use `LineTooltip` too.
+6. Legend: `<LineLegend series hovered onHover />` below the plot.
+7. Weekly axis: `evenWeekTicks()`.
+
+**Anti-patterns — do not repeat**
+- Local Nivo theme, tooltip or legend in a chart file (use the module).
+- Dark tooltip panel, thick (2.5px+) straight lines, resting points on every data point.
+- Vertical grid lines, axis domain lines, axis titles.
+- Black (`#101828`) for a "Total" series; colors assigned by rank/sort order.
+- Legend above/beside the plot or at 11px+; wrapping tooltip sub-lines.
+- SPC shaded band; UCL/LCL on charts that have no control-limit calculation.
+- A 9th categorical hue — fold to `SERIES_OVERFLOW_COLOR`.
+
 ### TrendChart + StackedBarChart
 Both charts share a KPI selector — changing selection in one updates the other. This is a deliberate design decision (Tableau parity).
 
-**Nivo theme (shared config from `lib/chartConfig.ts`):**
-- `fontFamily: "inherit"` — inherits Lato from body
-- Axis tick text: `#9ca3af 10px`
-- Grid lines: `#f3f4f6`
-- Crosshair: `#215AA8`
-- Tooltip bg: `#2A3D4A`
-- SPC control zone fill: `#E9EFF6` (brand-50) at 55% opacity
+**TrendChart:** Line chart per plant, styled entirely by the Standard Line Chart module above (theme, tooltip, legend below the plot). X-axis: even ISO week numbers only (W2, W4...). SPC UCL/Mean/LCL as hairline markers + tooltip sub-line (no shaded band).
 
-**TrendChart:** Line chart per plant. X-axis: even ISO week numbers only (W2, W4...). SPC UCL/Mean/LCL bands.
+**StackedBarChart** still uses its own Nivo bar theme (not covered by the line standard).
 
 **StackedBarChart:** Bar per plant, status legend (In Control / Above UCL / Below LCL).
 
@@ -241,3 +278,7 @@ Monitor mode (`/monitor`) is a fullscreen page with a dark bottom navigation bar
 | Use `border-gray-100` or `border-gray-200` | Use `border-[#EBEBEB]` |
 | Add animation beyond `transition-all ease-out` | No `animate-bounce` |
 | Add `animate-bounce` | Use `transition-all ease-out` |
+
+## Segmented Toggle
+
+Standard for every toggle: `components/ui/SegmentedToggle.tsx` — same style as the Overview KPI card toggles (Gross / Nett, Finished Goods / Bulk). Track `#f2f3f6`, radius 7, padding 3, gap 2; option 11px/600, padding 4×10, radius 5; active = white chip, text `#101828`, shadow `0 1px 2px rgba(16,24,40,.08)`; inactive = transparent, text `#667085`. Used by the Lead Time "Lead time per stage" card. (The KPI cards keep their inline copy because of the `compact` scaling.)

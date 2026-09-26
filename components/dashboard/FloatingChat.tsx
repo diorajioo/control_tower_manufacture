@@ -19,10 +19,10 @@ interface FloatingChatProps {
 }
 
 const QUICK_ACTIONS = [
-  "Kenapa OEE turun?",
-  "Analisa lead time bulan ini",
-  "Plant mana bulk loss tertinggi?",
-  "Tren RFT 3 bulan terakhir",
+  "Why is OEE dropping?",
+  "Analyze lead time this month",
+  "Which plant has the highest bulk loss?",
+  "RFT trend over the last 3 months",
 ];
 
 const KPI_CHIP_LABELS: Record<string, string> = {
@@ -32,7 +32,7 @@ const KPI_CHIP_LABELS: Record<string, string> = {
   output:       "Output",
   oee:          "OEE",
   ope:          "OPE",
-  productivity: "Produktivitas",
+  productivity: "Productivity",
 };
 
 // Inline: **bold** → <strong>, [kpi:ID] → highlight chip
@@ -52,7 +52,7 @@ function formatInline(text: string, onKpiClick?: (kpi: string) => void): React.R
             <button
               key={i}
               onClick={() => onKpiClick?.(kpiId)}
-              title={`Highlight ${label} di dashboard`}
+              title={`Highlight ${label} on dashboard`}
               className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-1.5 py-0.5 rounded-md font-semibold transition-colors ml-0.5 align-middle cursor-pointer"
             >
               {label} ↗
@@ -67,7 +67,7 @@ function formatInline(text: string, onKpiClick?: (kpi: string) => void): React.R
 
 // Extract follow-up questions from the AI response tail
 function splitFollowUps(text: string): { main: string; followUps: string[] } {
-  const headerRe = /\*{0,2}[Mm]au\s+explore\s+lebih\s+lanjut\??\*{0,2}/;
+  const headerRe = /\*{0,2}(?:[Ww]ant\s+to\s+explore\s+further|[Mm]au\s+explore\s+lebih\s+lanjut)\??\*{0,2}/;
   const idx = text.search(headerRe);
   if (idx === -1) return { main: text, followUps: [] };
 
@@ -221,7 +221,7 @@ export function FloatingChat({ filters, kpiSnapshot, alerts }: FloatingChatProps
         }),
       });
 
-      if (!res.ok || !res.body) throw new Error("Gagal mendapatkan respons");
+      if (!res.ok || !res.body) throw new Error("Failed to get a response");
 
       setLoading(false);
       setStreaming(true);
@@ -241,7 +241,7 @@ export function FloatingChat({ filters, kpiSnapshot, alerts }: FloatingChatProps
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       setMessages([
         ...nextRef.current,
-        { role: "assistant", content: "Maaf, terjadi kesalahan. Coba lagi beberapa saat." },
+        { role: "assistant", content: "Sorry, something went wrong. Please try again in a moment." },
       ]);
       setLoading(false);
       setStreaming(false);
@@ -340,9 +340,9 @@ export function FloatingChat({ filters, kpiSnapshot, alerts }: FloatingChatProps
                   <Sparkles size={24} className="text-brand-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-800 mb-1">Tanya tentang manufacturing</p>
+                  <p className="text-sm font-semibold text-gray-800 mb-1">Ask about manufacturing</p>
                   <p className="text-xs text-gray-500 leading-relaxed">
-                    Analisa KPI, deteksi anomali, atau cari pola dari data Snowflake langsung.
+                    Analyze KPIs, detect anomalies, or find patterns straight from Snowflake data.
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 w-full mt-1">
@@ -427,7 +427,7 @@ export function FloatingChat({ filters, kpiSnapshot, alerts }: FloatingChatProps
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Tanya tentang KPI atau pola data..."
+              placeholder="Ask about KPIs or data patterns…"
               disabled={loading || streaming}
               className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 placeholder:text-gray-400 disabled:opacity-50 transition-all"
             />

@@ -6,7 +6,7 @@ export function SecurityOverlay() {
   const { data: session } = useSession();
 
   const userLabel =
-    session?.user?.email ?? session?.user?.name ?? "Pengguna Berwenang";
+    session?.user?.email ?? session?.user?.name ?? "Authorized User";
 
   const now = new Date();
   const dateLabel = [

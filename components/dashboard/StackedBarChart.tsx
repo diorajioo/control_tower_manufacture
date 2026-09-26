@@ -10,6 +10,7 @@ import {
   computePerPlantLimits,
 } from "@/lib/chartConfig";
 import { cn } from "@/lib/utils";
+import { LineTooltip } from "@/components/charts/StandardLine";
 
 interface Filters {
   plant: string;
@@ -150,7 +151,7 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
       {/* Header */}
       <div className={cn("flex items-center justify-between mb-2", fillHeight && "shrink-0")}>
         <div className="flex items-center gap-2">
-          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">
+          <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">
             {t("chart_kpi_by_plant")}
           </span>
           {loading && (
@@ -215,39 +216,21 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
             enableGridX={false}
             enableLabel={false}
             markers={markers}
-            tooltip={({ indexValue, value, color }) => (
-              <div style={{
-                background: "#2A3D4A",
-                borderRadius: 10,
-                padding: "9px 13px",
-                fontSize: 11,
-                minWidth: 170,
-                boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
-                fontFamily: "inherit",
-                animation: "chart-tooltip-in 0.15s ease-out",
-              }}>
-                <p style={{ fontWeight: 700, marginBottom: 6, color: String(color) }}>{String(indexValue)}</p>
-                {(() => {
-                  const p = plantData.find((d) => d.plant === indexValue);
-                  if (!p) return null;
-                  return (
-                    <>
-                      <p style={{ color: "#f1f5f9", margin: "2px 0", fontWeight: 600 }}>
-                        Avg: {Number(value).toFixed(2)}{" "}
-                        <span style={{ color: "#475569", fontWeight: 400 }}>{selectedKpi.unit}</span>
-                        <span style={{ color: "#475569", fontWeight: 400, marginLeft: 6 }}>· {p.weeks}w</span>
-                      </p>
-                      <div style={{ height: 1, background: "#334155", margin: "7px 0" }} />
-                      <p style={{ color: "#64748b", margin: "2px 0", fontSize: 10 }}>
-                        σ {p.plantStdev.toFixed(2)} · UCL{" "}
-                        <span style={{ color: "#f87171" }}>{p.plantUcl.toFixed(2)}</span> · LCL{" "}
-                        <span style={{ color: "#f87171" }}>{p.plantLcl.toFixed(2)}</span>
-                      </p>
-                    </>
-                  );
-                })()}
-              </div>
-            )}
+            tooltip={({ indexValue, value, color }) => {
+              const p = plantData.find((d) => d.plant === indexValue);
+              return (
+                <LineTooltip
+                  title={String(indexValue)}
+                  rows={[{
+                    label: p ? `Avg · ${p.weeks}w` : "Avg",
+                    color: String(color),
+                    value: Number(value),
+                    unit: selectedKpi.unit,
+                    sub: p && <>σ {p.plantStdev.toFixed(2)} · UCL <span style={{ color: "#f5a39a" }}>{p.plantUcl.toFixed(2)}</span> · LCL <span style={{ color: "#f5a39a" }}>{p.plantLcl.toFixed(2)}</span></>,
+                  }]}
+                />
+              );
+            }}
           />
         )}
       </div>

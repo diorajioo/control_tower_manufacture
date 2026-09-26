@@ -37,7 +37,7 @@ const PARETO_AXIS  = 32;
 // ── Stage data ────────────────────────────────────────────────────────────
 const STAGES_GROUP: Stage[] = [
   { name: "PO & Approval", value: 6.75, cls: "UNVA" },
-  { name: "Produksi",      value: 2.84, cls: "VA"   },
+  { name: "Production",    value: 2.84, cls: "VA"   },
   { name: "QC & NDC",      value: 0.60, cls: "NNVA" },
   { name: "WIP Waiting",   value: 8.84, cls: "UNVA" },
 ];
@@ -510,8 +510,8 @@ function SkuTable({ data, variant }: { data: SkuRow[]; variant: "top" | "bottom"
 }
 
 // ── SummaryStrip ──────────────────────────────────────────────────────────
-const SUMMARY_FULL = "Lead Time rata-rata berada di 19.03 hari, melampaui target 13.0 hari sebesar 6.03 hari. Komponen UNVA mendominasi dengan 81.9% dari total waktu — WIP Waiting menjadi kontributor terbesar di 8.84 hari. Mengeliminasi 70% WIP Waiting berpotensi menurunkan Lead Time ke 10.91 hari, di bawah target.";
-const SUMMARY_COLLAPSED = "Lead Time rata-rata berada di 19.03 hari, melampaui target 13.0 hari sebesar 6.03 hari. Komponen UNVA mendominasi dengan 81.9% dari total waktu.";
+const SUMMARY_FULL = "Average Lead Time is 19.03 days, 6.03 days over the 13.0-day target. UNVA dominates at 81.9% of total time — WIP Waiting is the largest contributor at 8.84 days. Eliminating 70% of WIP Waiting could bring Lead Time down to 10.91 days, below target.";
+const SUMMARY_COLLAPSED = "Average Lead Time is 19.03 days, 6.03 days over the 13.0-day target. UNVA dominates at 81.9% of total time.";
 
 function SummaryStrip({ onExit }: { onExit?: () => void }) {
   const [open, setOpen] = useState(false);

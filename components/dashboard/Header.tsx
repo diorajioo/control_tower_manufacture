@@ -208,8 +208,22 @@ export function Header({
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   };
 
+  // Publish the full header height (top bar + filter row) as --app-header-h so the Sidebar
+  // logo block can match it and its bottom border lines up with the filter row's.
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const apply = () => root.style.setProperty("--app-header-h", `${el.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <header className="shrink-0">
+    <header ref={headerRef} className="shrink-0">
 
       {/* ── Row 1: Navy topbar ───────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-4 h-[52px] bg-white border-b border-[#EBEBEB]">

@@ -16,7 +16,7 @@ import { AlertPanel } from "@/components/dashboard/AlertPanel";
 import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { OutputKPICard } from "@/components/dashboard/OutputKPICard";
 import { LeadTimeKPICard } from "@/components/dashboard/LeadTimeKPICard";
-import { LiteKPICard } from "@/components/dashboard/LiteKPICard";
+import { RegularKPICard } from "@/components/dashboard/RegularKPICard";
 import { FitToScreen } from "@/components/ui/FitToScreen";
 import { formatThousands, cn } from "@/lib/utils";
 import { computeAlerts, type KPIAlert } from "@/lib/alerts";
@@ -294,12 +294,14 @@ export default function DashboardPage() {
 
           {activeView === "strategic" && (<>
 
-          {/* ── Row 1: Lead Time + Output ── */}
-          <div className="grid grid-cols-2 gap-3.5">
+          {/* ── Row 1: Lead Time · Output · E2E Productivity (3 per row, compact regular cards) ── */}
+          <div className="grid grid-cols-3 gap-3.5">
           {loading ? (
-            Array.from({ length: 2 }).map((_, i) => <SkeletonCard key={i} />)
+            Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
           ) : (<>
             <LeadTimeKPICard
+              compact
+              showBreakdown={false}
               grossDays={kpi?.leadTime?.grossDays ?? 0}
               nettDays={kpi?.leadTime?.nettDays ?? 0}
               grossTrend={kpi?.leadTime?.grossTrend ?? null}
@@ -310,6 +312,7 @@ export default function DashboardPage() {
               hasAlert={visibleAlerts.some((a) => a.id.startsWith("leadtime"))}
             />
             <OutputKPICard
+              compact
               fgQty={kpi?.output?.fgQty ?? 0}
               bulkQty={kpi?.output?.bulkQty ?? 0}
               fgTrend={kpi?.output?.fgTrend ?? null}
@@ -317,58 +320,74 @@ export default function DashboardPage() {
               sparkline={kpi?.output?.sparkline ?? []}
               bulkSparkline={kpi?.output?.bulkSparkline ?? []}
             />
+            <RegularKPICard
+              compact
+              label="E2E Productivity"
+              icon={<Users size={13} color="#8b5cf6" strokeWidth={1.75} />}
+              value={kpi ? (kpi.productivity?.e2e ?? 0).toFixed(1) : "—"}
+              unit="pcs/manhour"
+              sparkUnit="pcs/mh"
+              trend={kpi?.productivity?.e2eTrend ?? null}
+              subLabel={kpi?.productivity?.e2ePrev ? `vs prior period ${kpi.productivity.e2ePrev.toFixed(1)}` : "vs prior period"}
+              sparkline={kpi?.productivity?.sparkline ?? []}
+              secondary={{
+                value: `${(kpi?.productivity?.upstream ?? 0).toFixed(1)} · ${(kpi?.productivity?.downstream ?? 0).toFixed(1)}`,
+                unit: "pcs/mh",
+                label: "Upstream · Downstream",
+              }}
+              footerLeft="Output per operator manhour, end to end"
+              footerRight={kpi?.productivity?.manhours ? `${formatThousands(Math.round(kpi.productivity.manhours))} mh` : undefined}
+            />
           </>)}
           </div>
 
-          {/* ── Row 2: OEE + OPE + Yield + RFT compact ── */}
-          <div className="grid grid-cols-4 gap-3.5">
+          {/* ── Row 2: OEE · Yield Loss · Energy (3 per row, compact regular cards) ── */}
+          <div className="grid grid-cols-3 gap-3.5">
             {loading ? (
-              Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+              Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
             ) : (
               <>
                 {/* OEE — no data yet (CT_MANUF_KEMAS not connected) */}
-                <LiteKPICard
+                <RegularKPICard
+                  compact
+                  noData
                   label="OEE"
                   icon={<Gauge size={13} color="#8b5cf6" strokeWidth={1.75} />}
                   value="—"
                   unit="%"
-                  target="≥ 65%"
-                  attainment={0}
-                  noData
-                />
-
-                {/* E2E Productivity */}
-                <LiteKPICard
-                  label="E2E Productivity"
-                  icon={<Users size={13} color="#8b5cf6" strokeWidth={1.75} />}
-                  value={kpi ? (kpi.productivity?.e2e ?? 0).toFixed(1) : "—"}
-                  unit="pcs/manhour"
-                  target={kpi?.productivity?.e2ePrev ? `${kpi.productivity.e2ePrev.toFixed(1)} (prior period)` : "prior period"}
-                  attainment={kpi ? 100 + (kpi.productivity?.e2eTrend ?? 0) : 0}
-                  trend={kpi?.productivity?.e2eTrend ?? null}
-                  series={kpi?.productivity?.sparkline ?? []}
+                  subLabel="target ≥ 65%"
+                  secondary={{ value: "—", unit: "%", label: "OPE (OEE × 0.8)" }}
+                  footerLeft="CT_MANUF_KEMAS not connected yet"
+                  footerRight="Target ≥ 65%"
                 />
 
                 {/* Yield Loss — no data yet (CT_MANUF_KEMAS not connected) */}
-                <LiteKPICard
+                <RegularKPICard
+                  compact
+                  noData
+                  inverse
                   label="Yield Loss"
                   icon={<Droplets size={13} color="#f59e0b" strokeWidth={1.75} />}
                   value="—"
                   unit="%"
-                  target="≤ 3%"
-                  attainment={0}
-                  noData
+                  subLabel="target ≤ 3%"
+                  secondary={{ value: "—", unit: "%", label: "Bulk loss · Pack loss" }}
+                  footerLeft="CT_MANUF_KEMAS not connected yet"
+                  footerRight="Target ≤ 3%"
                 />
 
                 {/* Energy — no data yet */}
-                <LiteKPICard
+                <RegularKPICard
+                  compact
+                  noData
+                  inverse
                   label="Energy"
                   icon={<Zap size={13} color="#eab308" strokeWidth={1.75} />}
                   value="—"
                   unit="kWh/unit"
-                  target="—"
-                  attainment={0}
-                  noData
+                  subLabel="target not set"
+                  secondary={{ value: "—", unit: "kWh/unit", label: "Prior period" }}
+                  footerLeft="No source table yet"
                 />
               </>
             )}

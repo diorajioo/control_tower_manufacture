@@ -16,7 +16,7 @@ export const REPLY_TO = process.env.REPLY_TO ?? undefined;
 
 function shell(body: string): string {
   return `<!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -31,7 +31,7 @@ function shell(body: string): string {
         <tr>
           <td style="background:linear-gradient(135deg,#3730a3 0%,#4f46e5 100%);border-radius:12px 12px 0 0;padding:20px 28px;">
             <p style="color:white;font-size:17px;font-weight:700;margin:0;letter-spacing:-0.3px;">Control Tower Manufacture</p>
-            <p style="color:#c7d2fe;font-size:12px;margin:3px 0 0;">PT Paracorp Group &nbsp;·&nbsp; Notifikasi Otomatis</p>
+            <p style="color:#c7d2fe;font-size:12px;margin:3px 0 0;">PT Paracorp Group &nbsp;·&nbsp; Automated Notification</p>
           </td>
         </tr>
 
@@ -46,7 +46,7 @@ function shell(body: string): string {
         <tr>
           <td style="background:#f9fafb;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:14px 28px;">
             <p style="color:#9ca3af;font-size:11px;margin:0;">
-              Dikirim otomatis oleh Control Tower Manufacture &nbsp;·&nbsp; PT Paracorp Group
+              Sent automatically by Control Tower Manufacture &nbsp;·&nbsp; PT Paracorp Group
             </p>
           </td>
         </tr>
@@ -61,8 +61,8 @@ function shell(body: string): string {
 // ── Alert email (the real notification) ───────────────────────────────────────
 
 const SEVERITY_STYLE: Record<KPIAlert["severity"], { bg: string; text: string; label: string }> = {
-  critical: { bg: "#fef2f2", text: "#b91c1c", label: "Kritis"    },
-  warning:  { bg: "#fffbeb", text: "#92400e", label: "Peringatan" },
+  critical: { bg: "#fef2f2", text: "#b91c1c", label: "Critical"  },
+  warning:  { bg: "#fffbeb", text: "#92400e", label: "Warning"    },
   info:     { bg: "#eff6ff", text: "#1d4ed8", label: "Info"       },
 };
 
@@ -112,8 +112,8 @@ export function alertEmailHtml(
 
   const summaryColor = criticalCount > 0 ? "#dc2626" : "#d97706";
   const summaryLabel = criticalCount > 0
-    ? `${criticalCount} alert kritis${warningCount > 0 ? ` + ${warningCount} peringatan` : ""}`
-    : `${warningCount} peringatan`;
+    ? `${criticalCount} critical alert${criticalCount > 1 ? "s" : ""}${warningCount > 0 ? ` + ${warningCount} warning${warningCount > 1 ? "s" : ""}` : ""}`
+    : `${warningCount} warning${warningCount > 1 ? "s" : ""}`;
 
   const alertCards = alerts.map(alertCard).join("");
 
@@ -122,7 +122,7 @@ export function alertEmailHtml(
         <tr>
           <td style="background:#4f46e5;border-radius:8px;">
             <a href="${dashboardUrl}" style="display:inline-block;color:white;font-size:13px;font-weight:600;padding:10px 20px;text-decoration:none;">
-              Buka Dashboard →
+              Open Dashboard →
             </a>
           </td>
         </tr>
@@ -130,12 +130,12 @@ export function alertEmailHtml(
     : "";
 
   const body = `
-    <p style="color:#374151;font-size:14px;margin:0 0 4px;">Halo ${userName},</p>
-    <p style="color:#6b7280;font-size:13px;margin:0 0 20px;">Periode: ${period}</p>
+    <p style="color:#374151;font-size:14px;margin:0 0 4px;">Hi ${userName},</p>
+    <p style="color:#6b7280;font-size:13px;margin:0 0 20px;">Period: ${period}</p>
 
     <div style="background:#fafafa;border-radius:8px;padding:12px 16px;margin-bottom:20px;border-left:3px solid ${summaryColor};">
       <p style="color:${summaryColor};font-size:13px;font-weight:700;margin:0;">
-        Ditemukan ${summaryLabel} yang memerlukan perhatian.
+        ${summaryLabel} need${criticalCount + warningCount > 1 ? "" : "s"} attention.
       </p>
     </div>
 
@@ -155,7 +155,7 @@ const SAMPLE_ALERTS: KPIAlert[] = [
     id: "oee-critical",
     kpi: "OEE",
     severity: "critical",
-    message: "OEE 51.3% — jauh di bawah target 65%",
+    message: "OEE 51.3% — well below 65% target",
     value: 51.3,
     trend: -8.2,
     threshold: "<55%",
@@ -164,7 +164,7 @@ const SAMPLE_ALERTS: KPIAlert[] = [
     id: "bulkloss-warning",
     kpi: "Bulk Loss",
     severity: "warning",
-    message: "Bulk loss 3.8% — di atas target 3%",
+    message: "Bulk loss 3.8% — above 3% target",
     value: 3.8,
     trend: 12.4,
     threshold: ">3%",
@@ -173,7 +173,7 @@ const SAMPLE_ALERTS: KPIAlert[] = [
     id: "rft-warning",
     kpi: "Right First Time",
     severity: "warning",
-    message: "RFT 92.1% — di bawah target 95%",
+    message: "RFT 92.1% — below 95% target",
     value: 92.1,
     trend: -2.9,
     threshold: "<95%",
@@ -184,6 +184,6 @@ export function testEmailHtml(userName: string): string {
   return alertEmailHtml(
     SAMPLE_ALERTS,
     userName,
-    "Preview — data sampel (bukan data aktual)",
+    "Preview — sample data (not actual data)",
   );
 }

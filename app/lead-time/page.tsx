@@ -13,6 +13,11 @@ import { Clock, AlertTriangle, Zap } from "lucide-react";
 import { FitToScreen } from "@/components/ui/FitToScreen";
 import { LiteKPICard } from "@/components/dashboard/LiteKPICard";
 import { LeadTimeCategoryCard } from "@/components/dashboard/LeadTimeCategoryCard";
+import { LeadTimeSkuScatter, type LeadTimeChartData } from "@/components/dashboard/LeadTimeCharts";
+import { LeadTimeTrendChart } from "@/components/dashboard/LeadTimeTrendChart";
+import { LeadTimeStageChart } from "@/components/dashboard/LeadTimeStageChart";
+import { LeadTimeTopSkuChart } from "@/components/dashboard/LeadTimeTopSkuChart";
+import { LineTooltip } from "@/components/charts/StandardLine";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -43,7 +48,7 @@ type ChartTab  = "gross" | "nett" | "pareto";
 function ChartTitle({ label, badge }: { label: string; badge?: string }) {
   return (
     <div className="flex items-center justify-between mb-1">
-      <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">{label}</span>
+      <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">{label}</span>
       {badge && (
         <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold">{badge}</span>
       )}
@@ -79,7 +84,7 @@ function VALegend() {
     <div className="flex flex-wrap gap-4">
       {([
         [VA_COLOR,   "VA (Value-added)"],
-        [NNVA_COLOR, "NNVA (Perlu, tidak tambah nilai)"],
+        [NNVA_COLOR, "NNVA (Necessary, non-value-added)"],
         [UNVA_COLOR, "UNVA (Waste)"],
       ] as [string, string][]).map(([c, l]) => (
         <div key={l} className="flex items-center gap-1.5 text-[10.5px] text-slate-500">
@@ -355,7 +360,7 @@ function StageGroupChart() {
   return (
     <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">Lead Time per Stage</span>
+        <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">Lead Time per Stage</span>
         <SegmentedControl
           options={[
             { key: "group",    label: "Per Stage Group" },
@@ -365,7 +370,7 @@ function StageGroupChart() {
           onChange={(k) => setView(k as StageView)}
         />
       </div>
-      <p className="text-[10.5px] text-slate-400 mb-2">YTD 2026 · All Plant · Median per stage dalam hari</p>
+      <p className="text-[10.5px] text-slate-400 mb-2">YTD 2026 · All Plant · Median per stage in days</p>
       <VALegend />
       <div style={{ height: 200 }} className="mt-3">
         <ResponsiveBar
@@ -389,13 +394,7 @@ function StageGroupChart() {
           enableGridX={false}
           enableLabel={false}
           tooltip={({ indexValue, value, color }) => (
-            <div style={{
-              background: "#2A3D4A", borderRadius: 10, padding: "8px 13px",
-              fontSize: 11, minWidth: 140, boxShadow: "0 8px 32px rgba(0,0,0,0.28)", fontFamily: "inherit",
-            }}>
-              <p style={{ fontWeight: 700, marginBottom: 4, color: String(color) }}>{String(indexValue)}</p>
-              <p style={{ color: "#f1f5f9", margin: 0 }}>{Number(value).toFixed(2)} hari</p>
-            </div>
+            <LineTooltip title={String(indexValue)} rows={[{ label: "Lead time", color: String(color), value: Number(value), unit: "days" }]} />
           )}
         />
       </div>
@@ -411,7 +410,7 @@ function SKUTable({ skus, title, variant }: {
   return (
     <div className="bg-white rounded-lg border border-[#EBEBEB] overflow-hidden hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
       <div className="px-4 py-2.5 border-b border-[#EBEBEB] flex items-center gap-2">
-        <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">{title}</span>
+        <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">{title}</span>
         <span className={cn("text-[9.5px] font-bold px-2 py-0.5 rounded-full ml-auto",
           variant === "top" ? "bg-[#D3DEEE] text-[#143665]" : "bg-[#FFEDEF] text-[#8A0011]"
         )}>
@@ -479,10 +478,10 @@ function OnTimePOTrend() {
   return (
     <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">On-Time PO Trend</span>
+        <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">On-Time PO Trend</span>
         <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold">Monthly · 2026</span>
       </div>
-      <p className="text-[10.5px] text-slate-400 mb-2">% PO delivered on-time dari target NDC · Rata-rata {avg}%</p>
+      <p className="text-[10.5px] text-slate-400 mb-2">% of POs delivered on time vs NDC target · Average {avg}%</p>
       <div style={{ height: 180 }}>
         <ResponsiveLine
           data={nivoData}
@@ -512,13 +511,7 @@ function OnTimePOTrend() {
           enableCrosshair={false}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           tooltip={({ point }: any) => (
-            <div style={{
-              background: "#2A3D4A", borderRadius: 10, padding: "8px 13px",
-              fontSize: 11, minWidth: 120, boxShadow: "0 8px 32px rgba(0,0,0,0.28)", fontFamily: "inherit",
-            }}>
-              <p style={{ color: "#64748b", margin: "0 0 4px", fontSize: 10 }}>{String(point.data.x)}</p>
-              <p style={{ color: "#f1f5f9", margin: 0, fontWeight: 700 }}>{Number(point.data.y).toFixed(0)}%</p>
-            </div>
+            <LineTooltip title={String(point.data.x)} rows={[{ label: "On-time PO", color: String(point.seriesColor), value: `${Number(point.data.y).toFixed(0)}%` }]} />
           )}
         />
       </div>
@@ -588,10 +581,10 @@ function LTParetoSKU() {
   return (
     <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">Lead Time Pareto per SKU</span>
+        <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">Lead Time Pareto per SKU</span>
         <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold">Top 10 · YTD 2026</span>
       </div>
-      <p className="text-[10.5px] text-slate-400 mb-2">SKU diurutkan dari lead time tertinggi · Garis oranye = kumulatif %</p>
+      <p className="text-[10.5px] text-slate-400 mb-2">SKUs sorted by highest lead time · Orange line = cumulative %</p>
       <div style={{ height: 200 }}>
         <ResponsiveBar
           data={PARETO_DATA}
@@ -614,21 +607,15 @@ function LTParetoSKU() {
           markers={PARETO_MARKERS}
           layers={["grid", "axes", "bars", CumulativeLine, "markers"]}
           tooltip={({ indexValue, value, color }) => (
-            <div style={{
-              background: "#2A3D4A", borderRadius: 10, padding: "8px 13px",
-              fontSize: 11, minWidth: 140, boxShadow: "0 8px 32px rgba(0,0,0,0.28)", fontFamily: "inherit",
-            }}>
-              <p style={{ fontWeight: 700, marginBottom: 4, color: String(color) }}>{String(indexValue)}</p>
-              <p style={{ color: "#f1f5f9", margin: 0 }}>{Number(value).toFixed(2)} hari</p>
-            </div>
+            <LineTooltip title={String(indexValue)} rows={[{ label: "Lead time", color: String(color), value: Number(value), unit: "days" }]} />
           )}
         />
       </div>
       <div className="flex flex-wrap gap-4 mt-1">
         {([
-          [UNVA_COLOR, "UNVA (>20 hari)"],
-          [NNVA_COLOR, "NNVA (13–20 hari)"],
-          ["#10b981",  "On Target (<13 hari)"],
+          [UNVA_COLOR, "UNVA (>20 days)"],
+          [NNVA_COLOR, "NNVA (13–20 days)"],
+          ["#10b981",  "On Target (<13 days)"],
           ["#f97316",  "Kumulatif %"],
         ] as [string, string][]).map(([c, l]) => (
           <div key={l} className="flex items-center gap-1.5 text-[10px] text-slate-500">
@@ -736,7 +723,7 @@ function TacticalView() {
         <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">Lead Time per Stage</span>
+              <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">Lead Time per Stage</span>
               <p className="text-[10.5px] text-slate-400 mt-0.5">45 stage · klasifikasi VA / NNVA / UNVA</p>
             </div>
             <SegmentedControl
@@ -791,13 +778,7 @@ function TacticalView() {
               enableGridX={false}
               enableLabel={false}
               tooltip={({ indexValue, value, color }) => (
-                <div style={{
-                  background: "#2A3D4A", borderRadius: 10, padding: "8px 13px",
-                  fontSize: 11, minWidth: 140, boxShadow: "0 8px 32px rgba(0,0,0,0.28)", fontFamily: "inherit",
-                }}>
-                  <p style={{ fontWeight: 700, marginBottom: 4, color: String(color) }}>{String(indexValue)}</p>
-                  <p style={{ color: "#f1f5f9", margin: 0 }}>{Number(value).toFixed(2)} hari</p>
-                </div>
+                <LineTooltip title={String(indexValue)} rows={[{ label: "Lead time", color: String(color), value: Number(value), unit: "days" }]} />
               )}
             />
           </div>
@@ -808,7 +789,7 @@ function TacticalView() {
       <div className="px-5 pb-5">
         <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">Lead Time Stages Trend</span>
+            <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">Lead Time Stages Trend</span>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
               {([
                 [VA_COLOR,   "VA (PO)"],
@@ -873,14 +854,7 @@ function TacticalView() {
               }] as any}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               tooltip={({ point }: any) => (
-                <div style={{
-                  background: "#2A3D4A", borderRadius: 10, padding: "8px 13px",
-                  fontSize: 11, minWidth: 140, boxShadow: "0 8px 32px rgba(0,0,0,0.28)", fontFamily: "inherit",
-                }}>
-                  <p style={{ color: "#64748b", margin: "0 0 4px", fontSize: 10 }}>{String(point.data.x)}</p>
-                  <p style={{ color: String(point.serieColor), fontWeight: 700, margin: 0 }}>{String(point.serieId)}</p>
-                  <p style={{ color: "#f1f5f9", margin: "2px 0 0" }}>{Number(point.data.y).toFixed(2)} hari</p>
-                </div>
+                <LineTooltip title={String(point.data.x)} rows={[{ label: String(point.seriesId), color: String(point.seriesColor), value: Number(point.data.y), unit: "days" }]} />
               )}
             />
           </div>
@@ -907,33 +881,53 @@ interface LeadTimeKPI {
 }
 
 
-// Same source and filters as the Overview Lead Time card (/api/dashboard/kpi, ct-filters)
-function useLeadTimeKPI() {
+type LeadTimeFilters = { plant: string; startDate: string; endDate: string; period: string };
+
+// Matches Header's initial state (All Plant · YTD) so the cards always reflect what the filter row shows.
+const DEFAULT_LT_FILTERS: LeadTimeFilters = {
+  plant:     "All Plant",
+  startDate: `${new Date().getFullYear()}-01-01`,
+  endDate:   new Date().toISOString().split("T")[0],
+  period:    "YTD",
+};
+
+// Same source as the Overview Lead Time card (/api/dashboard/kpi → CT_MANUF_LEADTIME, date = PO_FG_DONE_DATE).
+function useLeadTimeKPI(filters: LeadTimeFilters, refreshKey: number) {
   const [lt, setLt] = useState<LeadTimeKPI | null>(null);
   useEffect(() => {
-    let f = {
-      plant:     "All Plant",
-      startDate: `${new Date().getFullYear()}-01-01`,
-      endDate:   new Date().toISOString().split("T")[0],
-      period:    "YTD",
-    };
-    try {
-      const stored = localStorage.getItem("ct-filters");
-      if (stored) f = { ...f, ...JSON.parse(stored) };
-    } catch { /* ignore */ }
-    const params = new URLSearchParams({ plant: f.plant, startDate: f.startDate, endDate: f.endDate, period: f.period });
+    let cancelled = false;
+    setLt(null);
+    const params = new URLSearchParams(filters);
     fetch(`/api/dashboard/kpi?${params}`)
       .then((r) => r.json())
-      .then((res) => { if (res?.leadTime) setLt(res.leadTime); })
+      .then((res) => { if (!cancelled && res?.leadTime) setLt(res.leadTime); })
       .catch(() => { /* cards fall back to No Data */ });
-  }, []);
+    return () => { cancelled = true; };
+  }, [filters, refreshKey]);
   return lt;
 }
 
-// ── STRATEGIC VIEW ────────────────────────────────────────────────────────────
+// Trend per POSITION + SKU scatter (/api/lead-time/charts → CT_MANUF_LEADTIME)
+function useLeadTimeCharts(filters: LeadTimeFilters, refreshKey: number) {
+  const [data, setData]       = useState<LeadTimeChartData | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setData(null);
+    setLoading(true);
+    fetch(`/api/lead-time/charts?${new URLSearchParams(filters)}`)
+      .then((r) => r.json())
+      .then((res) => { if (!cancelled && res?.trend) setData(res); })
+      .catch(() => { /* charts show empty state */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [filters, refreshKey]);
+  return { data, loading };
+}
 
-function StrategicView() {
-  const lt   = useLeadTimeKPI();
+function StrategicView({ filters, refreshKey }: { filters: LeadTimeFilters; refreshKey: number }) {
+  const charts = useLeadTimeCharts(filters, refreshKey);
+  const lt   = useLeadTimeKPI(filters, refreshKey);
   const comp = lt?.composition;
   // Share of VA + NNVA + Waste (activities overlap, so this is not a share of gross lead time)
   const compTotal = comp ? comp.vaDays + comp.nnvaDays + comp.unvaDays : 0;
@@ -947,8 +941,8 @@ function StrategicView() {
           label="Lead Time"
           icon={<Clock size={13} color="#d97706" strokeWidth={1.75} />}
           value={lt ? lt.grossDays.toFixed(1) : "—"}
-          unit="hari"
-          target={`≤ ${LT_CARD_TARGET} hari`}
+          unit="days"
+          target={`≤ ${LT_CARD_TARGET} days`}
           attainment={lt && lt.grossDays > 0 ? (LT_CARD_TARGET / lt.grossDays) * 100 : 0}
           trend={lt?.grossTrend ?? null}
           series={lt?.sparkline ?? []}
@@ -958,10 +952,10 @@ function StrategicView() {
           category="va"
           label="Value-Added"
           value={comp ? comp.vaDays.toFixed(1) : "—"}
-          unit="hari"
-          context={`${share(comp?.vaDays)}% dari total`}
-          description="Terjadi pada Weighing, Olah, serta Filling & Packing"
-          info="Rata-rata per PO: SUM(NET_LEADTIME) aktivitas ACTIVITY_CATEGORY = VA"
+          unit="days"
+          context={`${share(comp?.vaDays)}% of total`}
+          description="Occurs in Weighing, Processing, and Filling & Packing"
+          info="Average per PO: SUM(NET_LEADTIME) of activities with ACTIVITY_CATEGORY = VA"
           trend={comp?.vaTrend ?? null}
           series={comp?.vaMonthly ?? []}
           noData={!comp}
@@ -970,10 +964,10 @@ function StrategicView() {
           category="nnva"
           label="Necessary Non-Value-Added"
           value={comp ? comp.nnvaDays.toFixed(1) : "—"}
-          unit="hari"
-          context={`${share(comp?.nnvaDays)}% dari total`}
-          description="Terjadi pada PO, cuci, unbox, dan receiving NDC"
-          info="Rata-rata per PO: SUM(NET_LEADTIME) aktivitas ACTIVITY_CATEGORY = NNVA"
+          unit="days"
+          context={`${share(comp?.nnvaDays)}% of total`}
+          description="Occurs in PO, cleaning, unboxing, and NDC receiving"
+          info="Average per PO: SUM(NET_LEADTIME) of activities with ACTIVITY_CATEGORY = NNVA"
           trend={comp?.nnvaTrend ?? null}
           series={comp?.nnvaMonthly ?? []}
           noData={!comp}
@@ -982,10 +976,10 @@ function StrategicView() {
           category="waste"
           label="Waste"
           value={comp ? comp.unvaDays.toFixed(1) : "—"}
-          unit="hari"
-          context={`${share(comp?.unvaDays)}% dari total`}
-          description="Terdiri atas WIP dan waktu tunggu"
-          info="Rata-rata per PO: SUM(NET_LEADTIME) aktivitas ACTIVITY_CATEGORY = UNVA"
+          unit="days"
+          context={`${share(comp?.unvaDays)}% of total`}
+          description="Made up of WIP and waiting time"
+          info="Average per PO: SUM(NET_LEADTIME) of activities with ACTIVITY_CATEGORY = UNVA"
           trend={comp?.unvaTrend ?? null}
           series={comp?.unvaMonthly ?? []}
           noData={!comp}
@@ -994,36 +988,33 @@ function StrategicView() {
           category="saving"
           label="Potential Saving"
           value={comp ? comp.wipDays.toFixed(1) : "—"}
-          unit="hari"
-          context={`${comp && comp.unvaDays > 0 ? Math.round((comp.wipDays / comp.unvaDays) * 100) : 0}% dari Waste berupa WIP`}
-          description="Dengan asumsi seluruh WIP dapat dihilangkan"
-          info="Rata-rata per PO: SUM(NET_LEADTIME) aktivitas UNVA dengan ACTIVITY_TYPE = WIP"
+          unit="days"
+          context={`${comp && comp.unvaDays > 0 ? Math.round((comp.wipDays / comp.unvaDays) * 100) : 0}% of Waste is WIP`}
+          description="Assuming all WIP can be eliminated"
+          info="Average per PO: SUM(NET_LEADTIME) of UNVA activities with ACTIVITY_TYPE = WIP"
           trend={comp?.wipTrend ?? null}
           series={comp?.wipMonthly ?? []}
           noData={!comp}
         />
       </div>
 
-      {/* Stage Group Chart */}
-      <div className="px-5 mb-4">
-        <StageGroupChart />
-      </div>
-
-      {/* SKU tables — Top 5 + Bottom 5 side by side */}
+      {/* Lead time trend (overall + per POSITION) and SKU scatter */}
       <div className="grid grid-cols-2 gap-3.5 px-5 mb-4">
-        <SKUTable skus={TOP_SKUS}    title="Top 5 SKU by Volume" variant="top" />
-        <SKUTable skus={BOTTOM_SKUS} title="Bottom 5 SKU by Volume" variant="bottom" />
+        <LeadTimeTrendChart data={charts.data} loading={charts.loading} />
+        <LeadTimeSkuScatter data={charts.data} loading={charts.loading} />
       </div>
 
-      {/* On-Time PO Trend */}
+      {/* Lead time per stage — Pareto, real data (replaces the mock StageGroupChart, whose code is kept but no longer rendered) */}
       <div className="px-5 mb-4">
-        <OnTimePOTrend />
+        <LeadTimeStageChart data={charts.data} loading={charts.loading} />
       </div>
 
-      {/* Lead Time Pareto per SKU */}
+      {/* Top 10 SKU by lead time — composition / P10–P90 range, real data */}
       <div className="px-5 pb-5">
-        <LTParetoSKU />
+        <LeadTimeTopSkuChart data={charts.data} loading={charts.loading} />
       </div>
+
+      {/* Mock SKU tables, On-Time PO Trend and SKU Pareto removed from Strategic (no real data yet); components kept below for reuse */}
     </div>
   );
 }
@@ -1032,10 +1023,10 @@ function StrategicView() {
 
 function OperationalView() {
   const exceptions = [
-    { batch: "#BT-20260913-042", stage: "WIP Menunggu",  msg: "Sudah 8,4 hari di stage WIP sebelum Kemas. Standar maks 4 hari.", meta: "Plant 1 · Bulk Line A · Delay 4,4 hari",    severity: "critical" as const },
-    { batch: "#BT-20260911-018", stage: "QC Hold",       msg: "QC Hold 5,2 hari — menunggu hasil lab uji stabilitas.",           meta: "Plant 2 · Lab QC · Delay 2,2 hari",         severity: "critical" as const },
-    { batch: "#BT-20260910-055", stage: "PO Released",   msg: "Approval dokumen PO sudah 3,1 hari. Approaching limit 3,5 hari.", meta: "Plant 1 · Procurement · Sisa 0,4 hari",    severity: "warning" as const },
-    { batch: "#BT-20260912-031", stage: "NDC-In",        msg: "Penerimaan NDC 2,8 hari. Mendekati batas 3 hari.",               meta: "NDC Cikarang · Receiving · Sisa 0,2 hari",  severity: "warning" as const },
+    { batch: "#BT-20260913-042", stage: "WIP Waiting",   msg: "8.4 days in WIP before Packing. Standard max 4 days.", meta: "Plant 1 · Bulk Line A · Delay 4.4 days",    severity: "critical" as const },
+    { batch: "#BT-20260911-018", stage: "QC Hold",       msg: "QC Hold 5.2 days — waiting for stability test lab results.", meta: "Plant 2 · Lab QC · Delay 2.2 days",         severity: "critical" as const },
+    { batch: "#BT-20260910-055", stage: "PO Released",   msg: "PO document approval at 3.1 days. Approaching limit 3.5 days.", meta: "Plant 1 · Procurement · 0.4 days left",    severity: "warning" as const },
+    { batch: "#BT-20260912-031", stage: "NDC-In",        msg: "NDC receiving at 2.8 days. Approaching limit 3 days.", meta: "NDC Cikarang · Receiving · 0.2 days left",  severity: "warning" as const },
   ];
 
   return (
@@ -1044,7 +1035,7 @@ function OperationalView() {
         {/* Exceptions */}
         <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">Exceptions Aktif</span>
+            <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">Exceptions Aktif</span>
             <span className="w-1.5 h-1.5 rounded-full bg-[#E6001C] animate-pulse ml-1" />
           </div>
           <div className="flex flex-col gap-2">
@@ -1070,8 +1061,8 @@ function OperationalView() {
 
         {/* Heatmap */}
         <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
-          <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">Lead Time Stage Harian</span>
-          <p className="text-[10.5px] text-slate-400 mb-3 mt-0.5">Rata-rata lead time per stage · 7 hari terakhir · hari kerja</p>
+          <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">Lead Time Stage Harian</span>
+          <p className="text-[10.5px] text-slate-400 mb-3 mt-0.5">Average lead time per stage · last 7 days · working days</p>
           <svg viewBox="0 0 360 220" style={{ width: "100%" }} fontFamily="inherit">
             {["WIP-PO","QC Hold","PO-Release","Scheduling","Transport","NDC-In"].map((stage, i) => (
               <text key={stage} x="78" y={28 + i * 28} textAnchor="end" fontSize="9.5" fill="#374151">{stage}</text>
@@ -1119,6 +1110,23 @@ export default function LeadTimePage() {
   const router = useRouter();
   const [persona,       setPersona]     = useState<Persona>("strategic");
   const [lastUpdated,   setLastUpdated] = useState<Date>();
+  const [filters,       setFilters]     = useState<LeadTimeFilters>(DEFAULT_LT_FILTERS);
+  const [plants,        setPlants]      = useState<string[]>(["All Plant"]);
+  const [refreshKey,    setRefreshKey]  = useState(0);
+
+  // Plant values come from the same list as Overview (J1/J2/J4/J6 — identical to CT_MANUF_LEADTIME.PLANT)
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    fetch("/api/dashboard/plants")
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d?.plants)) setPlants(d.plants); })
+      .catch(() => { /* keep All Plant */ });
+  }, [status]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshKey((n) => n + 1);
+    setLastUpdated(new Date());
+  }, []);
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
@@ -1141,12 +1149,15 @@ export default function LeadTimePage() {
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Header
-          plants={["All Plant", "Plant 1", "Plant 2", "NDC"]}
-          onFilterChange={() => {}}
+          plants={plants}
+          onFilterChange={({ plant, startDate, endDate, period }) => {
+            setFilters({ plant, startDate, endDate, period });
+            setLastUpdated(new Date());
+          }}
           views={LEAD_TIME_VIEWS}
           activeView={persona}
           onViewChange={(v) => setPersona(v as Persona)}
-          onRefresh={() => setLastUpdated(new Date())}
+          onRefresh={handleRefresh}
           isLoading={false}
           lastUpdated={lastUpdated}
           alertCount={0}
@@ -1155,7 +1166,7 @@ export default function LeadTimePage() {
         />
 
         <div className="flex-1 overflow-y-auto min-h-0">
-          {persona === "strategic"   && <StrategicView />}
+          {persona === "strategic"   && <StrategicView filters={filters} refreshKey={refreshKey} />}
           {persona === "tactical"    && <TacticalView />}
           {persona === "operational" && <OperationalView />}
         </div>

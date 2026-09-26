@@ -109,7 +109,7 @@ export function buildTeamsAlertCard(
     infos.length    > 0 ? `${infos.length} Info`       : null,
   ].filter(Boolean).join(" · ") || "No alerts";
 
-  const now = new Date().toLocaleString("id-ID", {
+  const now = new Date().toLocaleString("en-GB", {
     timeZone: "Asia/Jakarta",
     dateStyle: "medium",
     timeStyle: "short",
@@ -187,7 +187,7 @@ export function buildTeamsAlertCard(
     } as ACTextBlock);
     body.push({
       type: "TextBlock",
-      text: `💡 **Rekomendasi AI:** ${options.recommendation}`,
+      text: `💡 **AI Recommendation:** ${options.recommendation}`,
       wrap: true,
       size: "Small",
       spacing: "None",
@@ -199,7 +199,7 @@ export function buildTeamsAlertCard(
     version: "1.4",
     body,
     actions: options.dashboardUrl
-      ? [{ type: "Action.OpenUrl", title: "Buka Dashboard", url: options.dashboardUrl }]
+      ? [{ type: "Action.OpenUrl", title: "Open Dashboard", url: options.dashboardUrl }]
       : undefined,
   };
 
@@ -234,7 +234,7 @@ async function fetchLLMRecommendation(alerts: KPIAlert[]): Promise<string | unde
         {
           role: "system",
           content:
-            "Kamu adalah analis manufacturing. Buat 1-2 kalimat rekomendasi tindakan spesifik berdasarkan daftar KPI alert ini. Ringkas dan actionable.",
+            "You are a manufacturing analyst. Write a 1-2 sentence recommendation of specific actions based on this list of KPI alerts, in English. Concise and actionable.",
         },
         { role: "user", content: alertSummary },
       ],
@@ -273,7 +273,7 @@ function buildPowerAutomatePayload(
   const critical = alerts.filter((a) => a.severity === "critical");
   const warnings = alerts.filter((a) => a.severity === "warning");
 
-  const now = new Date().toLocaleString("id-ID", {
+  const now = new Date().toLocaleString("en-GB", {
     timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short",
   });
 

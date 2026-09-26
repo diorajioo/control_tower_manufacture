@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   };
 
   if (!Array.isArray(body.alerts) || body.alerts.length === 0) {
-    return NextResponse.json({ error: "Tidak ada alert untuk dikirim" }, { status: 400 });
+    return NextResponse.json({ error: "No alerts to send" }, { status: 400 });
   }
 
   const opts = {
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { error: "Konfigurasi Teams belum ada. Set TEAMS_RECIPIENTS atau konfigurasikan penerima di Settings." },
+    { error: "Teams is not configured yet. Set TEAMS_RECIPIENTS or configure recipients in Settings." },
     { status: 503 }
   );
 }

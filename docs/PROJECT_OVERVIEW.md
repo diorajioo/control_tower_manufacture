@@ -19,7 +19,7 @@ Repository: https://github.com/diorajioo/control_tower_manufacture
 
 Access is restricted to PT Paracorp Group corporate accounts — login via Azure AD (Microsoft SSO). There are no guest or public accounts.
 
-Usage context: Workstation in office, desktop-first. Used at the start of shifts or during operational meetings. UI is in Bahasa Indonesia.
+Usage context: Workstation in office, desktop-first. Used at the start of shifts or during operational meetings. UI is in English (switched from Bahasa Indonesia on 2026-09-26).
 
 ## Business Problem
 

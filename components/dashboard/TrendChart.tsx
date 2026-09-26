@@ -11,6 +11,10 @@ import {
   computePerPlantLimits,
 } from "@/lib/chartConfig";
 import { cn } from "@/lib/utils";
+import {
+  LINE_DEFAULTS, LineTooltip, LineLegend, rowsAtX, isolatedColor,
+  makeActivePointsLayer, makeActiveLineLayer, controlMarkers, LimitsSub,
+} from "@/components/charts/StandardLine";
 
 interface Filters {
   plant: string;
@@ -29,31 +33,9 @@ interface TrendChartProps {
   onPlantHover?: (plant: string | null) => void;
 }
 
-function hexToRgba(hex: string, alpha: number) {
-  const n = parseInt(hex.replace("#", ""), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
-}
-
 const KPI_TAB_LABELS: Record<string, string> = {
   leadtime: "chart_tab_leadtime",
   output:   "chart_tab_output",
-};
-
-const nivoTheme = {
-  background: "transparent",
-  axis: {
-    ticks: {
-      line: { strokeWidth: 0 },
-      text: { fill: "#9ca3af", fontSize: 11, fontFamily: "inherit" },
-    },
-    domain: { line: { strokeWidth: 0 } },
-  },
-  grid: {
-    line: { stroke: "#f3f4f6", strokeWidth: 1 },
-  },
-  crosshair: {
-    line: { stroke: "#215AA8", strokeWidth: 1, strokeOpacity: 0.3 },
-  },
 };
 
 export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, fillHeight = false, hideSelector = false, hoveredPlant = null, onPlantHover }: TrendChartProps) {
@@ -149,106 +131,16 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
     [data, plants]
   );
 
-  const lastValues = useMemo(() => {
-    const out: Record<string, number | null> = {};
-    nivoData.forEach((serie) => {
-      const last = serie.data[serie.data.length - 1];
-      out[String(serie.id)] = last != null ? last.y : null;
-    });
-    return out;
-  }, [nivoData]);
-
-  const ActivePointsLayer = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (props: any) => {
-      const x = activeXRef.current;
-      if (!x || !props.xScale || !props.yScale) return null;
-      return (
-        <g>
-          {nivoData.map((serie) => {
-            const pt = serie.data.find((d) => d.x === x);
-            if (!pt || pt.y == null) return null;
-            return (
-              <circle
-                key={serie.id}
-                cx={props.xScale(x)}
-                cy={props.yScale(pt.y)}
-                r={5}
-                fill="white"
-                stroke={serie.color}
-                strokeWidth={2}
-              />
-            );
-          })}
-        </g>
-      );
-    },
+  const ActivePointsLayer = useMemo(
+    () => makeActivePointsLayer(nivoData, () => activeXRef.current),
     [nivoData]
   );
 
-  const markers = useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const m: any[] = [];
-    if (ucl > 0) m.push({
-      axis: "y", value: ucl,
-      lineStyle: { stroke: "#ef4444", strokeDasharray: "5 3", strokeWidth: 1.5 },
-      legend: `UCL ${ucl.toFixed(1)}`,
-      legendOffsetX: -8, legendOffsetY: -8,
-      textStyle: { fill: "#ef4444", fontSize: 10, fontFamily: "inherit", fontWeight: 600 },
-    });
-    if (mean > 0) m.push({
-      axis: "y", value: mean,
-      lineStyle: { stroke: "#94a3b8", strokeDasharray: "4 2", strokeWidth: 1.5 },
-      legend: `Mean ${mean.toFixed(1)}`,
-      legendOffsetX: -8, legendOffsetY: -8,
-      textStyle: { fill: "#94a3b8", fontSize: 10, fontFamily: "inherit" },
-    });
-    if (lcl > 0) m.push({
-      axis: "y", value: lcl,
-      lineStyle: { stroke: "#ef4444", strokeDasharray: "5 3", strokeWidth: 1.5 },
-      legend: `LCL ${lcl.toFixed(1)}`,
-      legendOffsetX: -8, legendOffsetY: 12,
-      textStyle: { fill: "#ef4444", fontSize: 10, fontFamily: "inherit", fontWeight: 600 },
-    });
-    return m;
-  }, [ucl, mean, lcl]);
+  const markers = useMemo(() => controlMarkers({ mean, ucl, lcl }), [ucl, mean, lcl]);
 
-  const ControlZoneLayer = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (props: any) => {
-      if (!props.yScale || ucl <= 0) return null;
-      const y1  = props.yScale(ucl);
-      const y2  = props.yScale(Math.max(lcl, 0));
-      const top = Math.min(y1, y2);
-      const h   = Math.max(Math.abs(y2 - y1), 0);
-      return <rect x={0} y={top} width={props.innerWidth} height={h} fill="#E9EFF6" opacity={0.55} />;
-    },
-    [ucl, lcl]
-  );
-
-  const ActiveLineLayer = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (props: any) => {
-      if (!hoveredPlant || !props.xScale || !props.yScale) return null;
-      const serie = nivoData.find((s) => s.id === hoveredPlant);
-      if (!serie) return null;
-      const points = serie.data.filter((d) => d.y != null);
-      if (points.length < 2) return null;
-      const pathD = points
-        .map((d, i) => `${i === 0 ? "M" : "L"} ${props.xScale(d.x)} ${props.yScale(d.y)}`)
-        .join(" ");
-      return (
-        <path
-          d={pathD}
-          fill="none"
-          stroke={String(serie.color)}
-          strokeWidth={3.5}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      );
-    },
-    [hoveredPlant, nivoData]
+  const ActiveLineLayer = useMemo(
+    () => makeActiveLineLayer(nivoData, hoveredPlant),
+    [nivoData, hoveredPlant]
   );
 
   const isEmpty = nivoData.length === 0 || nivoData.every((s) => s.data.length === 0);
@@ -258,7 +150,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       {/* Header */}
       <div className={cn("flex items-center justify-between mb-2", fillHeight && "shrink-0")}>
         <div className="flex items-center gap-2">
-          <span className="text-[11.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">
+          <span className="text-[11.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">
             {t("chart_metric_trend")}
           </span>
           {loading && (
@@ -270,8 +162,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
         </span>
       </div>
 
-      {/* KPI tabs + plant legend */}
-      {(!hideSelector || plants.length > 0) && (
+      {/* KPI tabs (legend sits below the plot) */}
+      {!hideSelector && (
         <div className={cn("flex items-center justify-between gap-2 mb-2", fillHeight && "shrink-0")}>
           {!hideSelector && (
             <div className="flex flex-wrap gap-1">
@@ -290,36 +182,6 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
               ))}
             </div>
           )}
-          {plants.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0 ml-auto">
-              {plants.map((plant, i) => {
-                const isHovered = hoveredPlant === plant;
-                const isDimmed = hoveredPlant !== null && !isHovered;
-                const lv = lastValues[plant];
-                return (
-                  <button
-                    key={plant}
-                    className="flex items-center gap-1.5 transition-opacity cursor-default"
-                    style={{ opacity: isDimmed ? 0.35 : 1 }}
-                    onMouseEnter={() => onPlantHover?.(plant)}
-                    onMouseLeave={() => onPlantHover?.(null)}
-                  >
-                    <span
-                      className="w-4 h-0.5 rounded-full shrink-0"
-                      style={{ backgroundColor: PLANT_COLORS[i % PLANT_COLORS.length] }}
-                    />
-                    <span className={`text-[11px] font-medium tracking-tight ${isHovered ? "text-gray-700" : "text-gray-400"}`}>{plant}</span>
-                    {lv != null && (
-                      <span className="text-[11px] text-gray-400 tabular-nums">{lv.toFixed(1)}</span>
-                    )}
-                  </button>
-                );
-              })}
-              {hoveredPlant === null && onPlantHover && (
-                <span className="text-[10px] text-gray-300 italic">hover to isolate</span>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -329,41 +191,21 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
           <div className="h-full flex items-center justify-center text-[11px] text-gray-300">No data available</div>
         ) : (
           <ResponsiveLine
+            {...LINE_DEFAULTS}
             data={nivoData}
-            theme={nivoTheme}
-            margin={{ top: 4, right: 4, bottom: 28, left: 42 }}
-            xScale={{ type: "point" }}
-            yScale={{ type: "linear", min: "auto", max: "auto", stacked: false }}
-            curve="linear"
             axisBottom={{
               format: (v) => formatTick(String(v)),
               tickSize: 0,
               tickPadding: 8,
               tickValues: axisTicks,
             }}
-            axisLeft={{
-              tickSize: 0,
-              tickPadding: 6,
-              tickValues: 5,
-              format: (v) => Number(v).toFixed(1),
-            }}
-            gridYValues={5}
-            enablePoints={false}
-            useMesh={true}
-            crosshairType="x"
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             onMouseMove={(point: any) => { activeXRef.current = String(point.data.x); }}
             onMouseLeave={() => { activeXRef.current = null; }}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            colors={(serie: any) => {
-              if (hoveredPlant && String(serie.id) !== hoveredPlant) {
-                return hexToRgba(String(serie.color), 0.16);
-              }
-              return String(serie.color);
-            }}
-            lineWidth={2.5}
+            colors={(serie: any) => isolatedColor(String(serie.color), String(serie.id), hoveredPlant)}
             markers={markers}
-            layers={["grid", "axes", ControlZoneLayer, "lines", "crosshair", ActivePointsLayer, ActiveLineLayer, "mesh"]}
+            layers={["grid", "markers", "axes", "lines", "crosshair", ActivePointsLayer, ActiveLineLayer, "mesh"]}
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             tooltip={({ point }: any) => {
               const x = String(point.data.x);
@@ -373,54 +215,22 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
                   return isNaN(d.getTime()) ? x : format(d, "dd MMM yyyy");
                 } catch { return x; }
               })();
-              const allAtX = nivoData.flatMap((serie) =>
-                serie.data
-                  .filter((d) => String(d.x) === x)
-                  .map((d) => ({ plant: String(serie.id), y: d.y, color: serie.color }))
-              );
-              return (
-                <div style={{
-                  background: "#2A3D4A",
-                  borderRadius: 10,
-                  padding: "9px 13px",
-                  fontSize: 12,
-                  minWidth: 190,
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
-                  fontFamily: "inherit",
-                  animation: "chart-tooltip-in 0.15s ease-out",
-                }}>
-                  <p style={{ fontWeight: 500, marginBottom: 7, color: "#64748b", fontSize: 11, letterSpacing: "0.02em" }}>
-                    {dateLabel}
-                  </p>
-                  {allAtX.map(({ plant, y, color }) => {
-                    const lim = perPlantLimits[plant];
-                    return (
-                      <div key={plant} style={{ marginBottom: 6 }}>
-                        <p style={{ color: String(color), margin: 0, fontWeight: 700 }}>
-                          {plant}
-                          <span style={{ color: "#f1f5f9", fontWeight: 400, marginLeft: 6 }}>
-                            {Number(y).toFixed(2)}
-                          </span>
-                          <span style={{ color: "#475569", fontWeight: 400, marginLeft: 3 }}>
-                            {selectedKpi.unit}
-                          </span>
-                        </p>
-                        {lim && (
-                          <p style={{ color: "#475569", margin: "3px 0 0 0", fontSize: 11 }}>
-                            Mean {lim.mean.toFixed(2)} · UCL{" "}
-                            <span style={{ color: "#f87171" }}>{lim.ucl.toFixed(2)}</span> · LCL{" "}
-                            <span style={{ color: "#f87171" }}>{lim.lcl.toFixed(2)}</span>
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
+              const rows = rowsAtX(nivoData, x, selectedKpi.unit).map((r) => {
+                const lim = perPlantLimits[r.label];
+                return lim ? { ...r, sub: <LimitsSub lim={lim} /> } : r;
+              });
+              return <LineTooltip title={dateLabel} rows={rows} />;
             }}
           />
         )}
       </div>
+
+      {/* Legend — below the plot (standard) */}
+      {plants.length > 0 && (
+        <div className={cn("mt-1.5", fillHeight && "shrink-0")}>
+          <LineLegend series={nivoData} hovered={hoveredPlant} onHover={onPlantHover} />
+        </div>
+      )}
     </div>
   );
 }

@@ -51,6 +51,9 @@ interface DisplaySettings {
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 
+// UI language is fixed to English (2026-09-26) — the language picker is hidden.
+const SHOW_LANGUAGE_PICKER = false;
+
 const KPI_CHIPS: Record<KpiKey, string> = {
   leadTime: "Lead Time",
   bulkLoss: "Bulk Loss",
@@ -87,7 +90,7 @@ const DEFAULT_DISPLAY: DisplaySettings = {
   timezone: "WIB",
   defaultPlant: "All Plant",
   defaultDataLevel: "Daily",
-  language: "id",
+  language: "en",
 };
 
 // ── Storage ───────────────────────────────────────────────────────────────────
@@ -308,7 +311,7 @@ function SettingsShell() {
                 }}
               />
             ) : (
-              <AdminOnly title="Notifikasi" />
+              <AdminOnly title="Notifications" />
             )
           )}
           {active === "threshold" && (
@@ -396,7 +399,7 @@ function SaveButton({ onSave }: { onSave: () => void }) {
         saved ? "bg-green-500 text-white" : "bg-brand-600 text-white hover:bg-brand-700"
       )}
     >
-      {saved ? <><Check size={14} />Tersimpan</> : "Simpan Perubahan"}
+      {saved ? <><Check size={14} />Saved</> : "Save Changes"}
     </button>
   );
 }
@@ -516,18 +519,18 @@ function ProfilSection({
         iconBg="#EFF6FF"
       >
         <div className="space-y-4">
-          <Field label="Nama">
+          <Field label="Name">
             <ReadOnly value={name} />
           </Field>
           <Field label="Email">
             <ReadOnly value={email} />
           </Field>
-          <Field label="Jabatan">
+          <Field label="Job Title">
             <input
               type="text"
               value={jabatan}
               onChange={(e) => setJabatan(e.target.value)}
-              placeholder="cth. Plant Manager"
+              placeholder="e.g. Plant Manager"
               className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-transparent"
             />
           </Field>
@@ -535,7 +538,7 @@ function ProfilSection({
 
         <div className="mt-5 flex items-center gap-1.5 text-xs text-slate-400">
           <AlertCircle size={12} />
-          <span>Nama dan email dikelola melalui Microsoft Azure AD</span>
+          <span>Name and email are managed through Microsoft Azure AD</span>
         </div>
       </Card>
 
@@ -582,9 +585,9 @@ function TampilanSection({
 
   return (
     <div className="space-y-5">
-      <SectionTitle title="Tampilan" description="Preferensi tampilan dan filter default" />
+      <SectionTitle title="Display" description="Display preferences and default filters" />
 
-      <Card title="Zona Waktu">
+      <Card title="Timezone">
         <div className="grid grid-cols-3 gap-2">
           {(["WIB", "WITA", "WIT"] as const).map((tz) => (
             <button
@@ -613,7 +616,9 @@ function TampilanSection({
         </div>
       </Card>
 
-      <Card title="Bahasa / Language">
+      {/* Language picker hidden: UI language is fixed to English (2026-09-26). */}
+      {SHOW_LANGUAGE_PICKER && (
+      <Card title="Language">
         <div className="grid grid-cols-2 gap-3">
           {([
             { value: "id" as const, label: "Bahasa Indonesia", flag: "🇮🇩", sub: "Indonesia" },
@@ -640,10 +645,11 @@ function TampilanSection({
           ))}
         </div>
       </Card>
+      )}
 
-      <Card title="Filter Default">
+      <Card title="Default Filters">
         <div className="space-y-4">
-          <Field label="Plant Default">
+          <Field label="Default Plant">
             <select
               value={display.defaultPlant}
               onChange={(e) => set({ defaultPlant: e.target.value })}
@@ -659,7 +665,7 @@ function TampilanSection({
             </select>
           </Field>
 
-          <Field label="Tampilan Data Default">
+          <Field label="Default Data View">
             <div className="flex gap-2">
               {(["Daily", "Hourly"] as const).map((level) => (
                 <button
@@ -672,7 +678,7 @@ function TampilanSection({
                       : "border-gray-200 text-gray-600 hover:border-gray-300"
                   )}
                 >
-                  {level === "Daily" ? "Harian" : "Per Jam"}
+                  {level === "Daily" ? "Daily" : "Hourly"}
                 </button>
               ))}
             </div>
@@ -697,9 +703,9 @@ function AdminOnly({ title }: { title: string }) {
         <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-4">
           <Lock size={22} className="text-gray-400" />
         </div>
-        <p className="text-sm font-semibold text-gray-800 mb-1">Akses Dibatasi</p>
+        <p className="text-sm font-semibold text-gray-800 mb-1">Access Restricted</p>
         <p className="text-sm text-gray-400 max-w-xs leading-relaxed">
-          Hanya admin yang dapat mengubah pengaturan ini. Hubungi admin untuk meminta akses.
+          Only admins can change these settings. Contact an admin to request access.
         </p>
       </div>
     </div>
@@ -724,11 +730,11 @@ function AdminSection({
     const t = emailInput.trim().toLowerCase();
     if (!t) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) {
-      setEmailError("Format email tidak valid");
+      setEmailError("Invalid email format");
       return;
     }
     if (admins.includes(t)) {
-      setEmailError("Email sudah terdaftar sebagai admin");
+      setEmailError("This email is already an admin");
       return;
     }
     onSave([...admins, t]);
@@ -743,16 +749,16 @@ function AdminSection({
 
   return (
     <div className="space-y-5">
-      <SectionTitle title="Admin" description="Kelola siapa saja yang memiliki akses admin" />
+      <SectionTitle title="Admin" description="Manage who has admin access" />
 
-      <Card title="Daftar Admin">
+      <Card title="Admin List">
         <div className="space-y-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="email"
-                placeholder="nama@paracorpgroup.com"
+                placeholder="name@paracorpgroup.com"
                 value={emailInput}
                 onChange={(e) => { setEmailInput(e.target.value); setEmailError(""); }}
                 onKeyDown={(e) => e.key === "Enter" && add()}
@@ -764,7 +770,7 @@ function AdminSection({
               className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors"
             >
               <Plus size={14} />
-              Tambah
+              Add
             </button>
           </div>
           {emailError && <p className="text-xs text-red-500">{emailError}</p>}
@@ -779,7 +785,7 @@ function AdminSection({
                   <div>
                     <p className="text-sm font-medium text-gray-700">{email}</p>
                     {email === currentEmail && (
-                      <p className="text-xs text-brand-500 leading-none mt-0.5">Anda</p>
+                      <p className="text-xs text-brand-500 leading-none mt-0.5">You</p>
                     )}
                   </div>
                 </div>
@@ -788,7 +794,7 @@ function AdminSection({
                     onClick={() => remove(email)}
                     disabled={admins.length <= 1}
                     className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30"
-                    aria-label={`Hapus admin ${email}`}
+                    aria-label={`Remove admin ${email}`}
                   >
                     <X size={13} />
                   </button>
@@ -802,7 +808,7 @@ function AdminSection({
       <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
         <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
         <p className="text-xs text-amber-700 leading-relaxed">
-          Data admin disimpan secara lokal di perangkat ini. Perubahan hanya berlaku pada browser dan perangkat yang sama.
+          Admin data is stored locally on this device. Changes only apply to this browser and device.
         </p>
       </div>
     </div>
@@ -825,7 +831,7 @@ function NotifikasiSection({
   const [activeTab, setActiveTab] = useState<"email" | "teams">("email");
   return (
     <div className="space-y-5">
-      <SectionTitle title="Notifikasi" description="Konfigurasi pengiriman notifikasi saat alert terjadi" />
+      <SectionTitle title="Notifications" description="Configure how notifications are sent when alerts fire" />
       <div className="flex rounded-lg border border-gray-100 bg-gray-50 p-1 gap-1">
         {(["email", "teams"] as const).map((tab) => {
           const Icon = tab === "email" ? Mail : MessageSquare;
@@ -880,11 +886,11 @@ function EmailTab({
     const t = emailInput.trim().toLowerCase();
     if (!t) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) {
-      setEmailError("Format email tidak valid");
+      setEmailError("Invalid email format");
       return;
     }
     if (notif.recipients.some((r) => r.email === t)) {
-      setEmailError("Email sudah ditambahkan");
+      setEmailError("Email already added");
       return;
     }
     set({ recipients: [...notif.recipients, { email: t, kpis: { ...ALL_KPIS_ON } }] });
@@ -913,12 +919,12 @@ function EmailTab({
         body: JSON.stringify({ recipients: notif.recipients.map((r) => r.email) }),
       });
       const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Gagal mengirim");
+      if (!res.ok) throw new Error(data.error ?? "Failed to send");
       setTestState("success");
-      setTestMsg(`Email terkirim ke ${notif.recipients.length} penerima`);
+      setTestMsg(`Email sent to ${notif.recipients.length} recipient(s)`);
       setTimeout(() => setTestState("idle"), 3500);
     } catch (err) {
-      setTestMsg(err instanceof Error ? err.message : "Gagal mengirim");
+      setTestMsg(err instanceof Error ? err.message : "Failed to send");
       setTestState("error");
       setTimeout(() => setTestState("idle"), 6000);
     }
@@ -929,22 +935,22 @@ function EmailTab({
       <Card>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-gray-800">Aktifkan Notifikasi Email</p>
-            <p className="text-xs text-gray-500 mt-0.5">Kirim email saat ada alert atau metrik bermasalah</p>
+            <p className="text-sm font-semibold text-gray-800">Enable Email Notifications</p>
+            <p className="text-xs text-gray-500 mt-0.5">Send an email when an alert fires or a metric needs attention</p>
           </div>
           <Toggle checked={notif.enabled} onChange={setEnabled} />
         </div>
       </Card>
 
       <div className={cn("space-y-4", !notif.enabled && "opacity-40 pointer-events-none")}>
-        <Card title="Penerima Email">
+        <Card title="Email Recipients">
           <div className="space-y-3">
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="email"
-                  placeholder="nama@paracorpgroup.com"
+                  placeholder="name@paracorpgroup.com"
                   value={emailInput}
                   onChange={(e) => { setEmailInput(e.target.value); setEmailError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && addEmail()}
@@ -956,7 +962,7 @@ function EmailTab({
                 className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors"
               >
                 <Plus size={14} />
-                Tambah
+                Add
               </button>
             </div>
             {emailError && <p className="text-xs text-red-500">{emailError}</p>}
@@ -969,7 +975,7 @@ function EmailTab({
                       <button
                         onClick={() => removeRecipient(recipient.email)}
                         className="text-gray-400 hover:text-red-500 transition-colors"
-                        aria-label={`Hapus ${recipient.email}`}
+                        aria-label={`Remove ${recipient.email}`}
                       >
                         <X size={13} />
                       </button>
@@ -994,16 +1000,16 @@ function EmailTab({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-1">Belum ada penerima</p>
+              <p className="text-sm text-gray-400 text-center py-1">No recipients yet</p>
             )}
           </div>
         </Card>
 
-        <Card title="Mode Pengiriman">
+        <Card title="Delivery Mode">
           <div className="grid grid-cols-2 gap-3">
             {[
-              { value: "immediate" as const, label: "Langsung", desc: "Kirim segera saat alert muncul" },
-              { value: "daily_digest" as const, label: "Ringkasan Harian", desc: "Kirim satu kali per hari" },
+              { value: "immediate" as const, label: "Immediate", desc: "Send as soon as an alert fires" },
+              { value: "daily_digest" as const, label: "Daily Digest", desc: "Send once per day" },
             ].map(({ value, label, desc }) => (
               <button
                 key={value}
@@ -1023,7 +1029,7 @@ function EmailTab({
           {notif.mode === "daily_digest" && (
             <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-100">
               <Clock size={14} className="text-gray-400 shrink-0" />
-              <span className="text-sm text-gray-600">Kirim setiap hari pukul</span>
+              <span className="text-sm text-gray-600">Send every day at</span>
               <input
                 type="time"
                 value={notif.digestTime}
@@ -1037,7 +1043,7 @@ function EmailTab({
         {testState === "error" && (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
             <AlertCircle size={15} className="shrink-0 mt-0.5" />
-            <span>{testMsg || "Gagal mengirim. Pastikan RESEND_API_KEY sudah dikonfigurasi."}</span>
+            <span>{testMsg || "Failed to send. Make sure RESEND_API_KEY is configured."}</span>
           </div>
         )}
         {testState === "success" && (
@@ -1062,9 +1068,9 @@ function EmailTab({
           )}
         >
           {testState === "loading" ? (
-            <><Loader2 size={14} className="animate-spin" />Mengirim...</>
+            <><Loader2 size={14} className="animate-spin" />Sending…</>
           ) : (
-            <><Send size={14} />Kirim Test Email</>
+            <><Send size={14} />Send Test Email</>
           )}
         </button>
         <SaveButton onSave={onSave} />
@@ -1102,11 +1108,11 @@ function TeamsTab({
     const t = emailInput.trim().toLowerCase();
     if (!t) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) {
-      setEmailError("Format email tidak valid");
+      setEmailError("Invalid email format");
       return;
     }
     if (teamsNotif.recipients.some((r) => r.email === t)) {
-      setEmailError("Email sudah ditambahkan");
+      setEmailError("Email already added");
       return;
     }
     set({ recipients: [...teamsNotif.recipients, { email: t, kpis: { ...ALL_KPIS_ON } }] });
@@ -1138,16 +1144,16 @@ function TeamsTab({
       const data = (await res.json()) as { ok?: boolean; error?: string; hint?: string; sent?: number };
       if (!res.ok) {
         const hint = data.hint === "sign-out-signin"
-          ? " Coba sign out dan sign in ulang untuk memperbarui izin Teams."
+          ? " Try signing out and back in to refresh Teams permissions."
           : "";
-        throw new Error((data.error ?? "Gagal mengirim") + hint);
+        throw new Error((data.error ?? "Failed to send") + hint);
       }
       const count = data.sent ?? teamsNotif.recipients.length;
       setTestState("success");
-      setTestMsg(`Pesan test terkirim ke ${count} penerima`);
+      setTestMsg(`Test message sent to ${count} recipient(s)`);
       setTimeout(() => setTestState("idle"), 3500);
     } catch (err) {
-      setTestMsg(err instanceof Error ? err.message : "Gagal mengirim");
+      setTestMsg(err instanceof Error ? err.message : "Failed to send");
       setTestState("error");
       setTimeout(() => setTestState("idle"), 6000);
     }
@@ -1158,9 +1164,9 @@ function TeamsTab({
       <Card>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-gray-800">Aktifkan Notifikasi Teams</p>
+            <p className="text-sm font-semibold text-gray-800">Enable Teams Notifications</p>
             <p className="text-xs text-gray-500 mt-0.5">
-              Kirim DM ke Teams saat alert terjadi, sesuai metrik yang dipilih tiap penerima
+              Send a Teams DM when an alert fires, for the metrics each recipient selects
             </p>
           </div>
           <Toggle checked={teamsNotif.enabled} onChange={setEnabled} />
@@ -1168,14 +1174,14 @@ function TeamsTab({
       </Card>
 
       <div className={cn("space-y-4", !teamsNotif.enabled && "opacity-40 pointer-events-none")}>
-        <Card title="Penerima Teams">
+        <Card title="Teams Recipients">
           <div className="space-y-3">
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <MessageSquare size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="email"
-                  placeholder="nama@paracorpgroup.com"
+                  placeholder="name@paracorpgroup.com"
                   value={emailInput}
                   onChange={(e) => { setEmailInput(e.target.value); setEmailError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && addEmail()}
@@ -1187,7 +1193,7 @@ function TeamsTab({
                 className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors"
               >
                 <Plus size={14} />
-                Tambah
+                Add
               </button>
             </div>
             {emailError && <p className="text-xs text-red-500">{emailError}</p>}
@@ -1200,7 +1206,7 @@ function TeamsTab({
                       <button
                         onClick={() => removeRecipient(recipient.email)}
                         className="text-gray-400 hover:text-red-500 transition-colors"
-                        aria-label={`Hapus ${recipient.email}`}
+                        aria-label={`Remove ${recipient.email}`}
                       >
                         <X size={13} />
                       </button>
@@ -1225,7 +1231,7 @@ function TeamsTab({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-gray-400 text-center py-1">Belum ada penerima</p>
+              <p className="text-sm text-gray-400 text-center py-1">No recipients yet</p>
             )}
           </div>
         </Card>
@@ -1233,14 +1239,14 @@ function TeamsTab({
         <div className="flex items-start gap-2.5 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
           <MessageSquare size={14} className="text-indigo-400 shrink-0 mt-0.5" />
           <p className="text-xs text-indigo-700 leading-relaxed">
-            Alert dikirim langsung saat terjadi. Setiap penerima hanya mendapat DM untuk metrik yang mereka pilih.
+            Alerts are sent as soon as they fire. Each recipient only gets DMs for the metrics they select.
           </p>
         </div>
 
         {testState === "error" && (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
             <AlertCircle size={15} className="shrink-0 mt-0.5" />
-            <span>{testMsg || "Gagal mengirim. Pastikan TEAMS_REFRESH_TOKEN sudah dikonfigurasi di Vercel."}</span>
+            <span>{testMsg || "Failed to send. Make sure TEAMS_REFRESH_TOKEN is configured in Vercel."}</span>
           </div>
         )}
         {testState === "success" && (
@@ -1263,9 +1269,9 @@ function TeamsTab({
           )}
         >
           {testState === "loading" ? (
-            <><Loader2 size={14} className="animate-spin" />Mengirim...</>
+            <><Loader2 size={14} className="animate-spin" />Sending…</>
           ) : (
-            <><Send size={14} />Kirim Test Teams</>
+            <><Send size={14} />Send Test Teams Message</>
           )}
         </button>
         <SaveButton onSave={onSave} />
@@ -1299,79 +1305,79 @@ function ThresholdSection({
       <div className="flex items-start justify-between mb-6">
         <SectionTitle
           title="Alert & Threshold"
-          description="Ambang batas yang memicu alert di dashboard dan email notifikasi"
+          description="Thresholds that trigger alerts on the dashboard and in email notifications"
         />
         <button
           onClick={() => setThresholds(DEFAULT_THRESHOLDS)}
           className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors shrink-0 mt-1"
         >
           <RotateCcw size={11} />
-          Reset semua
+          Reset all
         </button>
       </div>
 
       <div className="space-y-4">
         <ThresholdCard
           label="Lead Time"
-          description="Lead time naik lebih dari X% vs periode sebelumnya"
+          description="Lead time rises more than X% vs prior period"
           onReset={() => resetKpi("leadTime")}
         >
-          <ThreshRow label="Peringatan" color="amber" desc="Naik lebih dari">
+          <ThreshRow label="Warning" color="amber" desc="Rises more than">
             <NumericInput value={thresholds.leadTime.warning} onChange={(v) => upd("leadTime", "warning", v)} unit="%" min={0} />
           </ThreshRow>
-          <ThreshRow label="Kritis" color="red" desc="Naik lebih dari">
+          <ThreshRow label="Critical" color="red" desc="Rises more than">
             <NumericInput value={thresholds.leadTime.critical} onChange={(v) => upd("leadTime", "critical", v)} unit="%" min={0} />
           </ThreshRow>
         </ThresholdCard>
 
         <ThresholdCard
           label="Bulk Loss"
-          description="Bulk loss absolut melampaui X%"
+          description="Absolute bulk loss exceeds X%"
           onReset={() => resetKpi("bulkLoss")}
         >
-          <ThreshRow label="Peringatan" color="amber" desc="Di atas">
+          <ThreshRow label="Warning" color="amber" desc="Above">
             <NumericInput value={thresholds.bulkLoss.absWarning} onChange={(v) => upd("bulkLoss", "absWarning", v)} unit="%" min={0} />
           </ThreshRow>
-          <ThreshRow label="Kritis" color="red" desc="Di atas">
+          <ThreshRow label="Critical" color="red" desc="Above">
             <NumericInput value={thresholds.bulkLoss.absCritical} onChange={(v) => upd("bulkLoss", "absCritical", v)} unit="%" min={0} />
           </ThreshRow>
         </ThresholdCard>
 
         <ThresholdCard
           label="Pack Loss"
-          description="Pack loss absolut melampaui X%"
+          description="Absolute pack loss exceeds X%"
           onReset={() => resetKpi("packLoss")}
         >
-          <ThreshRow label="Peringatan" color="amber" desc="Di atas">
+          <ThreshRow label="Warning" color="amber" desc="Above">
             <NumericInput value={thresholds.packLoss.absWarning} onChange={(v) => upd("packLoss", "absWarning", v)} unit="%" min={0} />
           </ThreshRow>
-          <ThreshRow label="Kritis" color="red" desc="Di atas">
+          <ThreshRow label="Critical" color="red" desc="Above">
             <NumericInput value={thresholds.packLoss.absCritical} onChange={(v) => upd("packLoss", "absCritical", v)} unit="%" min={0} />
           </ThreshRow>
         </ThresholdCard>
 
         <ThresholdCard
           label="Right First Time"
-          description="RFT % jatuh di bawah X%"
+          description="RFT % falls below X%"
           onReset={() => resetKpi("rft")}
         >
-          <ThreshRow label="Peringatan" color="amber" desc="Di bawah">
+          <ThreshRow label="Warning" color="amber" desc="Below">
             <NumericInput value={thresholds.rft.warning} onChange={(v) => upd("rft", "warning", v)} unit="%" min={0} max={100} />
           </ThreshRow>
-          <ThreshRow label="Kritis" color="red" desc="Di bawah">
+          <ThreshRow label="Critical" color="red" desc="Below">
             <NumericInput value={thresholds.rft.critical} onChange={(v) => upd("rft", "critical", v)} unit="%" min={0} max={100} />
           </ThreshRow>
         </ThresholdCard>
 
         <ThresholdCard
           label="OEE"
-          description="OEE % jatuh di bawah X%"
+          description="OEE % falls below X%"
           onReset={() => resetKpi("oee")}
         >
-          <ThreshRow label="Peringatan" color="amber" desc="Di bawah">
+          <ThreshRow label="Warning" color="amber" desc="Below">
             <NumericInput value={thresholds.oee.warning} onChange={(v) => upd("oee", "warning", v)} unit="%" min={0} max={100} />
           </ThreshRow>
-          <ThreshRow label="Kritis" color="red" desc="Di bawah">
+          <ThreshRow label="Critical" color="red" desc="Below">
             <NumericInput value={thresholds.oee.critical} onChange={(v) => upd("oee", "critical", v)} unit="%" min={0} max={100} />
           </ThreshRow>
         </ThresholdCard>
@@ -1447,13 +1453,13 @@ function ThreshRow({
 function IntegrasiSection() {
   return (
     <div className="space-y-5">
-      <SectionTitle title="Integrasi" description="Status koneksi ke sumber data eksternal" />
+      <SectionTitle title="Integrations" description="Connection status for external data sources" />
 
       <Card title="Snowflake Data Warehouse">
         <div className="mb-4">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            Terhubung
+            Connected
           </span>
         </div>
         <div className="space-y-0">

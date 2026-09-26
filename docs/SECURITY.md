@@ -35,7 +35,7 @@
     return p.replace(/[^A-Za-z0-9 \-]/g, "").trim().slice(0, 64);
   }
   ```
-- All Snowflake queries use **parameterized bindings** (`?` placeholders) — never string interpolation for user-supplied values. **Implemented** in `app/api/chat/route.ts` (40+ queries).
+- All Snowflake queries use **parameterized bindings** (`?` placeholders) — never string interpolation for user-supplied values. **Implemented** in `app/api/chat/route.ts` (40+ queries) and `lib/queries.ts` (plant filter via `plantWhere()` + `plantBinds()`, dates via `?::DATE`).
 
 ### Role mapping (future)
 

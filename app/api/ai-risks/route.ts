@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     filters: { plant: string; period: string };
   };
 
-  const prompt = `Analyze the following manufacturing KPI data and identify the top risks and required actions:\n${JSON.stringify(kpi, null, 2)}\n\nPlant: ${filters.plant}, Period: ${filters.period}\n\nRespond EXACTLY in this format (no other text):\nRISK:\n1. [TITLE]: [brief description]\n2. [TITLE]: [brief description]\n3. [TITLE]: [brief description]\n\nACTION:\n1. [TITLE]: [concrete action]\n2. [TITLE]: [concrete action]\n3. [TITLE]: [concrete action]`;
+  const prompt = `Analyze the following manufacturing KPI data and identify the top risks and required actions:\n${JSON.stringify(kpi, null, 2)}\n\nPlant: ${filters.plant}, Period: ${filters.period}\n\nRespond in English, EXACTLY in this format (no other text):\nRISK:\n1. [TITLE]: [brief description]\n2. [TITLE]: [brief description]\n3. [TITLE]: [brief description]\n\nACTION:\n1. [TITLE]: [concrete action]\n2. [TITLE]: [concrete action]\n3. [TITLE]: [concrete action]`;
 
   try {
     const client = getDeepSeekClient();

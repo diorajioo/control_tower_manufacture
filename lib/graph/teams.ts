@@ -145,7 +145,7 @@ export async function findOrCreateChat(
     return {
       chatId: null,
       graphError: {
-        message: `User ${recipientEmail} tidak ditemukan. Tambahkan izin User.ReadBasic.All (Delegated) di Azure AD app registration, lalu login ulang untuk generate token baru.`,
+        message: `User ${recipientEmail} not found. Add the User.ReadBasic.All (Delegated) permission to the Azure AD app registration, then sign in again to generate a new token.`,
       },
     };
   }
@@ -187,7 +187,7 @@ export function buildAlertHtml(
   alerts: KPIAlert[],
   opts: { plant?: string; period?: string; dashboardUrl?: string; recommendation?: string }
 ): string {
-  const now = new Date().toLocaleString("id-ID", {
+  const now = new Date().toLocaleString("en-GB", {
     timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short",
   });
 
@@ -202,10 +202,10 @@ export function buildAlertHtml(
     .join("");
 
   const rec  = opts.recommendation
-    ? `<p>💡 <b>Rekomendasi AI:</b> ${escHtml(opts.recommendation)}</p>`
+    ? `<p>💡 <b>AI Recommendation:</b> ${escHtml(opts.recommendation)}</p>`
     : "";
   const link = opts.dashboardUrl
-    ? `<p><a href="${escHtml(opts.dashboardUrl)}">Buka Dashboard →</a></p>`
+    ? `<p><a href="${escHtml(opts.dashboardUrl)}">Open Dashboard →</a></p>`
     : "";
 
   return [
