@@ -6,3 +6,6 @@ out/
 *.log
 .claude/
 data/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
