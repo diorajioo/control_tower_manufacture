@@ -18,11 +18,13 @@ interface FloatingChatProps {
   alerts?: Pick<KPIAlert, "severity" | "kpi" | "message">[];
 }
 
+// Starter questions: 2 general + 2 metric-specific, only on metrics with real data
+// (Lead Time, Output, E2E Productivity) that the chat tools can answer.
 const QUICK_ACTIONS = [
-  "Why is OEE dropping?",
-  "Analyze lead time this month",
-  "Which plant has the highest bulk loss?",
-  "RFT trend over the last 3 months",
+  "Summarize production health this month",
+  "What should I focus on first today?",
+  "Is lead time improving week over week?",
+  "How does E2E productivity compare with last month?",
 ];
 
 const KPI_CHIP_LABELS: Record<string, string> = {
@@ -260,7 +262,7 @@ export function FloatingChat({ filters, kpiSnapshot, alerts }: FloatingChatProps
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
       {open && (
         <div
-          className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[30rem] flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200"
+          className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[30rem] flex flex-col overflow-hidden chat-pop-in"
           style={{ height: "640px" }}
         >
           {/* Header */}
