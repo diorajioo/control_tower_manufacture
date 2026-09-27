@@ -4,6 +4,15 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-09-27
+
+### Added
+- **Overview Tactical: "Lead time per stage" actual vs standard (real data)** — new `LeadTimeStageStdChart.tsx` above the KPI table. Horizontal bars = days per PO per `POSITION` (single color), tick = standard from `ACTIVITY_LEADTIME_STD` (minutes per row; only TIMBANG / OLAH / CUCI OLAH have usable values), sorted by process sequence (`STAGE_ORDER`), with WIP always last in this chart. "Open stage detail" goes to `/lead-time`. New query `getLeadTimeStageVsStd()` + route `/api/lead-time/stages` (cache `lead-time-stages-v1`), fetched only while Tactical is open.
+- **Overview Tactical: "Lead time breakdown per plant" table (real data)** — new `LeadTimePlantTable.tsx` below the stage chart. Rows = Network (ROLLUP) + each `PLANT`; columns = Gross LT · days per PO per stage (same columns/order as the chart, grouped Upstream / Downstream, WIP last) · Nett LT · On-time. Red cell = plant above the network value for that stage (tint up to +30%), explained in the info icon. On-time = % of POs with gross ≤ 13 days (the Lead Time target — no due-date column exists). New query `getLeadTimeByPlant()`; `plants` + `targetDays` added to `/api/lead-time/stages` (cache `lead-time-stages-v2`). Waterfall toggle from the mockup not built yet.
+- **Overview Tactical: old KPI table removed** — the Tactical view is now the stage chart + plant breakdown table only. Plant table header: Paragon Blue group row, light-blue stage row.
+
+---
+
 ## 2026-09-26
 
 ### Security

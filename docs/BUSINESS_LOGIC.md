@@ -252,3 +252,8 @@ Status legend in StackedBarChart: "In Control" (emerald), "Above UCL" (red), "Be
 - Cache can be manually invalidated via `/api/cache/revalidate` (protected route).
 - Dashboard auto-refreshes every 1 hour. Users can force refresh via the header refresh button.
 - Inactivity auto-logout after 15 minutes (via `Sidebar.tsx` event listeners).
+
+
+## Lead Time On-Time % (Overview Tactical)
+
+Share of POs whose gross lead time (PO start → RECEIVE NDC stop) is ≤ 13 days, the Lead Time target used in the Tactical KPI table. Constant `LEAD_TIME_TARGET_DAYS` in `app/api/lead-time/stages/route.ts`; query `getLeadTimeByPlant()` in `lib/queries.ts`. Provisional: `CT_MANUF_LEADTIME` has no due-date column, so this is not a delivery on-time rate.

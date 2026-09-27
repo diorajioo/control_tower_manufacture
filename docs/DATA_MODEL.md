@@ -26,6 +26,7 @@ Source for: Lead Time, Right First Time (RFT), Lead Time position breakdown.
 | `NET_LEADTIME` | number | Active lead time in minutes for this activity row |
 | `LINE_CATEGORY` | string | Production line category. NULL = non-production activities |
 | `POSITION` | string | Production position/stage name |
+| `ACTIVITY_LEADTIME_STD` | number | Standard minutes per activity row. Usable only for TIMBANG, OLAH, CUCI OLAH; 0 for PO/WIP/RECEIVE NDC, near-zero (per-unit rate) for KEMAS 1/2 and CUCI KEMAS |
 | `PO_FG_DONE_DATE` | date | **Date filter column** — completion date of the process order |
 | `PLANT` | string | Plant identifier |
 

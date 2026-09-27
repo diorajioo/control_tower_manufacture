@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useI18n } from "@/lib/i18n";
 import { useRouter } from "next/navigation";
-import { Clock, Droplets, Package, Gauge, Zap, Users } from "lucide-react";
+import { Droplets, Gauge, Zap, Users } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { Header } from "@/components/dashboard/Header";
 import { SecurityOverlay } from "@/components/dashboard/SecurityOverlay";
@@ -17,8 +17,10 @@ import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { OutputKPICard } from "@/components/dashboard/OutputKPICard";
 import { LeadTimeKPICard } from "@/components/dashboard/LeadTimeKPICard";
 import { RegularKPICard } from "@/components/dashboard/RegularKPICard";
+import { LeadTimeStageStdChart, type StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
+import { LeadTimePlantTable, type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
 import { FitToScreen } from "@/components/ui/FitToScreen";
-import { formatThousands, cn } from "@/lib/utils";
+import { formatThousands } from "@/lib/utils";
 import { computeAlerts, type KPIAlert } from "@/lib/alerts";
 
 interface KPIResponse {
@@ -102,6 +104,9 @@ export default function DashboardPage() {
   });
   const [highlightedKpi, setHighlightedKpi] = useState<string | null>(null);
   const [refreshCount,  setRefreshCount]  = useState(0);
+  const [stageStd,      setStageStd]      = useState<StageStdPoint[] | null>(null);
+  const [stageLoading,  setStageLoading]  = useState(false);
+  const [plantLT,       setPlantLT]       = useState<{ plants: PlantBreakdown[]; targetDays: number } | null>(null);
   const [undoId, setUndoId] = useState<string | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sentAlertIds = useRef<Set<string>>(new Set());
@@ -119,6 +124,20 @@ export default function DashboardPage() {
     window.addEventListener("kpi-highlight", handler);
     return () => window.removeEventListener("kpi-highlight", handler);
   }, []);
+
+  // Tactical view: lead time per stage vs standard — fetched only while the view is open
+  useEffect(() => {
+    if (activeView !== "tactical") return;
+    let cancelled = false;
+    setStageLoading(true);
+    const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, period: filters.period });
+    fetch(`/api/lead-time/stages?${params}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) { setStageStd(d.stages ?? []); setPlantLT({ plants: d.plants ?? [], targetDays: d.targetDays ?? 13 }); } })
+      .catch(() => { if (!cancelled) { setStageStd([]); setPlantLT({ plants: [], targetDays: 13 }); } })
+      .finally(() => { if (!cancelled) setStageLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeView, filters.plant, filters.startDate, filters.endDate, filters.period, refreshCount]);
 
   useEffect(() => {
     fetch("/api/dashboard/plants")
@@ -417,140 +436,13 @@ export default function DashboardPage() {
 
           {/* ── Tactical view ── */}
           {activeView === "tactical" && (
-            <div className="bg-white rounded-lg border border-[#EBEBEB] overflow-hidden shrink-0">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-[#EBEBEB]">
-                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider w-[180px]">KPI</th>
-                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Value</th>
-                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Target</th>
-                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">vs Target</th>
-                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Trend MoM</th>
-                    <th className="px-4 py-2.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {(() => {
-                    if (loading) return (
-                      Array.from({ length: 6 }).map((_, i) => (
-                        <tr key={i}>
-                          {Array.from({ length: 6 }).map((__, j) => (
-                            <td key={j} className="px-4 py-3">
-                              <div className="h-3 bg-gray-100 rounded animate-pulse w-3/4" />
-                            </td>
-                          ))}
-                        </tr>
-                      ))
-                    );
-                    const rows: { icon: React.ReactNode; name: string; value: string; unit: string; target: string; delta: string; deltaColor: string; trend: number | null; alertId: string }[] = [
-                      {
-                        icon: <Clock size={13} className="text-blue-500" />,
-                        name: "Lead Time",
-                        value: kpi ? (kpi.leadTime?.grossDays ?? 0).toFixed(2) : "—",
-                        unit: "days",
-                        target: "≤ 13",
-                        delta: kpi ? `${(kpi.leadTime?.grossDays ?? 0) > 13 ? "+" : ""}${((kpi.leadTime?.grossDays ?? 0) - 13).toFixed(2)}d` : "—",
-                        deltaColor: kpi && (kpi.leadTime?.grossDays ?? 0) > 13 ? "text-red-600" : "text-emerald-600",
-                        trend: kpi?.leadTime?.grossTrend ?? null,
-                        alertId: "leadtime",
-                      },
-                      {
-                        icon: <Package size={13} className="text-teal-500" />,
-                        name: "Output (FG)",
-                        value: kpi ? formatThousands(kpi.output?.fgQty ?? 0) : "—",
-                        unit: "pcs",
-                        target: "—",
-                        delta: kpi?.output?.fgTrend != null ? `${kpi.output.fgTrend >= 0 ? "+" : ""}${kpi.output.fgTrend.toFixed(1)}%` : "—",
-                        deltaColor: kpi && (kpi.output?.fgTrend ?? 0) >= 0 ? "text-emerald-600" : "text-red-600",
-                        trend: kpi?.output?.fgTrend ?? null,
-                        alertId: "output",
-                      },
-                      {
-                        icon: <Gauge size={13} className="text-red-500" />,
-                        name: "OEE",
-                        value: kpi ? (kpi.oee?.value ?? 0).toFixed(1) : "—",
-                        unit: "%",
-                        target: "≥ 65%",
-                        delta: kpi ? `${(kpi.oee?.value ?? 0) - 65 >= 0 ? "+" : ""}${((kpi.oee?.value ?? 0) - 65).toFixed(1)}pp` : "—",
-                        deltaColor: kpi && (kpi.oee?.value ?? 0) >= 65 ? "text-emerald-600" : "text-red-600",
-                        trend: kpi?.oee?.trend ?? null,
-                        alertId: "oee",
-                      },
-                      {
-                        icon: <Users size={13} className="text-violet-500" />,
-                        name: "Productivity",
-                        value: kpi ? (kpi.productivity?.e2e ?? 0).toFixed(1) : "—",
-                        unit: "pcs/mh",
-                        target: "—",
-                        delta: kpi?.productivity?.e2eTrend != null ? `${kpi.productivity.e2eTrend >= 0 ? "+" : ""}${kpi.productivity.e2eTrend.toFixed(1)}%` : "—",
-                        deltaColor: kpi && (kpi.productivity?.e2eTrend ?? 0) >= 0 ? "text-emerald-600" : "text-red-600",
-                        trend: kpi?.productivity?.e2eTrend ?? null,
-                        alertId: "productivity",
-                      },
-                      {
-                        icon: <Droplets size={13} className="text-amber-500" />,
-                        name: "Bulk Loss",
-                        value: kpi ? (kpi.yield?.bulkLossPct ?? 0).toFixed(1) : "—",
-                        unit: "%",
-                        target: "≤ 3%",
-                        delta: kpi ? `${(kpi.yield?.bulkLossPct ?? 0) - 3 >= 0 ? "+" : ""}${((kpi.yield?.bulkLossPct ?? 0) - 3).toFixed(1)}pp` : "—",
-                        deltaColor: kpi && (kpi.yield?.bulkLossPct ?? 0) <= 3 ? "text-emerald-600" : "text-red-600",
-                        trend: kpi?.yield?.bulkLossTrend ?? null,
-                        alertId: "bulkloss",
-                      },
-                      {
-                        icon: <Zap size={13} className="text-yellow-500" />,
-                        name: "Energy",
-                        value: "—",
-                        unit: "kWh/unit",
-                        target: "—",
-                        delta: "—",
-                        deltaColor: "text-gray-400",
-                        trend: null,
-                        alertId: "energy",
-                      },
-                    ];
-                    return rows.map((row) => {
-                      const hasAlert = visibleAlerts.some((a) => a.id.startsWith(row.alertId));
-                      const trendGood = row.trend != null && (
-                        ["oee","ope","rft","output"].includes(row.alertId) ? row.trend >= 0 : row.trend <= 0
-                      );
-                      return (
-                        <tr key={row.name} className={cn("hover:bg-gray-50/50 transition-colors", hasAlert && "bg-red-50/40")}>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              {row.icon}
-                              <span className="text-[12px] font-semibold text-gray-800">{row.name}</span>
-                              {hasAlert && <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-[13px] font-bold text-gray-900 tabular-nums">{row.value}</span>
-                            <span className="text-[10px] text-gray-400 ml-1">{row.unit}</span>
-                          </td>
-                          <td className="px-4 py-3 text-[11px] text-gray-500">{row.target}</td>
-                          <td className="px-4 py-3">
-                            <span className={cn("text-[11px] font-semibold tabular-nums", row.deltaColor)}>{row.delta}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            {row.trend != null ? (
-                              <span className={cn("text-[11px] font-semibold tabular-nums", trendGood ? "text-emerald-600" : "text-red-500")}>
-                                {row.trend > 0 ? "▲" : "▼"} {Math.abs(row.trend).toFixed(1)}%
-                              </span>
-                            ) : <span className="text-[11px] text-gray-300">—</span>}
-                          </td>
-                          <td className="px-4 py-3">
-                            {hasAlert
-                              ? <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-700">⚠ Alert</span>
-                              : <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700">✓ OK</span>
-                            }
-                          </td>
-                        </tr>
-                      );
-                    });
-                  })()}
-                </tbody>
-              </table>
+            <div className="shrink-0">
+              <LeadTimeStageStdChart data={stageStd} loading={stageLoading} />
+            </div>
+          )}
+          {activeView === "tactical" && (
+            <div className="shrink-0">
+              <LeadTimePlantTable data={plantLT?.plants ?? null} targetDays={plantLT?.targetDays ?? 13} loading={stageLoading} />
             </div>
           )}
         </main>

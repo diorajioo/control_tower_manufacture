@@ -131,7 +131,7 @@ Plant 4 → #10b981   Plant 5 → #8b5cf6   Plant 6 → #f97316
 - Right: clock · sync status · notification bell · Teams send button · avatar
 - Row 2 (filter row): view toggle (if `views.length >= 2`) · period pills · date picker · plant dropdown · data level pills · monitor button
 
-The view toggle only renders when `views` prop has 2+ items. On `/dashboard`, `views={[]}` is passed so the toggle is hidden. On `/lead-time`, `views={LEAD_TIME_VIEWS}` shows Strategic/Tactical/Operational.
+The view toggle only renders when `views` prop has 2+ items. On `/dashboard`, Strategic / Tactical is shown (Tactical = "Lead time per stage" actual vs standard chart + "Lead time breakdown per plant" table). On `/lead-time`, `views={LEAD_TIME_VIEWS}` shows Strategic/Tactical/Operational.
 
 ---
 

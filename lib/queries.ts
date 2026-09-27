@@ -218,6 +218,79 @@ export async function getLeadTimeByStageCategory(filters: QueryFilters) {
   `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
+// Lead time per stage (POSITION): actual vs standard → Overview Tactical view
+// ACTUAL_DAYS = SUM(NET_LEADTIME) / COUNT(DISTINCT PO in period) / 1440 (same basis as the Pareto above).
+// STD_DAYS    = SUM(ACTIVITY_LEADTIME_STD) on the same basis — the column is minutes per activity row.
+export async function getLeadTimeStageVsStd(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ STAGE: string; ACTUAL_DAYS: number; STD_DAYS: number }>(`
+    WITH base AS (
+      SELECT PROCESS_ORDER_FG, POSITION, NET_LEADTIME, ACTIVITY_LEADTIME_STD
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        AND POSITION IS NOT NULL
+        ${plantWhere(filters.plant)}
+    ),
+    po AS (SELECT COUNT(DISTINCT PROCESS_ORDER_FG) AS N FROM base)
+    SELECT
+      b.POSITION AS STAGE,
+      SUM(b.NET_LEADTIME) / 1440.0 / NULLIF(MAX(po.N), 0) AS ACTUAL_DAYS,
+      SUM(COALESCE(b.ACTIVITY_LEADTIME_STD, 0)) / 1440.0 / NULLIF(MAX(po.N), 0) AS STD_DAYS
+    FROM base b
+    CROSS JOIN po
+    GROUP BY 1
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+}
+
+// Lead time breakdown per plant → Overview Tactical table. Network row = GROUPING(PLANT) = 1.
+// Per PO: gross (PO start → RECEIVE NDC stop) and nett (ACTUAL, LINE_CATEGORY NOT NULL) as in getLeadTimeKPI.
+// ONTIME_PCT = share of POs with gross ≤ targetDays. Stage minutes are summed per plant × POSITION;
+// divide by PO_COUNT for days per PO (same basis as getLeadTimeStageVsStd).
+export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: number) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const binds = [...dateBinds, ...plantBinds(filters.plant)];
+  const base = `
+    SELECT PLANT, PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_TYPE, LINE_CATEGORY, ACTIVITY_START, ACTIVITY_STOP, NET_LEADTIME
+    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+    WHERE ${datePred}
+      ${plantWhere(filters.plant)}`;
+
+  const [plantRows, stageRows] = await Promise.all([
+    executeQuery<{ IS_NETWORK: number; PLANT: string | null; PO_COUNT: number; GROSS_DAYS: number; NETT_DAYS: number; ONTIME_PCT: number | null }>(`
+      WITH base AS (${base}),
+      po AS (
+        SELECT
+          PLANT,
+          PROCESS_ORDER_FG,
+          DATEDIFF('minute',
+            MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
+            MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
+          ) AS gross_minutes,
+          SUM(CASE WHEN ACTIVITY_TYPE = 'ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END) AS nett_minutes
+        FROM base
+        GROUP BY PLANT, PROCESS_ORDER_FG
+      )
+      SELECT
+        GROUPING(PLANT) AS IS_NETWORK,
+        PLANT,
+        COUNT(*) AS PO_COUNT,
+        AVG(gross_minutes) / 1440.0 AS GROSS_DAYS,
+        AVG(nett_minutes) / 1440.0 AS NETT_DAYS,
+        COUNT_IF(gross_minutes <= ? * 1440) * 100.0 / NULLIF(COUNT(gross_minutes), 0) AS ONTIME_PCT
+      FROM po
+      GROUP BY ROLLUP (PLANT)
+    `, [...binds, targetDays]),
+    executeQuery<{ PLANT: string; STAGE: string; MINUTES: number }>(`
+      SELECT PLANT, POSITION AS STAGE, SUM(NET_LEADTIME) AS MINUTES
+      FROM (${base}) b
+      WHERE POSITION IS NOT NULL
+      GROUP BY 1, 2
+    `, binds),
+  ]);
+
+  return { plants: plantRows, stages: stageRows };
+}
+
 export async function getLeadTimeBySku(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ PRODUCT_CODE: string; PRODUCT_NAME: string; PO_COUNT: number; AVG_DAYS: number }>(`

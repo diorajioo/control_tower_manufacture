@@ -48,7 +48,7 @@ For implementation details not covered by docs: read the source directly.
 
 ### Layout — do not change without explicit instruction
 - No layout changes unless user explicitly requests them.
-- Dashboard (`/dashboard`) always shows the Strategic layout — no view toggle.
+- Dashboard (`/dashboard`) has a Strategic / Tactical toggle. Tactical = "Lead time per stage" actual vs standard chart (`LeadTimeStageStdChart`, real data via `/api/lead-time/stages`, "Open stage detail" → `/lead-time`), then "Lead time breakdown per plant" table (`LeadTimePlantTable`, same route; red = above network, on-time = gross ≤ 13 days). (The old Tactical KPI table was removed 2026-09-27.)
 - Lead Time (`/lead-time`) has its own Strategic / Tactical / Operational view toggle.
 
 ### Design system
