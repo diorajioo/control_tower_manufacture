@@ -197,30 +197,32 @@ export function LeadTimeTopSkuChart({ data, loading }: { data: LeadTimeChartData
         )}
       </div>
 
-      {/* Legend */}
-      {rows.length > 0 && (
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 mt-1">
-          {isRange ? (
-            <>
-              <span className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
-                <span className="w-3 h-[1.5px]" style={{ background: RANGE_COLOR }} />P10 to P90
+      {/* Legend + insight pinned to bottom so footer aligns with sibling cards in grid layouts */}
+      <div className="mt-auto">
+        {rows.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 mt-1">
+            {isRange ? (
+              <>
+                <span className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
+                  <span className="w-3 h-[1.5px]" style={{ background: RANGE_COLOR }} />P10 to P90
+                </span>
+                <span className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
+                  <span className="w-[3px] h-2 rounded-[1px]" style={{ background: MEAN_COLOR }} />Average
+                </span>
+              </>
+            ) : stackKeys.map((k) => (
+              <span key={k} className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: CATEGORY_COLORS[k] }} />
+                {k}
               </span>
-              <span className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
-                <span className="w-[3px] h-2 rounded-[1px]" style={{ background: MEAN_COLOR }} />Average
-              </span>
-            </>
-          ) : stackKeys.map((k) => (
-            <span key={k} className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: CATEGORY_COLORS[k] }} />
-              {k}
-            </span>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {insight && (
-        <p className="mt-3 pt-3 border-t border-[#f0f1f4] text-[11px] text-slate-500">{insight}</p>
-      )}
+        {insight && (
+          <p className="mt-3 pt-3 border-t border-[#f0f1f4] text-[11px] text-slate-500">{insight}</p>
+        )}
+      </div>
     </ChartCard>
   );
 }

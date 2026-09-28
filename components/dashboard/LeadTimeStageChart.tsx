@@ -205,25 +205,27 @@ export function LeadTimeStageChart({ data, loading }: { data: LeadTimeChartData 
         )}
       </div>
 
-      {/* Legend */}
-      {rows.length > 0 && (
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 mt-1">
-          <span className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
-            <span className="w-2.5 h-2.5 rounded-full border-[1.75px] bg-white" style={{ borderColor: CUMULATIVE_COLOR }} />
-            Cumulative
-          </span>
-          {keys.map((k) => (
-            <span key={k} className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: CATEGORY_COLORS[k] }} />
-              {CATEGORY_LABELS[k]}
+      {/* Legend + insight pinned to bottom so footer aligns with sibling cards in grid layouts */}
+      <div className="mt-auto">
+        {rows.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 mt-1">
+            <span className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
+              <span className="w-2.5 h-2.5 rounded-full border-[1.75px] bg-white" style={{ borderColor: CUMULATIVE_COLOR }} />
+              Cumulative
             </span>
-          ))}
-        </div>
-      )}
+            {keys.map((k) => (
+              <span key={k} className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: CATEGORY_COLORS[k] }} />
+                {CATEGORY_LABELS[k]}
+              </span>
+            ))}
+          </div>
+        )}
 
-      {insight && (
-        <p className="mt-3 pt-3 border-t border-[#f0f1f4] text-[11px] text-slate-500">{insight}</p>
-      )}
+        {insight && (
+          <p className="mt-3 pt-3 border-t border-[#f0f1f4] text-[11px] text-slate-500">{insight}</p>
+        )}
+      </div>
     </ChartCard>
   );
 }
