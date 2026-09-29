@@ -92,11 +92,15 @@ interface AISummaryProps {
 // "_en" suffix: invalidates summaries cached before the UI switched to English.
 const CACHE_TEXT = "ai_summary_text_en";
 const CACHE_TIME = "ai_summary_time_en";
+// Filters the cached summary was generated for — a different plant/period regenerates it.
+const CACHE_KEY  = "ai_summary_key_en";
 const TTL_MS    = 5 * 60 * 60 * 1000; // 5 hours
 
 export function AISummary({ kpi, filters, ready }: AISummaryProps) {
+  const filterKey = [filters.plant, filters.startDate, filters.endDate].join("|");
   const [summary,   setSummary]   = useState(() =>
-    typeof window !== "undefined" ? (localStorage.getItem(CACHE_TEXT) ?? "") : ""
+    typeof window !== "undefined" && localStorage.getItem(CACHE_KEY) === filterKey
+      ? (localStorage.getItem(CACHE_TEXT) ?? "") : ""
   );
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState(false);
@@ -112,7 +116,8 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
     if (!force) {
       const cachedTime = Number(localStorage.getItem(CACHE_TIME) ?? 0);
       const cachedText = localStorage.getItem(CACHE_TEXT) ?? "";
-      if (cachedText && Date.now() - cachedTime < TTL_MS) return;
+      const sameFilters = localStorage.getItem(CACHE_KEY) === filterKey;
+      if (cachedText && sameFilters && Date.now() - cachedTime < TTL_MS) return;
     }
 
     abortRef.current?.abort();
@@ -162,6 +167,7 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
       if (complete) {
         localStorage.setItem(CACHE_TEXT, clean);
         localStorage.setItem(CACHE_TIME, String(Date.now()));
+        localStorage.setItem(CACHE_KEY, filterKey);
         setSummary(clean);
       } else {
         // Stream was cut — show what arrived but do NOT cache so next load retries
@@ -175,7 +181,8 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
     }
   };
 
-  // Auto-fetch only when ready first becomes true — NOT on every filter change
+  // Auto-fetch when ready becomes true (initial load and after each filter change);
+  // the cache check skips the call if a fresh summary exists for the same filters
   useEffect(() => {
     if (ready) fetchSummary();
     return () => abortRef.current?.abort();
@@ -192,13 +199,10 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
     : null;
 
   return (
-    <div className="bg-white rounded-lg border border-[#EBEBEB] shadow-[0px_4px_4px_-2px_rgba(42,61,74,0.08)] px-4 py-3">
+    <div className="bg-white rounded-lg border border-[#EBEBEB] border-l-[3px] border-l-[#215AA8] px-4 py-3">
       <div className="flex items-center gap-2">
-        <span
-          className="inline-flex items-center gap-1.5 shrink-0 text-[10px] font-bold text-white rounded-full px-2.5 py-0.5"
-          style={{ background: "linear-gradient(90deg,#725DA3,#864A9C)" }}
-        >
-          ✦ AI Summary
+        <span className="shrink-0 text-[10.5px] font-bold uppercase tracking-[0.08em] text-[#215AA8]">
+          AI Summary
         </span>
 
         <div className="flex-1 min-w-0">

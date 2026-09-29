@@ -184,7 +184,11 @@ Client factory: `lib/ai-provider.ts → getClientForModel(modelId)`.
 
 ### AI Summary (`/api/dashboard/summary`)
 
-Generates a 3-sentence executive summary of current KPI state. Cached 5 hours.
+Generates a 3-sentence executive summary of current KPI state. Cached 5 hours in the browser (`localStorage`) per filter set (plant + start/end date); changing plant or period generates a new one.
+
+Inputs: Lead Time (gross/nett), Output (bulk + FG), E2E Productivity, and their MoM trends.
+
+**AI scope (`lib/aiScope.ts`):** every AI feature — Summary, AI Risks, Chat (tool `kpi_type` enums + system prompt) and alerts (incl. Teams DMs) — only covers metrics whose data is shown on a page: Lead Time, Output, Productivity. OEE / OPE, Pack Loss, Energy (`CT_MANUF_KEMAS` not ready) and Bulk Loss / RFT (no card) are excluded; widen the lists there when their cards go live.
 
 **Summary model priority (fool-proof, fast, low token cost):**
 1. `deepseek-chat` — DeepSeek V4, primary (fastest, lowest cost, `max_tokens: 600`)

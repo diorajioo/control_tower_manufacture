@@ -46,7 +46,8 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
   const fetchRisks = async (force = false) => {
     if (!kpi || !ready) return;
 
-    const cacheKey  = `ai_risks_${filters.plant}_${filters.period}`;
+    // "v2": drops risks cached before AI was limited to in-scope metrics (lib/aiScope.ts)
+    const cacheKey  = `ai_risks_v2_${filters.plant}_${filters.period}`;
     const cacheTime = `${cacheKey}_time`;
     if (!force) {
       try {
@@ -121,14 +122,9 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
   return (
     <div className="bg-white border border-[#EBEBEB] rounded-lg flex flex-col overflow-hidden">
       <div className="px-3.5 py-2 border-b border-[#EBEBEB] flex items-center gap-2 shrink-0">
-        <span
-          className="inline-flex items-center gap-1 px-2 py-[2px] rounded text-[10px] font-bold text-white shrink-0"
-          style={{ background: "linear-gradient(90deg,#725DA3,#864A9C)" }}
-        >
-          ✦ AI
-        </span>
-        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.08em]">
-          Risks &amp; Recommendations
+        <span className="text-[11px] font-bold uppercase tracking-[0.08em]">
+          <span className="text-[#215AA8]">AI</span>{" "}
+          <span className="text-slate-400">Risks &amp; Recommendations</span>
         </span>
         <button
           onClick={() => fetchRisks(true)}

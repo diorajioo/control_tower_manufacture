@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDeepSeekClient, isDeepSeekConfigured } from "@/lib/deepseek";
+import { pickAIKpis, OUT_OF_SCOPE_NOTE } from "@/lib/aiScope";
 
 // Allow up to 60 s on Vercel — the default limit cut the streamed answer short (fewer risks/actions than local).
 export const maxDuration = 60;
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     filters: { plant: string; period: string };
   };
 
-  const prompt = `Analyze the following manufacturing KPI data and identify the top risks and required actions:\n${JSON.stringify(kpi, null, 2)}\n\nPlant: ${filters.plant}, Period: ${filters.period}\n\nRespond in English, EXACTLY in this format (no other text):\nRISK:\n1. [TITLE]: [brief description]\n2. [TITLE]: [brief description]\n3. [TITLE]: [brief description]\n\nACTION:\n1. [TITLE]: [concrete action]\n2. [TITLE]: [concrete action]\n3. [TITLE]: [concrete action]`;
+  const prompt = `Analyze the following manufacturing KPI data and identify the top risks and required actions. Use only these metrics; ${OUT_OF_SCOPE_NOTE} Do not mention them.\n${JSON.stringify(pickAIKpis(kpi), null, 2)}\n\nPlant: ${filters.plant}, Period: ${filters.period}\n\nRespond in English, EXACTLY in this format (no other text):\nRISK:\n1. [TITLE]: [brief description]\n2. [TITLE]: [brief description]\n3. [TITLE]: [brief description]\n\nACTION:\n1. [TITLE]: [concrete action]\n2. [TITLE]: [concrete action]\n3. [TITLE]: [concrete action]`;
 
   try {
     const client = getDeepSeekClient();

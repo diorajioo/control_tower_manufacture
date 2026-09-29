@@ -1,3 +1,5 @@
+import { ALERT_KPIS } from "@/lib/aiScope";
+
 export type AlertSeverity = "critical" | "warning" | "info";
 
 export interface KPIAlert {
@@ -162,5 +164,6 @@ export function computeAlerts(kpi: KPISnapshot): KPIAlert[] {
     });
   }
 
-  return alerts;
+  // Only KPIs with data on a page raise alerts (see lib/aiScope.ts)
+  return alerts.filter((a) => ALERT_KPIS.has(a.kpi));
 }

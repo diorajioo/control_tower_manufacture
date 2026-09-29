@@ -6,6 +6,7 @@ import { isValidModelId } from "@/lib/ai-models";
 import { routeModel } from "@/lib/agent-router";
 import { buildSystemPrompt, type KPISnapshot } from "@/lib/diagnostic-prompt";
 import { executeQuery } from "@/lib/snowflake";
+import { AI_KPI_TYPES, AI_TREND_TYPES } from "@/lib/aiScope";
 import type OpenAI from "openai";
 
 // Allow up to 60 s on Vercel — tool calls to Snowflake + a streamed answer can exceed the default limit.
@@ -31,11 +32,7 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
         properties: {
           kpi_type: {
             type: "string",
-            enum: [
-              "lead_time", "bulk_loss", "pack_loss", "rft",
-              "output_bulk", "output_fg", "oee",
-              "productivity_e2e", "productivity_upstream", "productivity_downstream",
-            ],
+            enum: AI_KPI_TYPES,
             description: "KPI type to fetch",
           },
           start_date: { type: "string", description: "Format YYYY-MM-DD (default: start of this year)" },
@@ -56,7 +53,7 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
         properties: {
           kpi_type: {
             type: "string",
-            enum: ["leadtime", "upstream", "downstream", "e2e", "oee", "rft", "output", "batch"],
+            enum: AI_TREND_TYPES,
             description: "KPI type for the trend",
           },
           start_date: { type: "string", description: "Format YYYY-MM-DD" },
@@ -97,6 +94,7 @@ async function executeGetKpiData(args: {
   const dateBinds = [startDate, endDate] as unknown[];
   const withPlant = plant ? [...dateBinds, plant] : dateBinds;
   const pf = plant ? "AND PLANT = ?" : "";
+  if (!AI_KPI_TYPES.includes(args.kpi_type)) return JSON.stringify({ error: "KPI not available yet on the dashboard" });
 
   try {
     let rows: unknown[];
@@ -343,7 +341,7 @@ async function executeGetWeeklyTrend(args: {
       GROUP BY WEEK, PLANT ORDER BY WEEK`,
   };
 
-  const sql = queryMap[args.kpi_type];
+  const sql = AI_TREND_TYPES.includes(args.kpi_type) ? queryMap[args.kpi_type] : undefined;
   if (!sql) return JSON.stringify({ error: "Unrecognized trend kpi_type" });
 
   try {

@@ -20,7 +20,8 @@ Strict rules:
 - Sentence 3: implication or one recommended action
 - Professional English, no bullet points, no headings
 
-Targets: OEE ≥ 65%, Bulk Loss < 3%, Pack Loss < 1%, RFT ≥ 95%.
+Target: Lead Time Gross ≤ 13 days.
+Analyze only these metrics: Lead Time, Output and Productivity. Do not mention OEE, OPE, yield/bulk/pack loss, RFT or energy.
 Analyze only the data provided.`;
 
 type AnyMessage = Groq.Chat.ChatCompletionMessageParam | OpenAI.Chat.ChatCompletionMessageParam;
@@ -59,21 +60,18 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { kpi, filters } = body;
 
+  // Only metrics shown on a page are sent (see lib/aiScope.ts).
+
   const trendText = [
     kpi.leadTime?.grossTrend   != null ? `Lead Time MoM: ${kpi.leadTime.grossTrend > 0 ? "+" : ""}${kpi.leadTime.grossTrend}%`         : null,
-    kpi.rightFirstTime?.trend  != null ? `RFT MoM: ${kpi.rightFirstTime.trend > 0 ? "+" : ""}${kpi.rightFirstTime.trend}%`             : null,
-    kpi.oee?.trend             != null ? `OEE MoM: ${kpi.oee.trend > 0 ? "+" : ""}${kpi.oee.trend}%`                                   : null,
-    kpi.yield?.bulkLossTrend   != null ? `Bulk Loss MoM: ${kpi.yield.bulkLossTrend > 0 ? "+" : ""}${kpi.yield.bulkLossTrend}%`         : null,
+    kpi.output?.fgTrend        != null ? `Released FG MoM: ${kpi.output.fgTrend > 0 ? "+" : ""}${kpi.output.fgTrend}%`               : null,
+    kpi.productivity?.e2eTrend != null ? `E2E Productivity MoM: ${kpi.productivity.e2eTrend > 0 ? "+" : ""}${kpi.productivity.e2eTrend}%` : null,
   ].filter(Boolean).join(", ");
 
   const userMessage = `KPI data for ${filters.startDate} to ${filters.endDate}, Plant: ${filters.plant || "All Plant"}:
 
 Lead Time Gross: ${kpi.leadTime?.grossDays ?? "—"} days | Nett: ${kpi.leadTime?.nettDays ?? "—"} days
-Bulk Loss: ${kpi.yield?.bulkLossPct ?? "—"}% (~${(kpi.yield?.bulkLossKg ?? 0).toLocaleString()} kg)
-Pack Loss: ${kpi.yield?.packLossPct ?? "—"}%
-Right First Time: ${kpi.rightFirstTime?.value ?? "—"}%
 Output Bulk: ${(kpi.output?.bulkQty ?? 0).toLocaleString()} kg | Released FG: ${(kpi.output?.fgQty ?? 0).toLocaleString()} pcs
-OEE: ${kpi.oee?.value ?? "—"}%
 E2E Productivity: ${kpi.productivity?.e2e ?? "—"} pcs/manhour${trendText ? `\nChange vs prior period: ${trendText}` : ""}
 
 Write a short executive summary:`;
