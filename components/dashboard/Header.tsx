@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, LayoutGrid, Calendar, ChevronDown, Check, Loader2, X, Send, Monitor } from "lucide-react";
+import { Bell, LayoutGrid, Calendar, ChevronDown, Check, Loader2, X, Send, Monitor, Lock } from "lucide-react";
 
 const EN_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const EN_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -82,7 +82,8 @@ interface HeaderProps {
   onFilterChange: (f: { plant: string; startDate: string; endDate: string; dataLevel: string; period: string }) => void;
   activeView: string;
   onViewChange: (v: string) => void;
-  views?: Array<{ key: string; label: string }>;
+  /** `locked` views are shown with a lock icon and cannot be opened (e.g. still on mock data) */
+  views?: Array<{ key: string; label: string; locked?: boolean }>;
   onRefresh: () => void;
   isLoading: boolean;
   lastUpdated?: Date;
@@ -100,7 +101,7 @@ export function Header({
 }: HeaderProps) {
   const { data: session } = useSession();
   const { t } = useI18n();
-  const resolvedViews = views ?? [
+  const resolvedViews: Array<{ key: string; label: string; locked?: boolean }> = views ?? [
     { key: "strategic", label: t("header_view_strategic") },
     { key: "tactical",  label: t("header_view_tactical") },
   ];
@@ -458,12 +459,16 @@ export function Header({
           <>
             <div className="w-px h-4 bg-gray-200 shrink-0 mx-0.5" />
             <div className="flex items-center gap-0.5 bg-white rounded-full p-0.5 border border-gray-200 shrink-0">
-              {resolvedViews.map(({ key, label }) => (
-                <button key={key} onClick={() => onViewChange(key)}
+              {resolvedViews.map(({ key, label, locked }) => (
+                <button key={key} onClick={() => { if (!locked) onViewChange(key); }}
+                  disabled={locked}
+                  title={locked ? "Coming soon — data not connected yet" : undefined}
                   className={cn(
-                    "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10",
-                    activeView === key ? "text-[#143665]" : "text-gray-500 hover:text-gray-700"
+                    "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10 inline-flex items-center gap-1",
+                    locked ? "text-gray-300 cursor-not-allowed"
+                      : activeView === key ? "text-[#143665]" : "text-gray-500 hover:text-gray-700"
                   )}>
+                  {locked && <Lock size={9} strokeWidth={2} />}
                   {activeView === key && (
                     <motion.span
                       layoutId="view-pill"

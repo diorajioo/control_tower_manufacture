@@ -105,7 +105,8 @@ lib/
 | Endpoint | Method | Auth | Cache | Purpose |
 |---|---|---|---|---|
 | `/api/dashboard/kpi` | GET | Required | 1h | KPI card values (all 7 KPIs in one call) |
-| `/api/dashboard/trends` | GET | Required | 1h | Chart trend data per period |
+| `/api/dashboard/trends` | GET | Required | 1h | Chart trend data per period; `grain=week\|month` |
+| `/api/lead-time/trend` | GET | Required | 1h | Lead Time Trend (total + per POSITION) at `grain=week\|month` — used when the chart is switched to Monthly |
 | `/api/dashboard/plants` | GET | Required | — | List of plant names for dropdown |
 | `/api/dashboard/summary` | GET | Required | 5h | AI executive summary text |
 | `/api/chat` | POST | Required | — | Streaming AI chat with tool use |

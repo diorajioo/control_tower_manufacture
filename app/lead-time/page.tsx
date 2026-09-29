@@ -1000,7 +1000,7 @@ function StrategicView({ filters, refreshKey }: { filters: LeadTimeFilters; refr
 
       {/* Lead time trend (overall + per POSITION) and SKU scatter */}
       <div className="grid grid-cols-2 gap-3.5 px-5 mb-4">
-        <LeadTimeTrendChart data={charts.data} loading={charts.loading} />
+        <LeadTimeTrendChart data={charts.data} loading={charts.loading} filters={filters} />
         <LeadTimeSkuScatter data={charts.data} loading={charts.loading} />
       </div>
 
@@ -1099,11 +1099,13 @@ function OperationalView() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// Tactical / Operational are still mock data → locked until they run on Snowflake (code kept below).
 const LEAD_TIME_VIEWS = [
   { key: "strategic",   label: "Strategic" },
-  { key: "tactical",    label: "Tactical" },
-  { key: "operational", label: "Operational" },
+  { key: "tactical",    label: "Tactical",    locked: true },
+  { key: "operational", label: "Operational", locked: true },
 ];
+const isLockedView = (v: string) => LEAD_TIME_VIEWS.some((x) => x.key === v && x.locked);
 
 export default function LeadTimePage() {
   const { status } = useSession();
@@ -1156,7 +1158,7 @@ export default function LeadTimePage() {
           }}
           views={LEAD_TIME_VIEWS}
           activeView={persona}
-          onViewChange={(v) => setPersona(v as Persona)}
+          onViewChange={(v) => { if (!isLockedView(v)) setPersona(v as Persona); }}
           onRefresh={handleRefresh}
           isLoading={false}
           lastUpdated={lastUpdated}
@@ -1167,8 +1169,8 @@ export default function LeadTimePage() {
 
         <div className="flex-1 overflow-y-auto min-h-0">
           {persona === "strategic"   && <StrategicView filters={filters} refreshKey={refreshKey} />}
-          {persona === "tactical"    && <TacticalView />}
-          {persona === "operational" && <OperationalView />}
+          {persona === "tactical"    && !isLockedView("tactical")    && <TacticalView />}
+          {persona === "operational" && !isLockedView("operational") && <OperationalView />}
         </div>
       </div>
 

@@ -50,7 +50,7 @@
 - Color: heat intensity based on delay severity
 
 ### User interactions
-- View toggle: Strategic / Tactical / Operational pills in header
+- View toggle: Strategic / Tactical / Operational pills in header — Tactical and Operational are locked (still mock data)
 - Monitor button: navigates to `/monitor?page=lead-time`
 - Stage breakdown chart toggle (Tactical): Gross / Nett / Pareto
 

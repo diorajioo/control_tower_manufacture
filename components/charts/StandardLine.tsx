@@ -279,6 +279,7 @@ export function LineChartCard({
   height = 300,
   empty = false,
   emptyText = "No data available",
+  actions,
   children,
 }: {
   /** Uppercase card label, e.g. "Lead Time Trend" */
@@ -290,6 +291,8 @@ export function LineChartCard({
   height?: number;
   empty?: boolean;
   emptyText?: string;
+  /** Controls shown left of the unit pill, e.g. the Weekly / Monthly toggle */
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -301,11 +304,14 @@ export function LineChartCard({
             <span className="w-3 h-3 border border-[#215AA8] border-t-transparent rounded-full animate-spin inline-block" />
           )}
         </div>
-        {unitBadge && (
-          <span className="text-[11px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
-            {unitBadge}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {actions}
+          {unitBadge && (
+            <span className="text-[11px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
+              {unitBadge}
+            </span>
+          )}
+        </div>
       </div>
       <div style={{ height }}>
         {empty ? (
@@ -317,6 +323,23 @@ export function LineChartCard({
       {legend && <div className="mt-1.5">{legend}</div>}
     </div>
   );
+}
+
+// ── Trend granularity (Weekly / Monthly toggle) ──────────────────────────────
+
+export type TrendGrain = "week" | "month";
+export const GRAIN_OPTIONS: { key: TrendGrain; label: string }[] = [
+  { key: "week",  label: "Weekly" },
+  { key: "month", label: "Monthly" },
+];
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Month axis label from a period-start date "YYYY-MM-DD": "Jan", or "Jan 25" when the range spans years. */
+export function monthLabel(dateStr: string, withYear = false): string {
+  const [y, m] = dateStr.split("-");
+  const name = MONTHS[Number(m) - 1] ?? dateStr;
+  return withYear ? `${name} ${y.slice(2)}` : name;
 }
 
 /** Tick values for a weekly point axis: every even ISO week, thinned further when dense (Overview rule). */

@@ -187,6 +187,7 @@ Applies to `RegularKPICard`, `LeadTimeKPICard`, `OutputKPICard`, `LiteKPICard`, 
 
 | Aspect | Standard |
 |---|---|
+| Granularity | Trend charts have a Weekly / Monthly `SegmentedToggle` (`GRAIN_OPTIONS`) in the card header, left of the unit pill (`LineChartCard` `actions` slot). Weekly axis = even ISO weeks (`W2, W4…`); Monthly axis = every month (`Jan`, or `Jan 25` when the range spans years). Data is re-queried with `grain=month` (`/api/dashboard/trends`, `/api/lead-time/trend`) |
 | Series colors | `SERIES_COLORS` (`lib/chartConfig.ts`) in fixed entity order, never by rank: `#3b82f6` `#f59e0b` `#ef4444` `#10b981` `#8b5cf6` `#f97316` `#06b6d4` `#db2777` (validated for CVD + normal-vision separation). 9th+ series → `SERIES_OVERFLOW_COLOR` `#98a2b3`. Aggregate series ("Total") → `SERIES_TOTAL_COLOR` Paragon Blue `#215AA8` (validated against every slot). `PLANT_COLORS` = first 6. |
 | Look | Minimal-modern: no axis lines, dashed horizontal hairline grid only (`#eef0f3`, 3 4), no vertical grid |
 | Line | `curve="monotoneX"`, 2px, round caps, no resting points (`LINE_DEFAULTS`) |

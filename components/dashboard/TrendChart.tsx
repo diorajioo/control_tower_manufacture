@@ -14,7 +14,9 @@ import { cn } from "@/lib/utils";
 import {
   LINE_DEFAULTS, LineTooltip, LineLegend, rowsAtX, isolatedColor,
   makeActivePointsLayer, makeActiveLineLayer, controlMarkers, LimitsSub,
+  monthLabel, GRAIN_OPTIONS, type TrendGrain,
 } from "@/components/charts/StandardLine";
+import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 
 interface Filters {
   plant: string;
@@ -42,6 +44,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
   const [data,    setData]    = useState<Record<string, unknown>[]>([]);
   const [plants,  setPlants]  = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [grain,   setGrain]   = useState<TrendGrain>("week");
   const activeXRef = useRef<string | null>(null);
   const { t } = useI18n();
 
@@ -56,6 +59,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       startDate: filters.startDate,
       endDate:   filters.endDate,
       kpiType:   fetchType,
+      grain,
     });
     fetch(`/api/dashboard/trends?${params}`)
       .then((r) => r.json())
@@ -78,7 +82,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [filters.plant, filters.startDate, filters.endDate, kpiType]);
+  }, [filters.plant, filters.startDate, filters.endDate, kpiType, grain]);
 
   const { mean, ucl, lcl } = useMemo(
     () => computeControlLimits(data, plants),
@@ -96,18 +100,23 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
     return new Date(s);
   };
 
+  // Monthly labels carry the year only when the range spans more than one year
+  const multiYear = useMemo(() => new Set(data.map((d) => String(d.date).slice(0, 4))).size > 1, [data]);
+
   const formatTick = useCallback((s: string) => {
+    if (grain === "month") return monthLabel(s, multiYear);
     try {
       const d = parseAnyDate(s);
       if (isNaN(d.getTime())) return s;
       return `W${getISOWeek(d)}`;
     } catch { return s; }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [grain, multiYear]);
 
-  // Show ticks at every even ISO week (W2, W4, W6…)
+  // Weekly: ticks at every even ISO week (W2, W4, W6…). Monthly: every month.
   const axisTicks = useMemo(() => {
     if (!data.length) return undefined;
+    if (grain === "month") return data.map((d) => String(d.date));
     const evenWeeks = data.filter((d) => {
       try {
         return getISOWeek(parseAnyDate(String(d.date))) % 2 === 0;
@@ -117,7 +126,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
     const step = evenWeeks.length > 26 ? 2 : 1;
     return evenWeeks.filter((_, i) => i % step === 0).map((d) => String(d.date));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [data, grain]);
 
   const nivoData = useMemo(
     () =>
@@ -157,9 +166,12 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
             <span className="w-3 h-3 border border-[#215AA8] border-t-transparent rounded-full animate-spin inline-block" />
           )}
         </div>
-        <span className="text-[11px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
-          {selectedKpi.label} · {selectedKpi.unit}
-        </span>
+        <div className="flex items-center gap-2">
+          <SegmentedToggle options={GRAIN_OPTIONS} value={grain} onChange={setGrain} ariaLabel="Trend granularity" />
+          <span className="text-[11px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
+            {selectedKpi.label} · {selectedKpi.unit}
+          </span>
+        </div>
       </div>
 
       {/* KPI tabs (legend sits below the plot) */}
@@ -212,7 +224,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
               const dateLabel = (() => {
                 try {
                   const d = parseAnyDate(x);
-                  return isNaN(d.getTime()) ? x : format(d, "dd MMM yyyy");
+                  if (isNaN(d.getTime())) return x;
+                  return grain === "month" ? format(d, "MMMM yyyy") : `Week of ${format(d, "dd MMM yyyy")}`;
                 } catch { return x; }
               })();
               const rows = rowsAtX(nivoData, x, selectedKpi.unit).map((r) => {

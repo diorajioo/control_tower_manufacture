@@ -132,7 +132,11 @@ export function LeadTimeMonitor({ filters }: { filters: MonitorFilters; onExit?:
 
         {/* Charts — 2×2 grid to keep chart ratios healthy */}
         <div className="grid grid-cols-2 gap-2">
-          <LeadTimeTrendChart data={chartsData} loading={chartsLoading} />
+          <LeadTimeTrendChart
+            data={chartsData}
+            loading={chartsLoading}
+            filters={{ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, period: filters.period }}
+          />
           <LeadTimeSkuScatter data={chartsData} loading={chartsLoading} />
         </div>
         <div className="grid grid-cols-2 gap-2">

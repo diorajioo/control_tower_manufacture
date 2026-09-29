@@ -15,6 +15,10 @@ const hasPlant = (plant?: string): plant is string => !!plant && plant !== "All 
 const plantWhere = (plant?: string, col = "PLANT") => (hasPlant(plant) ? `AND ${col} = ?` : "");
 const plantBinds = (plant?: string): unknown[] => (hasPlant(plant) ? [plant] : []);
 
+// Trend granularity for line charts. Only these two literals are ever put into DATE_TRUNC.
+export type TrendGrain = "week" | "month";
+const truncUnit = (grain?: string): TrendGrain => (grain === "month" ? "month" : "week");
+
 // Translates the Tableau Period calc filter to a parameterized Snowflake WHERE predicate.
 // Returns { sql, binds } — sql uses ? placeholders, binds holds the values.
 // Period-relative cases use CURRENT_DATE() (server-side, no drift).
@@ -159,13 +163,14 @@ export async function getLeadTimeCompositionMonthly(filters: QueryFilters) {
 
 // Lead Time trend per POSITION → weekly line chart on /lead-time
 // Per PO + POSITION: SUM(NET_LEADTIME), then AVG across POs that have that position, per week of PO_FG_DONE_DATE.
-export async function getLeadTimeWeeklyByPosition(filters: QueryFilters) {
+export async function getLeadTimeWeeklyByPosition(filters: QueryFilters, grain?: TrendGrain) {
+  const unit = truncUnit(grain);
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ WEEK: string; POSITION: string; AVG_DAYS: number }>(`
     SELECT WEEK, POSITION, AVG(pos_minutes) / 1440.0 AS AVG_DAYS
     FROM (
       SELECT
-        DATE_TRUNC('week', MAX(PO_FG_DONE_DATE)::DATE) AS WEEK,
+        DATE_TRUNC('${unit}', MAX(PO_FG_DONE_DATE)::DATE) AS WEEK,
         PROCESS_ORDER_FG,
         POSITION,
         SUM(NET_LEADTIME) AS pos_minutes
@@ -663,13 +668,14 @@ export async function getE2EWeekly(filters: QueryFilters) {
 }
 
 // Lead Time weekly series → sparkline for dashboard card
-export async function getLeadTimeWeekly(filters: QueryFilters) {
+export async function getLeadTimeWeekly(filters: QueryFilters, grain?: TrendGrain) {
+  const unit = truncUnit(grain);
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ WEEK: string; AVG_DAYS: number }>(`
     SELECT WEEK, AVG(DAYS) AS AVG_DAYS
     FROM (
       SELECT
-        DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK,
+        DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK,
         DATEDIFF('minute',
           MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
           MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
@@ -775,9 +781,10 @@ export async function getTrendsData(filters: QueryFilters) {
 //   Output:      SUM({FIXED [Process Order Fg]: sum([Release Fg])})
 //   Batch:       SUM({FIXED [Process Order Fg]: MAX([Release Bulk])})
 export async function getTrendKPIByPlant(
-  filters: QueryFilters & { kpiType?: string }
+  filters: QueryFilters & { kpiType?: string; grain?: TrendGrain }
 ) {
   const { startDate, endDate, plant, kpiType = "leadtime" } = filters;
+  const unit = truncUnit(filters.grain); // WEEK column = start of the week or month
   const dateRange = "?::DATE AND ?::DATE";
   const pf = plantWhere(plant);
 
@@ -790,7 +797,7 @@ export async function getTrendKPIByPlant(
         FROM (
           SELECT
             PROCESS_ORDER_FG,
-            DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK,
+            DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK,
             PLANT,
             DATEDIFF('minute',
               MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
@@ -814,7 +821,7 @@ export async function getTrendKPIByPlant(
           SELECT
             PROCESS_ORDER_SFG,
             PLANT,
-            DATE_TRUNC('week', OLAH_COMPLETED_AT::DATE) AS WEEK,
+            DATE_TRUNC('${unit}', OLAH_COMPLETED_AT::DATE) AS WEEK,
             POSITION,
             ACTIVITY,
             ACTIVITY_ID,
@@ -864,7 +871,7 @@ export async function getTrendKPIByPlant(
         FROM (
           SELECT
             PROCESS_ORDER_FG,
-            DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
+            DATE_TRUNC('${unit}', KEMAS_COMPLETED_AT::DATE) AS WEEK,
             PLANT,
             SUM(QTY_FG_GOOD)
               / NULLIF(SUM(LEADTIME_IN_MINUTE) / 60.0, 0)
@@ -887,7 +894,7 @@ export async function getTrendKPIByPlant(
         FROM (
           SELECT
             PROCESS_ORDER_FG,
-            DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
+            DATE_TRUNC('${unit}', KEMAS_COMPLETED_AT::DATE) AS WEEK,
             PLANT,
             AVG(E2E_PRODUCTIVITY) AS po_prod
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
@@ -906,7 +913,7 @@ export async function getTrendKPIByPlant(
         FROM (
           SELECT
             PROCESS_ORDER_FG,
-            DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK,
+            DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK,
             PLANT,
             SUM(RELEASE_FG) AS po_fg
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_TRENDS
@@ -920,7 +927,7 @@ export async function getTrendKPIByPlant(
 
     case "oee":
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK, PLANT,
+        SELECT DATE_TRUNC('${unit}', KEMAS_COMPLETED_AT::DATE) AS WEEK, PLANT,
           AVG(
             (CASE WHEN QTY_TOTAL > 0 THEN QTY_FG_GOOD::FLOAT / QTY_TOTAL ELSE 0 END) *
             (CASE WHEN ACTIVITY_PRODUCTIVITY_STD > 0
@@ -935,7 +942,7 @@ export async function getTrendKPIByPlant(
 
     case "rft":
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
+        SELECT DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
           COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) * 100.0
             / NULLIF(COUNT(*), 0) AS KPI_VALUE
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
@@ -948,7 +955,7 @@ export async function getTrendKPIByPlant(
     case "bulkloss":
       // No PLANT column in this table — always returns "All Plant"
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT DATE_TRUNC('week', CORRECTION_DATE::DATE) AS WEEK,
+        SELECT DATE_TRUNC('${unit}', CORRECTION_DATE::DATE) AS WEEK,
           'All Plant' AS PLANT,
           SUM(BULK_LOSS_QUANTITY) / NULLIF(SUM(THEORETICAL_QUANTITY), 0) * 100 AS KPI_VALUE
         FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH

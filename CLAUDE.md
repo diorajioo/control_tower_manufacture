@@ -49,7 +49,8 @@ For implementation details not covered by docs: read the source directly.
 ### Layout — do not change without explicit instruction
 - No layout changes unless user explicitly requests them.
 - Dashboard (`/dashboard`) has a Strategic / Tactical toggle. Tactical = "Lead time per stage" actual vs standard chart (`LeadTimeStageStdChart`, real data via `/api/lead-time/stages`, "Open stage detail" → `/lead-time`), then "Lead time breakdown per plant" table (`LeadTimePlantTable`, same route; red = above network, on-time = gross ≤ 13 days). (The old Tactical KPI table was removed 2026-09-27.)
-- Lead Time (`/lead-time`) has its own Strategic / Tactical / Operational view toggle.
+- Lead Time (`/lead-time`) has its own Strategic / Tactical / Operational view toggle. Tactical and Operational are **locked** (lock icon, not clickable — `locked: true` in `LEAD_TIME_VIEWS`) until they run on real data.
+- Trend line charts (Overview `TrendChart`, `LeadTimeTrendChart`) have a Weekly / Monthly toggle (`GRAIN_OPTIONS` in `StandardLine.tsx`); the query groups per `DATE_TRUNC(week|month)` in Snowflake (`grain` param), never by re-averaging weekly points.
 
 ### Design system
 - **Font: Lato only** — weights 400 and 700. No Inter, no Space Grotesk. `globals.css` imports Lato from Google Fonts.
