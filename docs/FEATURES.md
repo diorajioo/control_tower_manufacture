@@ -71,7 +71,7 @@
 | Page | Key | Source | Data |
 |---|---|---|---|
 | Strategic | `strategic` | `components/monitor/StrategicMonitor.tsx` | Live Snowflake via `/api/dashboard/kpi` |
-| Lead Time | `lead-time` | `components/monitor/LeadTimeMonitor.tsx` | Static mock data |
+| Lead Time | `lead-time` | `components/monitor/LeadTimeMonitor.tsx` | Live Snowflake via `/api/dashboard/kpi` + `/api/lead-time/charts` (KPI cards + 4 Strategic charts) |
 
 ### StrategicMonitor layout (no-scroll, fills viewport)
 1. AI Summary (shrink-0)

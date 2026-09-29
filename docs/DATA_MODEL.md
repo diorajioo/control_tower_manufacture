@@ -192,7 +192,7 @@ interface KPIResponse {
 
 1. **No PLANT column in OLAH/FG output tables**: Bulk Output, FG Output, and Bulk Loss data cannot be filtered by plant. These always return all-plant totals.
 
-2. **Lead Time page partially uses static mock data**: the Strategic KPI cards read `CT_MANUF_LEADTIME` (`getLeadTimeKPI`, `getLeadTimeComposition` — VA/NNVA/UNVA from `ACTIVITY_CATEGORY`). Charts, stage breakdown, Top SKU in `app/lead-time/page.tsx` and all of `components/monitor/LeadTimeMonitor.tsx` are still hardcoded.
+2. **Lead Time page partially uses static mock data**: the Strategic KPI cards read `CT_MANUF_LEADTIME` (`getLeadTimeKPI`, `getLeadTimeComposition` — VA/NNVA/UNVA from `ACTIVITY_CATEGORY`). The Strategic charts (`/api/lead-time/charts`) and `components/monitor/LeadTimeMonitor.tsx` (KPI cards + 4 Strategic charts) are real; the Tactical/Operational views of `app/lead-time/page.tsx` are still hardcoded.
 
 3. **E2E_PRODUCTIVITY is pre-aggregated**: The `CT_MANUF_E2E` table provides pre-computed productivity. We do not know what exact LOD calculation produces it, unlike Upstream Productivity where we control the 3-level aggregate.
 
