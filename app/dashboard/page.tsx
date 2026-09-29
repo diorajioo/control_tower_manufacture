@@ -22,6 +22,7 @@ import { LeadTimePlantTable, type PlantBreakdown } from "@/components/dashboard/
 import { FitToScreen } from "@/components/ui/FitToScreen";
 import { formatThousands } from "@/lib/utils";
 import { computeAlerts, type KPIAlert } from "@/lib/alerts";
+import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
 
 interface KPIResponse {
   leadTime: {
@@ -102,7 +103,6 @@ export default function DashboardPage() {
       return stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
     } catch { return defaults; }
   });
-  const [highlightedKpi, setHighlightedKpi] = useState<string | null>(null);
   const [refreshCount,  setRefreshCount]  = useState(0);
   const [stageStd,      setStageStd]      = useState<StageStdPoint[] | null>(null);
   const [stageLoading,  setStageLoading]  = useState(false);
@@ -115,15 +115,6 @@ export default function DashboardPage() {
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
   }, [status, router]);
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const kpi = (e as CustomEvent<{ kpi: string }>).detail.kpi;
-      setHighlightedKpi((prev) => (prev === kpi ? null : kpi));
-    };
-    window.addEventListener("kpi-highlight", handler);
-    return () => window.removeEventListener("kpi-highlight", handler);
-  }, []);
 
   // Tactical view: lead time per stage vs standard — fetched only while the view is open
   useEffect(() => {
@@ -295,7 +286,7 @@ export default function DashboardPage() {
           onMonitorMode={() => router.push(monitorUrl)}
         />
 
-        <main className="flex-1 px-5 py-4 overflow-y-auto min-h-0 flex flex-col gap-3.5" onClick={() => setHighlightedKpi(null)}>
+        <main className="flex-1 px-5 py-4 overflow-y-auto min-h-0 flex flex-col gap-3.5">
           {fetchError && (
             <div className="px-4 py-2.5 rounded-lg bg-red-50 border border-red-200 flex items-center justify-between gap-3">
               <span className="text-[12px] text-red-600 font-medium">{fetchError}</span>
@@ -318,45 +309,51 @@ export default function DashboardPage() {
           {loading ? (
             Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
           ) : (<>
-            <LeadTimeKPICard
-              compact
-              showBreakdown={false}
-              grossDays={kpi?.leadTime?.grossDays ?? 0}
-              nettDays={kpi?.leadTime?.nettDays ?? 0}
-              grossTrend={kpi?.leadTime?.grossTrend ?? null}
-              nettTrend={kpi?.leadTime?.nettTrend ?? null}
-              byPositionGross={kpi?.leadTime?.byPositionGross ?? []}
-              byPositionNett={kpi?.leadTime?.byPositionNett ?? []}
-              sparkline={kpi?.leadTime?.sparkline ?? []}
-              hasAlert={visibleAlerts.some((a) => a.id.startsWith("leadtime"))}
-            />
-            <OutputKPICard
-              compact
-              fgQty={kpi?.output?.fgQty ?? 0}
-              bulkQty={kpi?.output?.bulkQty ?? 0}
-              fgTrend={kpi?.output?.fgTrend ?? null}
-              bulkTrend={kpi?.output?.bulkTrend ?? null}
-              sparkline={kpi?.output?.sparkline ?? []}
-              bulkSparkline={kpi?.output?.bulkSparkline ?? []}
-            />
-            <RegularKPICard
-              compact
-              label="E2E Productivity"
-              icon={<Users size={13} color="#8b5cf6" strokeWidth={1.75} />}
-              value={kpi ? (kpi.productivity?.e2e ?? 0).toFixed(1) : "—"}
-              unit="pcs/manhour"
-              sparkUnit="pcs/mh"
-              trend={kpi?.productivity?.e2eTrend ?? null}
-              subLabel={kpi?.productivity?.e2ePrev ? `vs prior period ${kpi.productivity.e2ePrev.toFixed(1)}` : "vs prior period"}
-              sparkline={kpi?.productivity?.sparkline ?? []}
-              secondary={{
-                value: `${(kpi?.productivity?.upstream ?? 0).toFixed(1)} · ${(kpi?.productivity?.downstream ?? 0).toFixed(1)}`,
-                unit: "pcs/mh",
-                label: "Upstream · Downstream",
-              }}
-              footerLeft="Output per operator manhour, end to end"
-              footerRight={kpi?.productivity?.manhours ? `${formatThousands(Math.round(kpi.productivity.manhours))} mh` : undefined}
-            />
+            <KpiHighlightTarget id="leadtime">
+              <LeadTimeKPICard
+                compact
+                showBreakdown={false}
+                grossDays={kpi?.leadTime?.grossDays ?? 0}
+                nettDays={kpi?.leadTime?.nettDays ?? 0}
+                grossTrend={kpi?.leadTime?.grossTrend ?? null}
+                nettTrend={kpi?.leadTime?.nettTrend ?? null}
+                byPositionGross={kpi?.leadTime?.byPositionGross ?? []}
+                byPositionNett={kpi?.leadTime?.byPositionNett ?? []}
+                sparkline={kpi?.leadTime?.sparkline ?? []}
+                hasAlert={visibleAlerts.some((a) => a.id.startsWith("leadtime"))}
+              />
+            </KpiHighlightTarget>
+            <KpiHighlightTarget id="output">
+              <OutputKPICard
+                compact
+                fgQty={kpi?.output?.fgQty ?? 0}
+                bulkQty={kpi?.output?.bulkQty ?? 0}
+                fgTrend={kpi?.output?.fgTrend ?? null}
+                bulkTrend={kpi?.output?.bulkTrend ?? null}
+                sparkline={kpi?.output?.sparkline ?? []}
+                bulkSparkline={kpi?.output?.bulkSparkline ?? []}
+              />
+            </KpiHighlightTarget>
+            <KpiHighlightTarget id="productivity">
+              <RegularKPICard
+                compact
+                label="E2E Productivity"
+                icon={<Users size={13} color="#8b5cf6" strokeWidth={1.75} />}
+                value={kpi ? (kpi.productivity?.e2e ?? 0).toFixed(1) : "—"}
+                unit="pcs/manhour"
+                sparkUnit="pcs/mh"
+                trend={kpi?.productivity?.e2eTrend ?? null}
+                subLabel={kpi?.productivity?.e2ePrev ? `vs prior period ${kpi.productivity.e2ePrev.toFixed(1)}` : "vs prior period"}
+                sparkline={kpi?.productivity?.sparkline ?? []}
+                secondary={{
+                  value: `${(kpi?.productivity?.upstream ?? 0).toFixed(1)} · ${(kpi?.productivity?.downstream ?? 0).toFixed(1)}`,
+                  unit: "pcs/mh",
+                  label: "Upstream · Downstream",
+                }}
+                footerLeft="Output per operator manhour, end to end"
+                footerRight={kpi?.productivity?.manhours ? `${formatThousands(Math.round(kpi.productivity.manhours))} mh` : undefined}
+              />
+            </KpiHighlightTarget>
           </>)}
           </div>
 
@@ -367,47 +364,53 @@ export default function DashboardPage() {
             ) : (
               <>
                 {/* OEE — no data yet (CT_MANUF_KEMAS not connected) */}
-                <RegularKPICard
-                  compact
-                  noData
-                  label="OEE"
-                  icon={<Gauge size={13} color="#8b5cf6" strokeWidth={1.75} />}
-                  value="—"
-                  unit="%"
-                  subLabel="target ≥ 65%"
-                  secondary={{ value: "—", unit: "%", label: "OPE (OEE × 0.8)" }}
-                  footerLeft="CT_MANUF_KEMAS not connected yet"
-                  footerRight="Target ≥ 65%"
-                />
+                <KpiHighlightTarget id="oee">
+                  <RegularKPICard
+                    compact
+                    noData
+                    label="OEE"
+                    icon={<Gauge size={13} color="#8b5cf6" strokeWidth={1.75} />}
+                    value="—"
+                    unit="%"
+                    subLabel="target ≥ 65%"
+                    secondary={{ value: "—", unit: "%", label: "OPE (OEE × 0.8)" }}
+                    footerLeft="CT_MANUF_KEMAS not connected yet"
+                    footerRight="Target ≥ 65%"
+                  />
+                </KpiHighlightTarget>
 
                 {/* Yield Loss — no data yet (CT_MANUF_KEMAS not connected) */}
-                <RegularKPICard
-                  compact
-                  noData
-                  inverse
-                  label="Yield Loss"
-                  icon={<Droplets size={13} color="#f59e0b" strokeWidth={1.75} />}
-                  value="—"
-                  unit="%"
-                  subLabel="target ≤ 3%"
-                  secondary={{ value: "—", unit: "%", label: "Bulk loss · Pack loss" }}
-                  footerLeft="CT_MANUF_KEMAS not connected yet"
-                  footerRight="Target ≤ 3%"
-                />
+                <KpiHighlightTarget id="yield">
+                  <RegularKPICard
+                    compact
+                    noData
+                    inverse
+                    label="Yield Loss"
+                    icon={<Droplets size={13} color="#f59e0b" strokeWidth={1.75} />}
+                    value="—"
+                    unit="%"
+                    subLabel="target ≤ 3%"
+                    secondary={{ value: "—", unit: "%", label: "Bulk loss · Pack loss" }}
+                    footerLeft="CT_MANUF_KEMAS not connected yet"
+                    footerRight="Target ≤ 3%"
+                  />
+                </KpiHighlightTarget>
 
                 {/* Energy — no data yet */}
-                <RegularKPICard
-                  compact
-                  noData
-                  inverse
-                  label="Energy"
-                  icon={<Zap size={13} color="#eab308" strokeWidth={1.75} />}
-                  value="—"
-                  unit="kWh/unit"
-                  subLabel="target not set"
-                  secondary={{ value: "—", unit: "kWh/unit", label: "Prior period" }}
-                  footerLeft="No source table yet"
-                />
+                <KpiHighlightTarget id="energy">
+                  <RegularKPICard
+                    compact
+                    noData
+                    inverse
+                    label="Energy"
+                    icon={<Zap size={13} color="#eab308" strokeWidth={1.75} />}
+                    value="—"
+                    unit="kWh/unit"
+                    subLabel="target not set"
+                    secondary={{ value: "—", unit: "kWh/unit", label: "Prior period" }}
+                    footerLeft="No source table yet"
+                  />
+                </KpiHighlightTarget>
               </>
             )}
           </div>

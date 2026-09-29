@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { GROQ_MODELS, CHAT_DEFAULT_MODEL_ID, getModelConfig } from "@/lib/ai-models";
 import type { KPISnapshot } from "@/lib/diagnostic-prompt";
 import type { KPIAlert } from "@/lib/alerts";
+import { highlightKpi, isKpiHighlightId, KPI_TRIGGER_ATTR } from "@/components/ui/KpiHighlight";
 
 interface Message {
   role: "user" | "assistant";
@@ -50,9 +51,12 @@ function formatInline(text: string, onKpiClick?: (kpi: string) => void): React.R
         if (kpiMatch) {
           const kpiId = kpiMatch[1];
           const label = KPI_CHIP_LABELS[kpiId] ?? kpiId;
+          // No highlight target for this KPI → drop the tag instead of showing a dead chip
+          if (!isKpiHighlightId(kpiId)) return null;
           return (
             <button
               key={i}
+              {...KPI_TRIGGER_ATTR}
               onClick={() => onKpiClick?.(kpiId)}
               title={`Highlight ${label} on dashboard`}
               className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-1.5 py-0.5 rounded-md font-semibold transition-colors ml-0.5 align-middle cursor-pointer"
@@ -170,7 +174,7 @@ export function FloatingChat({ filters, kpiSnapshot, alerts }: FloatingChatProps
   }, [messages, loading, typed]);
 
   function handleKpiHighlight(kpi: string) {
-    window.dispatchEvent(new CustomEvent("kpi-highlight", { detail: { kpi } }));
+    highlightKpi(kpi);
   }
 
   // RAF-based character drip: reveals ~8 chars per frame (~480/s at 60fps)

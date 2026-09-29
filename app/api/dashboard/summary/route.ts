@@ -19,6 +19,8 @@ Strict rules:
 - Sentence 2: supporting context or trend
 - Sentence 3: implication or one recommended action
 - Professional English, no bullet points, no headings
+- Right after each KPI value you cite, add its tag with no other text in between: [kpi:leadtime] for lead time, [kpi:output] for output / released FG / bulk, [kpi:productivity] for productivity. Tag only actual values, not targets or percentage changes.
+  Example: "Gross lead time averaged 16.98 days [kpi:leadtime], above the 13-day target."
 
 Target: Lead Time Gross ≤ 13 days.
 Analyze only these metrics: Lead Time, Output and Productivity. Do not mention OEE, OPE, yield/bulk/pack loss, RFT or energy.

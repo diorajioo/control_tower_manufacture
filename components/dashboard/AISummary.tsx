@@ -2,22 +2,50 @@
 
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, AlertCircle } from "lucide-react";
+import { highlightKpi, isKpiHighlightId, KPI_TRIGGER_ATTR } from "@/components/ui/KpiHighlight";
 
-// KPI keyword → look for the next number within 50 chars and make it clickable
+// KPI keyword → look for the next number within 50 chars and make it clickable.
+// Only IDs that have a highlight target (KPI_HIGHLIGHT_IDS) become clickable.
 const KPI_KEYWORDS: { pattern: RegExp; id: string }[] = [
-  { pattern: /lead[\s-]?time/gi,                     id: "leadtime"     },
-  { pattern: /bulk[\s-]?loss|pack[\s-]?loss/gi,      id: "yield"        },
-  { pattern: /right[\s-]?first[\s-]?time|\bRFT\b/g, id: "rft"          },
-  { pattern: /\bOEE\b/g,                             id: "oee"          },
-  { pattern: /\bOPE\b/g,                             id: "ope"          },
-  { pattern: /produktivitas|\bproductivity\b/gi,     id: "productivity" },
-  { pattern: /\boutput\b/gi,                         id: "output"       },
-];
-const NUM_RE = /\d+(?:[.,]\d+)?\s*(?:%|hari|days|kg|pcs)?/;
+  { pattern: /lead[\s-]?time/gi,                              id: "leadtime"     },
+  { pattern: /produktivitas|\bproductivity\b/gi,              id: "productivity" },
+  { pattern: /\boutput\b|released\s+FG|finished\s+goods?/gi, id: "output"       },
+].filter((k) => isKpiHighlightId(k.id));
+// Number with optional thousands separators ("37,421,683") and unit
+const NUM = String.raw`(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(?:%|days?|hours?|hari|kg|pcs\/manhour|pcs\/mh|pieces per manhour|pcs|pieces)?`;
+const NUM_RE     = new RegExp(NUM);
+const NUM_END_RE = new RegExp(`${NUM}$`);
+// "[kpi:ID]" tag written by the model right after a number (see SYSTEM_PROMPT in /api/dashboard/summary)
+const TAG_RE     = /\s?\[kpi:([a-z]+)\]/g;
 
 interface Segment { text: string; kpi?: string }
 
+/** Tagged summary: the number right before each [kpi:ID] becomes clickable; tags are removed. */
+function parseTagged(text: string): Segment[] {
+  const segs: Segment[] = [];
+  let pos = 0;
+  let m: RegExpExecArray | null;
+  TAG_RE.lastIndex = 0;
+  while ((m = TAG_RE.exec(text)) !== null) {
+    const before = text.slice(pos, m.index);
+    const num = NUM_END_RE.exec(before);
+    if (num && isKpiHighlightId(m[1])) {
+      if (num.index > 0) segs.push({ text: before.slice(0, num.index) });
+      segs.push({ text: num[0], kpi: m[1] });
+    } else if (before) {
+      segs.push({ text: before });
+    }
+    pos = m.index + m[0].length;
+  }
+  // Hide a tag that is still streaming in ("… 16.98 days [kpi:lea")
+  const rest = text.slice(pos).replace(/\s?\[[a-z:]*$/, "");
+  if (rest) segs.push({ text: rest });
+  return segs;
+}
+
 function parseSummary(text: string): Segment[] {
+  if (text.includes("[kpi:")) return parseTagged(text);
+  // Fallback for untagged text: keyword → first number within 50 chars
   const hits: { start: number; end: number; id: string; raw: string }[] = [];
   const seen = new Set<string>();
 
@@ -61,10 +89,8 @@ function SummaryText({ text }: { text: string }) {
         seg.kpi ? (
           <button
             key={i}
-            onClick={(e) => {
-              e.stopPropagation(); // prevent main onClick from clearing highlight
-              window.dispatchEvent(new CustomEvent("kpi-highlight", { detail: { kpi: seg.kpi } }));
-            }}
+            {...KPI_TRIGGER_ATTR}
+            onClick={() => highlightKpi(seg.kpi!)}
             title={`Highlight on dashboard`}
             className="font-bold text-[#215AA8] underline decoration-[#A6BDDC] underline-offset-2 hover:decoration-[#215AA8] transition-colors cursor-pointer"
           >
@@ -89,11 +115,11 @@ interface AISummaryProps {
   ready: boolean;
 }
 
-// "_en" suffix: invalidates summaries cached before the UI switched to English.
-const CACHE_TEXT = "ai_summary_text_en";
-const CACHE_TIME = "ai_summary_time_en";
+// "_v3": invalidates summaries cached before the model started writing [kpi:ID] tags.
+const CACHE_TEXT = "ai_summary_text_v3";
+const CACHE_TIME = "ai_summary_time_v3";
 // Filters the cached summary was generated for — a different plant/period regenerates it.
-const CACHE_KEY  = "ai_summary_key_en";
+const CACHE_KEY  = "ai_summary_key_v3";
 const TTL_MS    = 5 * 60 * 60 * 1000; // 5 hours
 
 export function AISummary({ kpi, filters, ready }: AISummaryProps) {

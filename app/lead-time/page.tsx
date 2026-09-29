@@ -18,6 +18,7 @@ import { LeadTimeTrendChart } from "@/components/dashboard/LeadTimeTrendChart";
 import { LeadTimeStageChart } from "@/components/dashboard/LeadTimeStageChart";
 import { LeadTimeTopSkuChart } from "@/components/dashboard/LeadTimeTopSkuChart";
 import { LineTooltip } from "@/components/charts/StandardLine";
+import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -937,65 +938,75 @@ function StrategicView({ filters, refreshKey }: { filters: LeadTimeFilters; refr
       {/* 5 KPI cards — CT_MANUF_LEADTIME via /api/dashboard/kpi.
           VA / NNVA / Waste / Potential Saving use LeadTimeCategoryCard — fixed color, no status rules; sparkline = monthly avg. */}
       <div className="grid grid-cols-5 gap-3.5 px-5 mb-4">
-        <LiteKPICard
-          label="Lead Time"
-          icon={<Clock size={13} color="#d97706" strokeWidth={1.75} />}
-          value={lt ? lt.grossDays.toFixed(1) : "—"}
-          unit="days"
-          target={`≤ ${LT_CARD_TARGET} days`}
-          attainment={lt && lt.grossDays > 0 ? (LT_CARD_TARGET / lt.grossDays) * 100 : 0}
-          trend={lt?.grossTrend ?? null}
-          series={lt?.sparkline ?? []}
-          noData={!lt}
-        />
-        <LeadTimeCategoryCard
-          category="va"
-          label="Value-Added"
-          value={comp ? comp.vaDays.toFixed(1) : "—"}
-          unit="days"
-          context={`${share(comp?.vaDays)}% of total`}
-          description="Occurs in Weighing, Processing, and Filling & Packing"
-          info="Average per PO: SUM(NET_LEADTIME) of activities with ACTIVITY_CATEGORY = VA"
-          trend={comp?.vaTrend ?? null}
-          series={comp?.vaMonthly ?? []}
-          noData={!comp}
-        />
-        <LeadTimeCategoryCard
-          category="nnva"
-          label="Necessary Non-Value-Added"
-          value={comp ? comp.nnvaDays.toFixed(1) : "—"}
-          unit="days"
-          context={`${share(comp?.nnvaDays)}% of total`}
-          description="Occurs in PO, cleaning, unboxing, and NDC receiving"
-          info="Average per PO: SUM(NET_LEADTIME) of activities with ACTIVITY_CATEGORY = NNVA"
-          trend={comp?.nnvaTrend ?? null}
-          series={comp?.nnvaMonthly ?? []}
-          noData={!comp}
-        />
-        <LeadTimeCategoryCard
-          category="waste"
-          label="Waste"
-          value={comp ? comp.unvaDays.toFixed(1) : "—"}
-          unit="days"
-          context={`${share(comp?.unvaDays)}% of total`}
-          description="Made up of WIP and waiting time"
-          info="Average per PO: SUM(NET_LEADTIME) of activities with ACTIVITY_CATEGORY = UNVA"
-          trend={comp?.unvaTrend ?? null}
-          series={comp?.unvaMonthly ?? []}
-          noData={!comp}
-        />
-        <LeadTimeCategoryCard
-          category="saving"
-          label="Potential Saving"
-          value={comp ? comp.wipDays.toFixed(1) : "—"}
-          unit="days"
-          context={`${comp && comp.unvaDays > 0 ? Math.round((comp.wipDays / comp.unvaDays) * 100) : 0}% of Waste is WIP`}
-          description="Assuming all WIP can be eliminated"
-          info="Average per PO: SUM(NET_LEADTIME) of UNVA activities with ACTIVITY_TYPE = WIP"
-          trend={comp?.wipTrend ?? null}
-          series={comp?.wipMonthly ?? []}
-          noData={!comp}
-        />
+        <KpiHighlightTarget id="leadtime">
+          <LiteKPICard
+            label="Lead Time"
+            icon={<Clock size={13} color="#d97706" strokeWidth={1.75} />}
+            value={lt ? lt.grossDays.toFixed(1) : "—"}
+            unit="days"
+            target={`≤ ${LT_CARD_TARGET} days`}
+            attainment={lt && lt.grossDays > 0 ? (LT_CARD_TARGET / lt.grossDays) * 100 : 0}
+            trend={lt?.grossTrend ?? null}
+            series={lt?.sparkline ?? []}
+            noData={!lt}
+          />
+        </KpiHighlightTarget>
+        <KpiHighlightTarget id="va">
+          <LeadTimeCategoryCard
+            category="va"
+            label="Value-Added"
+            value={comp ? comp.vaDays.toFixed(1) : "—"}
+            unit="days"
+            context={`${share(comp?.vaDays)}% of total`}
+            description="Occurs in Weighing, Processing, and Filling & Packing"
+            info="Average per PO: SUM(NET_LEADTIME) of activities with ACTIVITY_CATEGORY = VA"
+            trend={comp?.vaTrend ?? null}
+            series={comp?.vaMonthly ?? []}
+            noData={!comp}
+          />
+        </KpiHighlightTarget>
+        <KpiHighlightTarget id="nnva">
+          <LeadTimeCategoryCard
+            category="nnva"
+            label="Necessary Non-Value-Added"
+            value={comp ? comp.nnvaDays.toFixed(1) : "—"}
+            unit="days"
+            context={`${share(comp?.nnvaDays)}% of total`}
+            description="Occurs in PO, cleaning, unboxing, and NDC receiving"
+            info="Average per PO: SUM(NET_LEADTIME) of activities with ACTIVITY_CATEGORY = NNVA"
+            trend={comp?.nnvaTrend ?? null}
+            series={comp?.nnvaMonthly ?? []}
+            noData={!comp}
+          />
+        </KpiHighlightTarget>
+        <KpiHighlightTarget id="waste">
+          <LeadTimeCategoryCard
+            category="waste"
+            label="Waste"
+            value={comp ? comp.unvaDays.toFixed(1) : "—"}
+            unit="days"
+            context={`${share(comp?.unvaDays)}% of total`}
+            description="Made up of WIP and waiting time"
+            info="Average per PO: SUM(NET_LEADTIME) of activities with ACTIVITY_CATEGORY = UNVA"
+            trend={comp?.unvaTrend ?? null}
+            series={comp?.unvaMonthly ?? []}
+            noData={!comp}
+          />
+        </KpiHighlightTarget>
+        <KpiHighlightTarget id="saving">
+          <LeadTimeCategoryCard
+            category="saving"
+            label="Potential Saving"
+            value={comp ? comp.wipDays.toFixed(1) : "—"}
+            unit="days"
+            context={`${comp && comp.unvaDays > 0 ? Math.round((comp.wipDays / comp.unvaDays) * 100) : 0}% of Waste is WIP`}
+            description="Assuming all WIP can be eliminated"
+            info="Average per PO: SUM(NET_LEADTIME) of UNVA activities with ACTIVITY_TYPE = WIP"
+            trend={comp?.wipTrend ?? null}
+            series={comp?.wipMonthly ?? []}
+            noData={!comp}
+          />
+        </KpiHighlightTarget>
       </div>
 
       {/* Lead time trend (overall + per POSITION) and SKU scatter */}

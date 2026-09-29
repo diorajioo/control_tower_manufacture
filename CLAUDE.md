@@ -65,6 +65,7 @@ For implementation details not covered by docs: read the source directly.
   - Legend (`LineLegend`): below the plot, centered, 9.5px, dot · name · last value, hover isolates.
   - SPC UCL/Mean/LCL only where the calculation exists (Overview TrendChart) — hairline markers, no shaded band.
 - **Tooltips: `LineTooltip` is the standard for every chart** (line, bar, scatter) — translucent slate card (`TOOLTIP_COLORS` in `StandardLine.tsx`), rows never wrap, optional `subtitle` / `footer` / `nowrap`. Never define a local tooltip.
+- **KPI highlight: `components/ui/KpiHighlight.tsx`** — rule: clicking one metric (AI Summary number or chat `[kpi:ID]` chip) gives that card a thin translucent blue outline + soft lift and **drops every other KPI card to 35% opacity**; same click again, a click elsewhere or Esc clears it. Senders call `highlightKpi(id)` and spread `KPI_TRIGGER_ATTR`. **Every** KPI card sits inside `<KpiHighlightTarget id>` — data cards use `leadtime | output | productivity` (`KPI_HIGHLIGHT_IDS`, the only clickable IDs; AI Summary gets them from `[kpi:ID]` tags the model writes), no-data cards (OEE, Yield, Energy, VA/NNVA/Waste/Saving) use their own ID so they dim too. When you add, replace or move a KPI card, keep the wrapper; when a KPI gets data, add its ID to `KPI_HIGHLIGHT_IDS`. In dev a console warning shows IDs with no target.
 - **Toggles: `components/ui/SegmentedToggle.tsx`** is the standard (same style as the Overview KPI card toggles). Chart card titles: 11.5px bold uppercase `text-slate-500`.
 - Full design system spec: `docs/UI_UX.md`.
 

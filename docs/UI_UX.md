@@ -257,7 +257,7 @@ Monitor mode (`/monitor`) is a fullscreen page with a dark bottom navigation bar
 | Filter change | Immediate re-fetch, KPI values animate count-up |
 | Data refresh | Flash `#215AA8` overlay 0.9s, values re-animate |
 | Alert dismiss | Row slides out, undo toast appears for 5s |
-| KPI number in AI Summary | `kpi-highlight` event, matching card briefly highlights |
+| KPI number in AI Summary / `[kpi:ID]` chip in chat | `highlightKpi(id)` → that card gets a thin outline (`1px rgba(33,90,168,.35)`) + soft shadow and scrolls into view; all other KPI cards fade to 35% opacity (200ms ease-out). Same click again, click elsewhere or Esc clears (`components/ui/KpiHighlight.tsx`) |
 | Monitor button | `router.push('/monitor?page=...')` (fullscreen page) |
 | Escape in fullscreen | `fullscreenchange` event → `router.back()` |
 | 15min idle | Auto-logout → `/login` |

@@ -49,31 +49,35 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
   const [hovered, setHovered] = useState<string | null>(null);
   const activeXRef = useRef<string | null>(null);
   const [grain, setGrain] = useState<TrendGrain>("week");
-  const [monthly, setMonthly] = useState<Trend | null>(null);
+  // Monthly data cached per filter set, so switching back and forth does not re-fetch
+  const [monthly, setMonthly] = useState<{ key: string; trend: Trend } | null>(null);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
   const filterKey = filters ? new URLSearchParams(filters).toString() : "";
+  const monthlyReady = monthly?.key === filterKey ? monthly.trend : null;
 
   useEffect(() => {
-    if (grain !== "month" || !filters) return;
+    if (grain !== "month" || !filters || monthlyReady) return;
     let cancelled = false;
-    setMonthly(null);
     setMonthlyLoading(true);
     fetch(`/api/lead-time/trend?${new URLSearchParams({ ...filters, grain: "month" })}`)
       .then((r) => r.json())
-      .then((res) => { if (!cancelled && res?.total) setMonthly(res); })
-      .catch(() => { /* empty state */ })
+      .then((res) => { if (!cancelled && res?.total) setMonthly({ key: filterKey, trend: res }); })
+      .catch(() => { /* keeps the previous lines */ })
       .finally(() => { if (!cancelled) setMonthlyLoading(false); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grain, filterKey]);
+  }, [grain, filterKey, monthlyReady]);
 
-  const trend: Trend | null = grain === "month" ? monthly : data?.trend ?? null;
+  // While monthly data loads, keep drawing the weekly lines so Nivo animates into the new shape
+  // (same as Monthly → Weekly) instead of unmounting the chart.
+  const showMonthly = grain === "month" && monthlyReady !== null;
+  const trend: Trend | null = showMonthly ? monthlyReady : data?.trend ?? null;
   const isLoading = grain === "month" ? monthlyLoading : loading;
 
   const series = useMemo((): StandardSeries[] => {
     if (!trend) return [];
     const years = new Set(trend.total.map((r) => r.week.slice(0, 4)));
-    const xLabel = (d: string) => (grain === "month" ? monthLabel(d, years.size > 1) : isoWeekLabel(d));
+    const xLabel = (d: string) => (showMonthly ? monthLabel(d, years.size > 1) : isoWeekLabel(d));
     const byPos = new Map<string, { x: string; y: number }[]>();
     for (const r of trend.positions) {
       if (!byPos.has(r.position)) byPos.set(r.position, []);
@@ -88,7 +92,7 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
       // id = English display name (legend/tooltip); color still keyed on the POSITION code
       ...positions.map((p) => ({ id: stageLabel(p), color: positionColor(p), data: byPos.get(p)! })),
     ];
-  }, [trend, grain]);
+  }, [trend, showMonthly]);
 
   const ActivePointsLayer = useMemo(() => makeActivePointsLayer(series, () => activeXRef.current), [series]);
   const ActiveLineLayer   = useMemo(() => makeActiveLineLayer(series, hovered), [series, hovered]);
@@ -112,7 +116,7 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
       <ResponsiveLine
         {...LINE_DEFAULTS}
         data={series}
-        axisBottom={{ tickSize: 0, tickPadding: 8, tickValues: grain === "month" ? xs : evenWeekTicks(xs) }}
+        axisBottom={{ tickSize: 0, tickPadding: 8, tickValues: showMonthly ? xs : evenWeekTicks(xs) }}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onMouseMove={(point: any) => { activeXRef.current = String(point.data.x); }}
         onMouseLeave={() => { activeXRef.current = null; }}
