@@ -62,15 +62,13 @@ export function LeadTimeCategoryCard({
       style={{
         height: "100%",
         background: "white",
-        border: "1px solid #e9eaee",
+        border: "1px solid #EBEBEB",
         borderRadius: 8,
         display: "flex",
         overflow: "hidden",
         fontFamily: "Lato, sans-serif",
       }}
     >
-      {/* Left accent bar */}
-      <div style={{ width: 6, background: color, flexShrink: 0 }} />
 
       <div style={{ flex: 1, padding: "14px 16px 10px", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
 
@@ -122,8 +120,7 @@ export function LeadTimeCategoryCard({
                 data={nivoData}
                 margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
                 curve="linear"
-                enableArea
-                areaOpacity={0.08}
+                enableArea={false}
                 colors={[color]}
                 lineWidth={1.4}
                 enablePoints={false}

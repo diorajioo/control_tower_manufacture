@@ -9,3 +9,6 @@ data/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# macOS
+.DS_Store

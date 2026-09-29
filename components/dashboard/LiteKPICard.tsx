@@ -2,6 +2,7 @@
 
 import React from "react";
 import { ResponsiveLine } from "@nivo/line";
+import { StatusDot } from "@/components/ui/StatusDot";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tone system
@@ -81,7 +82,6 @@ export function LiteKPICard({
     ? [{ id: label, data: series.map((y, x) => ({ x, y })) }]
     : [];
 
-  const accentColor = noData ? "#d0d5dd" : tone.color;
 
   return (
     <div
@@ -89,15 +89,13 @@ export function LiteKPICard({
       style={{
         maxWidth: "100%",
         background: "white",
-        border: "1px solid #e9eaee",
+        border: "1px solid #EBEBEB",
         borderRadius: 8,
         display: "flex",
         overflow: "hidden",
         fontFamily: "Lato, sans-serif",
       }}
     >
-      {/* Left accent bar */}
-      <div style={{ width: 6, background: accentColor, flexShrink: 0 }} />
 
       {/* Content */}
       <div style={{
@@ -116,12 +114,11 @@ export function LiteKPICard({
           gap: 5,
           overflow: "hidden",
         }}>
-          {icon && <span style={{ flexShrink: 0, display: "flex" }}>{icon}</span>}
           <span style={{
-            fontSize: 10,
-            fontWeight: 800,
-            letterSpacing: "0.1em",
-            color: "#8a90a0",
+            fontSize: 11.5,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+            color: "#64748b",
             textTransform: "uppercase",
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -182,19 +179,7 @@ export function LiteKPICard({
 
             {/* 4. Status pill */}
             <div>
-              <span style={{
-                display: "inline-flex", alignItems: "center", gap: 4,
-                border: `1px solid ${tone.border}`,
-                background: tone.bg,
-                color: tone.color,
-                borderRadius: 4,
-                padding: "2px 7px",
-                fontSize: 10,
-                fontWeight: 700,
-                whiteSpace: "nowrap",
-              }}>
-                {tone.icon} {tone.label}
-              </span>
+              <StatusDot color={tone.color} label={tone.label} />
             </div>
 
             {/* 5. Attainment bar */}
@@ -218,9 +203,8 @@ export function LiteKPICard({
                   data={nivoData}
                   margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
                   curve="linear"
-                  enableArea
-                  areaOpacity={0.08}
-                  colors={[tone.color]}
+                  enableArea={false}
+                  colors={["#215AA8"]}
                   lineWidth={1.4}
                   enablePoints={false}
                   enableGridX={false}

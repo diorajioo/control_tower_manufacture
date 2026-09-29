@@ -46,7 +46,7 @@ Two strict color domains — never mix:
 | Critical/Error | `#FFEDEF` | `#E6001C` | `#8A0011` |
 | Info | `#CCDDF5` | `#0056CC` | `#00347A` |
 
-**AI gradient (only sanctioned gradient):** `linear-gradient(90deg, #725DA3, #864A9C)` — AILabel chip only.
+**No gradients in product UI.** The old AI gradient chip was removed (2026-09-29); AI labels are plain `#215AA8` bold uppercase text.
 
 **Lead Time domain colors (fixed):**
 - VA (Value-Adding): `#215AA8`
@@ -95,7 +95,6 @@ Plant 4 → #10b981   Plant 5 → #8b5cf6   Plant 6 → #f97316
 | Content padding | 20px | `p-5` | Page content area |
 | KPI grid gap | 14px | `gap-[14px]` | All KPI grids |
 | Section gap | 20px | `mb-5` | Between sections |
-| Accent bar | 5px wide | `w-[5px]` | Left edge of KPI cards |
 
 ---
 
@@ -116,7 +115,7 @@ Plant 4 → #10b981   Plant 5 → #8b5cf6   Plant 6 → #f97316
 
 ### Sidebar (`components/dashboard/Sidebar.tsx`)
 - `w-56` (224px), white, `border-r border-slate-200`
-- Logo: `public/paragon-corp.98d5977b.png`
+- Logo: `public/paragon-corp-white.e705509b.png` (white) on a 52px Paragon Blue block, same height as the Header top bar so both read as one blue strip
 - Labels in **English** (like all UI copy)
 - Groups (divider between each): Overview · Alert Center | Lead Time · Output · Productivity · Yield · Energy · OEE · Root Cause Analysis | Reports · AI Fusion (BETA, purple)
 - Footer: Settings · User Management · Guide · Sign Out
@@ -126,8 +125,9 @@ Plant 4 → #10b981   Plant 5 → #8b5cf6   Plant 6 → #f97316
 - Inactivity logout: 15-minute idle timer
 
 ### Header (`components/dashboard/Header.tsx`)
-- Fixed 52px, `bg-[#215AA8] border-b border-[#1A4886]`
-- Left: brand text "MANUFACTURING CONTROL TOWER" (`text-[13px] font-medium text-white/50 uppercase tracking-[0.07em]`)
+- Top bar: fixed 52px, `bg-[#215AA8]`; controls use white-on-blue (`text-white/85`, `border-white/25`, `hover:bg-white/10`)
+- Left: brand text "MANUFACTURING CONTROL TOWER" (`text-[13px] font-medium text-white/70 uppercase tracking-[0.07em]`)
+- Alert dropdown severity = colored dot (red / amber / blue), no emoji
 - Right: clock · sync status · notification bell · Teams send button · avatar
 - Row 2 (filter row): view toggle (if `views.length >= 2`) · period pills · date picker · plant dropdown · data level pills · monitor button
 
@@ -136,6 +136,15 @@ The view toggle only renders when `views` prop has 2+ items. On `/dashboard`, St
 ---
 
 ## Component Patterns
+
+### Minimal KPI card style (2026-09-29)
+Applies to `RegularKPICard`, `LeadTimeKPICard`, `OutputKPICard`, `LiteKPICard`, `LeadTimeCategoryCard`:
+- Shell: white, `1px solid #EBEBEB`, radius 8, **no left accent bar**
+- Label: 11.5px bold uppercase `#64748b`, letter-spacing 0.06em, **no icon** (the info icon with a definition tooltip stays)
+- Status: `StatusDot` (`components/ui/StatusDot.tsx`) — 6px dot + bold label in the tone color; no filled pill
+- Sparkline: line only (`enableArea={false}`), Paragon Blue `#215AA8` (category cards keep their fixed VA/NNVA/Waste colors)
+- Secondary trend: colored text, no pill background
+- Footer: white with a hairline top border (no gray bar)
 
 ### KPI Card (`components/dashboard/KPICard.tsx`)
 ```
@@ -163,7 +172,7 @@ The view toggle only renders when `views` prop has 2+ items. On `/dashboard`, St
 
 ### AISummary (`components/dashboard/AISummary.tsx`)
 - White card (`bg-white rounded-lg border border-[#EBEBEB]`)
-- AILabel chip: `linear-gradient(90deg,#725DA3,#864A9C)` pill — "✦ AI Summary"
+- 3px Paragon Blue left border; label "AI SUMMARY" as `10.5px` bold uppercase `#215AA8` text (no chip, no shadow)
 - Body text: `13px text-[#2A3D4A] leading-relaxed`
 - Clickable KPI numbers: `text-[#215AA8]` with underline
 
@@ -272,7 +281,7 @@ Monitor mode (`/monitor`) is a fullscreen page with a dark bottom navigation bar
 | Use `border-slate-200` on dashboard cards | Use `border-[#EBEBEB]` |
 | Use `#1E4076` (old navy) as shell color | Use `#215AA8` (Paragon Blue) |
 | Use `#215AA8` to signal KPI health | Use green/amber/red |
-| Use gradients in product UI | Only use gradient on AILabel chip |
+| Use gradients in product UI | Plain colors only |
 | Shuffle plant color order | Plant colors are positional and fixed |
 | Put white text on warning yellow | Use `#342900` dark text on `#FFFBE4` |
 | Use `border-gray-100` or `border-gray-200` | Use `border-[#EBEBEB]` |

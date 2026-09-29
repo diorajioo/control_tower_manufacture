@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { ResponsiveLine } from "@nivo/line";
+import { StatusDot } from "@/components/ui/StatusDot";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Regular KPI card — generic version of the OutputKPICard / LeadTimeKPICard style
@@ -89,8 +90,8 @@ export function RegularKPICard({
     <div
       style={{
         background: "white",
-        border: "1px solid #e9eaee",
-        borderRadius: 10,
+        border: "1px solid #EBEBEB",
+        borderRadius: 8,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -100,8 +101,6 @@ export function RegularKPICard({
       }}
     >
       <div style={{ display: "flex", flex: 1 }}>
-        {/* Left accent bar */}
-        <div style={{ width: 6, background: noData ? "#d0d5dd" : tone.color, flexShrink: 0 }} />
 
         <div style={{ flex: 1, padding: `${z(14)}px ${z(16)}px 0`, display: "flex", flexDirection: "column", minWidth: 0 }}>
           {/* ── Header row ── */}
@@ -109,8 +108,7 @@ export function RegularKPICard({
             {/* LEFT column */}
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: z(8), minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: z(6) }}>
-                <span style={{ display: "flex", flexShrink: 0 }}>{icon}</span>
-                <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.11em", color: "#8a90a0", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.06em", color: "#64748b", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {label}
                 </span>
               </div>
@@ -130,9 +128,7 @@ export function RegularKPICard({
               <div style={{ fontSize: 11, color: "#98a2b3" }}>{subLabel}</div>
 
               <div style={{ display: "flex", alignItems: "center", gap: z(8) }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, background: tone.bg, border: `1px solid ${tone.border}`, color: tone.color, borderRadius: 5, padding: `${z(2)}px ${z(8)}px` }}>
-                  {tone.icon} {statusLabel}
-                </span>
+                <StatusDot color={tone.color} label={statusLabel} />
               </div>
             </div>
 
@@ -145,9 +141,8 @@ export function RegularKPICard({
                     margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
                     xScale={{ type: "point" }}
                     yScale={{ type: "linear", min: "auto", max: "auto" }}
-                    enableArea={true}
-                    areaOpacity={0.07}
-                    colors={[tone.color]}
+                    enableArea={false}
+                    colors={["#215AA8"]}
                     lineWidth={1.6}
                     enablePoints={false}
                     enableGridX={false}
@@ -182,7 +177,7 @@ export function RegularKPICard({
                 <div style={{ fontSize: 10.5, color: "#a3a8b5" }}>{secondary.label}</div>
               </div>
               {!noData && secondaryTone && (
-                <div style={{ fontSize: 11, fontWeight: 700, background: secondaryTone.bg, border: `1px solid ${secondaryTone.border}`, color: secondaryTone.color, borderRadius: 5, padding: `${z(3)}px ${z(9)}px`, fontVariantNumeric: "tabular-nums" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: secondaryTone.color, borderRadius: 5, padding: `${z(3)}px ${z(9)}px`, fontVariantNumeric: "tabular-nums" }}>
                   {trendArrow(secondary.trend ?? null)} {fmtTrend(secondary.trend ?? null)}
                 </div>
               )}
@@ -192,7 +187,7 @@ export function RegularKPICard({
       </div>
 
       {/* Footer bar */}
-      <div style={{ background: "#f6f7f9", borderTop: "1px solid #eceef2", display: "flex", alignItems: "center", justifyContent: "space-between", gap: z(8), padding: `${z(7)}px ${z(16)}px ${z(7)}px ${z(22)}px`, borderRadius: "0 0 9px 9px" }}>
+      <div style={{ background: "white", borderTop: "1px solid #eceef2", display: "flex", alignItems: "center", justifyContent: "space-between", gap: z(8), padding: `${z(7)}px ${z(16)}px ${z(7)}px ${z(16)}px`, borderRadius: "0 0 7px 7px" }}>
         <span style={{ fontSize: 11, color: "#667085", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{footerLeft}</span>
         {footerRight && (
           <span style={{ fontSize: 10, color: "#a3a8b5", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{footerRight}</span>

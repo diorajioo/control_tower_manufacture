@@ -158,14 +158,10 @@ export function Sidebar() {
   return (
     <aside className="w-56 h-screen bg-white flex flex-col shrink-0 border-r border-slate-200 overflow-hidden">
       {/* Logo */}
-      {/* Height = full Header (top bar + filter row, published by Header as --app-header-h) so the
-          nav starts level with the page content. No bottom border. */}
-      <div
-        className="shrink-0 px-4 flex items-center"
-        style={{ height: "var(--app-header-h, 101px)" }}
-      >
+      {/* Same height and color as the Header top bar, so logo + top bar read as one Paragon Blue strip. */}
+      <div className="shrink-0 px-4 h-[52px] flex items-center bg-[#215AA8]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/paragon-corp.98d5977b.png" alt="Paragon Corp" className="w-full h-auto" />
+        <img src="/paragon-corp-white.e705509b.png" alt="Paragon Corp" className="h-7 w-auto" />
       </div>
 
       <nav className="px-2.5 pt-3 flex flex-col flex-1 overflow-y-auto">

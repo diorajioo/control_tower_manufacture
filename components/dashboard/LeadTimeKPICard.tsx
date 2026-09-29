@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Clock } from "lucide-react";
 import { ResponsiveLine } from "@nivo/line";
+import { StatusDot } from "@/components/ui/StatusDot";
 
 // ---------------------------------------------------------------------------
 // Status tone — lead time: lower is better, target = 13 days
@@ -98,7 +98,6 @@ export function LeadTimeKPICard({
   const secondaryLabel = type === "gross" ? "Nett lead time this period" : "Gross lead time this period";
 
   const tone      = TONES[toneFromDays(primaryDays)];
-  const accentColor = hasAlert ? "#ef4444" : tone.color;
 
   const delta    = primaryDays - TARGET;
   const deltaPct = TARGET > 0 ? (delta / TARGET) * 100 : 0;
@@ -118,8 +117,8 @@ export function LeadTimeKPICard({
     <div
       style={{
         background: "white",
-        border: hasAlert ? "1px solid #fbd5d1" : "1px solid #e9eaee",
-        borderRadius: 10,
+        border: hasAlert ? "1px solid #fbd5d1" : "1px solid #EBEBEB",
+        borderRadius: 8,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -130,8 +129,6 @@ export function LeadTimeKPICard({
     >
       {/* Inner layout: accent bar + main content */}
       <div style={{ display: "flex", flex: 1 }}>
-        {/* Left accent bar */}
-        <div style={{ width: 6, background: accentColor, flexShrink: 0 }} />
 
         {/* Main content */}
         <div
@@ -150,13 +147,12 @@ export function LeadTimeKPICard({
 
               {/* Eyebrow */}
               <div style={{ display: "flex", alignItems: "center", gap: z(6) }}>
-                <Clock size={13} color="#3b82f6" strokeWidth={1.75} style={{ flexShrink: 0 }} />
                 <span
                   style={{
-                    fontSize: 10.5,
-                    fontWeight: 800,
-                    letterSpacing: "0.11em",
-                    color: "#8a90a0",
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    color: "#64748b",
                     fontFamily: "Lato, sans-serif",
                   }}
                 >
@@ -209,20 +205,7 @@ export function LeadTimeKPICard({
 
               {/* Status pill */}
               <div style={{ display: "flex", alignItems: "center", gap: z(8) }}>
-                <span
-                  style={{
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    background: tone.bg,
-                    border: `1px solid ${tone.border}`,
-                    color: tone.color,
-                    borderRadius: 5,
-                    padding: `${z(2)}px ${z(8)}px`,
-                    fontFamily: "Lato, sans-serif",
-                  }}
-                >
-                  {tone.icon} {tone.label}
-                </span>
+                <StatusDot color={tone.color} label={tone.label} />
               </div>
             </div>
 
@@ -296,9 +279,8 @@ export function LeadTimeKPICard({
                     margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
                     xScale={{ type: "point" }}
                     yScale={{ type: "linear", min: "auto", max: "auto" }}
-                    enableArea={true}
-                    areaOpacity={0.07}
-                    colors={[accentColor]}
+                    enableArea={false}
+                    colors={["#215AA8"]}
                     lineWidth={1.6}
                     enablePoints={false}
                     enableGridX={false}
@@ -370,8 +352,6 @@ export function LeadTimeKPICard({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  background: secondaryTrend <= 0 ? "#f0fdf6" : "#fef4f3",
-                  border: `1px solid ${secondaryTrend <= 0 ? "#bbf0d2" : "#fbd5d1"}`,
                   color: trendColor(secondaryTrend),
                   borderRadius: 5,
                   padding: `${z(3)}px ${z(9)}px`,
@@ -454,13 +434,13 @@ export function LeadTimeKPICard({
       {/* Footer bar */}
       <div
         style={{
-          background: "#f6f7f9",
+          background: "white",
           borderTop: "1px solid #eceef2",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: `${z(7)}px ${z(16)}px ${z(7)}px ${z(22)}px`,
-          borderRadius: "0 0 9px 9px",
+          padding: `${z(7)}px ${z(16)}px ${z(7)}px ${z(16)}px`,
+          borderRadius: "0 0 7px 7px",
         }}
       >
         <span style={{ fontSize: 11, color: "#667085", fontFamily: "Lato, sans-serif" }}>

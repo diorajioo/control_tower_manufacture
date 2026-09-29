@@ -208,31 +208,18 @@ export function Header({
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   };
 
-  // Publish the full header height (top bar + filter row) as --app-header-h so the Sidebar
-  // logo block can match it and its bottom border lines up with the filter row's.
-  const headerRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const el = headerRef.current;
-    if (!el) return;
-    const root = document.documentElement;
-    const apply = () => root.style.setProperty("--app-header-h", `${el.offsetHeight}px`);
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   return (
-    <header ref={headerRef} className="shrink-0">
+    <header className="shrink-0">
 
-      {/* ── Row 1: Navy topbar ───────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-4 h-[52px] bg-white border-b border-[#EBEBEB]">
+      {/* ── Row 1: Paragon Blue topbar (joins the Sidebar logo block) ─────── */}
+      <div className="flex items-center gap-3 px-4 h-[52px] bg-[#215AA8]">
 
         {/* Brand */}
-        <span className="text-[13px] font-medium text-slate-400 tracking-[0.07em] uppercase shrink-0">Manufacturing Control Tower</span>
+        <span className="text-[13px] font-medium text-white/70 tracking-[0.07em] uppercase shrink-0">Manufacturing Control Tower</span>
 
         {period && (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#D3DEEE] text-[#143665] border border-[#A6BDDC] shrink-0">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/15 text-white shrink-0">
             {period}
           </span>
         )}
@@ -240,13 +227,13 @@ export function Header({
         <div className="flex-1" />
 
         {/* Live clock */}
-        <div className="flex flex-col items-end pr-2.5 border-r border-[#EBEBEB] shrink-0">
-          <span className="text-[13px] font-bold text-[#1e293b] tracking-[0.03em] leading-tight tabular-nums">{clockTime}</span>
-          <span className="text-[9.5px] text-slate-400 leading-tight">{clockDate}</span>
+        <div className="flex flex-col items-end pr-2.5 border-r border-white/20 shrink-0">
+          <span className="text-[13px] font-bold text-white tracking-[0.03em] leading-tight tabular-nums">{clockTime}</span>
+          <span className="text-[9.5px] text-white/60 leading-tight">{clockDate}</span>
         </div>
 
         {/* Sync / countdown */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F7F8FA] border border-[#EBEBEB] text-[11px] text-slate-500 font-medium shrink-0">
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 text-[11px] text-white/85 font-medium shrink-0">
           <span className={cn("w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0", !isLoading && "animate-pulse")} />
           {isLoading ? "Loading..." : `Live ${lastUpdated ? fmtCountdown(countdown) : ""}`}
         </div>
@@ -255,7 +242,7 @@ export function Header({
         {onMonitorMode && (
           <button
             onClick={onMonitorMode}
-            className="w-8 h-8 rounded-[9px] flex items-center justify-center border border-[#EBEBEB] text-slate-500 hover:bg-[#F7F8FA] hover:text-slate-700 transition-colors shrink-0"
+            className="w-8 h-8 rounded-[9px] flex items-center justify-center border border-white/25 text-white/85 hover:bg-white/10 hover:text-white transition-colors shrink-0"
             title="Monitor mode — full screen view"
           >
             <Monitor size={14} />
@@ -270,12 +257,12 @@ export function Header({
               "relative w-8 h-8 rounded-[9px] flex items-center justify-center transition-colors",
               alertCount > 0
                 ? "bg-amber-50 border border-amber-300 text-amber-500 hover:bg-amber-100"
-                : "border border-[#EBEBEB] text-slate-500 hover:bg-[#F7F8FA]"
+                : "border border-white/25 text-white/85 hover:bg-white/10"
             )}
           >
             <Bell size={14} />
             {alertCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 border-[1.5px] border-white flex items-center justify-center text-[8px] font-bold text-white">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 border-[1.5px] border-[#215AA8] flex items-center justify-center text-[8px] font-bold text-white">
                 {alertCount}
               </span>
             )}
@@ -299,7 +286,7 @@ export function Header({
                   alerts.map((a) => (
                     <div key={a.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                       <span className="shrink-0 mt-0.5">
-                        {a.severity === "critical" ? "🔴" : a.severity === "warning" ? "🟡" : "🔵"}
+                        <span className={cn("block w-2 h-2 mt-1 rounded-full", a.severity === "critical" ? "bg-red-500" : a.severity === "warning" ? "bg-amber-400" : "bg-[#215AA8]")} />
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-semibold text-gray-800">{a.kpi}</p>
@@ -347,7 +334,7 @@ export function Header({
 
         {/* Avatar */}
         <div
-          className="w-8 h-8 bg-[#215AA8] rounded-full flex items-center justify-center shadow-sm cursor-pointer shrink-0"
+          className="w-8 h-8 bg-white/15 rounded-full flex items-center justify-center cursor-pointer shrink-0"
           title={session?.user?.name ?? ""}
           onClick={onRefresh}
         >
