@@ -156,15 +156,16 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-56 h-screen bg-white flex flex-col shrink-0 border-r border-slate-200 overflow-hidden">
+    <aside className="w-56 h-screen bg-white flex flex-col shrink-0 overflow-hidden">
       {/* Logo */}
-      {/* Same height and color as the Header top bar, so logo + top bar read as one Paragon Blue strip. */}
-      <div className="shrink-0 px-4 h-[52px] flex items-center bg-[#215AA8]">
+      {/* Same height and color as the Header top bar, so logo + top bar read as one Paragon Blue strip.
+          The sidebar's right border starts below it (on nav + footer) so no line cuts through the strip. */}
+      <div className="shrink-0 px-4 h-[52px] flex items-center justify-center bg-[#215AA8]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/paragon-corp-white.e705509b.png" alt="Paragon Corp" className="h-7 w-auto" />
+        <img src="/paragon-corp-white.e705509b.png" alt="Paragon Corp" className="w-36 h-auto" />
       </div>
 
-      <nav className="px-2.5 pt-3 flex flex-col flex-1 overflow-y-auto">
+      <nav className="px-2.5 pt-3 flex flex-col flex-1 overflow-y-auto border-r border-slate-200">
         {NAV_GROUPS.map((group, i) => (
           <div key={i} className="flex flex-col gap-0.5">
             {i > 0 && <div className="h-px bg-slate-100 my-2.5 mx-1" />}
@@ -175,7 +176,7 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-2.5 pb-4 flex flex-col gap-0.5">
+      <div className="px-2.5 pb-4 flex flex-col gap-0.5 border-r border-slate-200">
         <div className="h-px bg-slate-100 mb-2 mx-1" />
         {FOOTER_ITEMS.map((item) => (
           <NavRow key={item.label} item={item} pathname={pathname} alertCount={alertCount} />
