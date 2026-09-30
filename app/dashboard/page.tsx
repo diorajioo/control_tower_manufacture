@@ -465,6 +465,7 @@ export default function DashboardPage() {
           outputBulk:       kpi.output?.bulkQty,
           productivityE2e:  kpi.productivity?.e2e,
         } : undefined}
+        kpi={kpi ? { leadTime: kpi.leadTime, output: kpi.output, productivity: kpi.productivity } : undefined}
         alerts={visibleAlerts}
       />
       <SecurityOverlay />

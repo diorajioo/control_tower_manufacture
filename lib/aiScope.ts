@@ -5,7 +5,7 @@
 
 /** `get_kpi_data` tool types the chat may query. */
 export const AI_KPI_TYPES = [
-  "lead_time", "output_bulk", "output_fg",
+  "lead_time", "lead_time_by_stage", "output_bulk", "output_fg",
   "productivity_e2e", "productivity_upstream", "productivity_downstream",
 ];
 
@@ -17,17 +17,3 @@ export const ALERT_KPIS = new Set(["Lead Time"]);
 
 export const OUT_OF_SCOPE_NOTE =
   "OEE, OPE, Yield Loss (bulk and pack), RFT and Energy are not available yet on the dashboard.";
-
-/** Keep only the in-scope parts of the `/api/dashboard/kpi` response before sending it to an AI model. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function pickAIKpis(kpi: any) {
-  const p = kpi?.productivity;
-  return {
-    leadTime: kpi?.leadTime,
-    output:   kpi?.output,
-    productivity: p && {
-      e2e: p.e2e, e2ePrev: p.e2ePrev, e2eTrend: p.e2eTrend,
-      upstream: p.upstream, downstream: p.downstream, sparkline: p.sparkline,
-    },
-  };
-}

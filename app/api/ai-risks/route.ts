@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDeepSeekClient, isDeepSeekConfigured } from "@/lib/deepseek";
-import { pickAIKpis, OUT_OF_SCOPE_NOTE } from "@/lib/aiScope";
+import { OUT_OF_SCOPE_NOTE } from "@/lib/aiScope";
+import { KPI_RELATIONSHIPS, NARRATIVE_RULES, buildKpiContext } from "@/lib/kpiNarrative";
 
 // Allow up to 60 s on Vercel — the default limit cut the streamed answer short (fewer risks/actions than local).
 export const maxDuration = 60;
@@ -20,7 +21,32 @@ export async function POST(req: NextRequest) {
     filters: { plant: string; period: string };
   };
 
-  const prompt = `Analyze the following manufacturing KPI data and identify the top risks and required actions. Use only these metrics; ${OUT_OF_SCOPE_NOTE} Do not mention them.\n${JSON.stringify(pickAIKpis(kpi), null, 2)}\n\nPlant: ${filters.plant}, Period: ${filters.period}\n\nRespond in English, EXACTLY in this format (no other text):\nRISK:\n1. [TITLE]: [brief description]\n2. [TITLE]: [brief description]\n3. [TITLE]: [brief description]\n\nACTION:\n1. [TITLE]: [concrete action]\n2. [TITLE]: [concrete action]\n3. [TITLE]: [concrete action]`;
+  const prompt = `You are a senior manufacturing analyst. Identify the top 3 risks and the 3 actions that address their root cause.
+Use only Lead Time, Output and Productivity; ${OUT_OF_SCOPE_NOTE} Do not mention them.
+
+KPI data — Plant: ${filters.plant}, Period: ${filters.period}
+${buildKpiContext(kpi)}
+
+${KPI_RELATIONSHIPS}
+
+${NARRATIVE_RULES}
+
+Each RISK description is one sentence that names the cause → effect chain with numbers from the data
+(e.g. "WIP waiting of X days is most of the gross lead time, which likely holds back Released FG").
+Each ACTION targets the cause in that chain, not the symptom.
+Only list a risk the data supports; never list one the Signals contradict (fewer, solid risks beat speculative ones).
+TITLE = short Title Case label, max 5 words, no brackets.
+
+Respond in English, EXACTLY in this format (no other text):
+RISK:
+1. [TITLE]: [cause → effect, one sentence]
+2. [TITLE]: [cause → effect, one sentence]
+3. [TITLE]: [cause → effect, one sentence]
+
+ACTION:
+1. [TITLE]: [concrete action on the cause]
+2. [TITLE]: [concrete action on the cause]
+3. [TITLE]: [concrete action on the cause]`;
 
   try {
     const client = getDeepSeekClient();

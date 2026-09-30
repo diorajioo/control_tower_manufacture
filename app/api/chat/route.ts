@@ -7,7 +7,9 @@ import { routeModel } from "@/lib/agent-router";
 import { buildSystemPrompt, type KPISnapshot } from "@/lib/diagnostic-prompt";
 import { executeQuery } from "@/lib/snowflake";
 import { AI_KPI_TYPES, AI_TREND_TYPES } from "@/lib/aiScope";
+import { stageLabel } from "@/lib/leadTimeStages";
 import type OpenAI from "openai";
+import { LEAD_TIME_START_SQL, NDC_RECEIVED_AT_SQL } from "@/lib/leadTimeDefinition";
 
 // Allow up to 60 s on Vercel — tool calls to Snowflake + a streamed answer can exceed the default limit.
 export const maxDuration = 60;
@@ -26,7 +28,7 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "get_kpi_data",
-      description: "Fetch manufacturing KPI values from Snowflake for a given period and plant.",
+      description: "Fetch manufacturing KPI values from Snowflake for a given period and plant. lead_time_by_stage = days per PO in each process stage (PO, weighing, mixing, packing, WIP waiting, NDC) — use it to explain WHY lead time moves.",
       parameters: {
         type: "object",
         properties: {
@@ -105,16 +107,31 @@ async function executeGetKpiData(args: {
           SELECT AVG(gross_minutes)/1440.0 AS AVG_GROSS_DAYS, AVG(nett_minutes)/1440.0 AS AVG_NETT_DAYS, COUNT(*) AS TOTAL_PO
           FROM (
             SELECT PROCESS_ORDER_FG,
-              DATEDIFF('minute', MIN(CASE WHEN ACTIVITY='PO' THEN ACTIVITY_START END),
-                MAX(CASE WHEN ACTIVITY='RECEIVE NDC' THEN ACTIVITY_STOP END)) AS gross_minutes,
+              DATEDIFF('minute', ${LEAD_TIME_START_SQL},
+                ${NDC_RECEIVED_AT_SQL}) AS gross_minutes,
               SUM(CASE WHEN ACTIVITY_TYPE='ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME ELSE 0 END) AS nett_minutes
             FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
             WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
             GROUP BY PROCESS_ORDER_FG
-            HAVING MIN(CASE WHEN ACTIVITY='PO' THEN ACTIVITY_START END) IS NOT NULL
-              AND MAX(CASE WHEN ACTIVITY='RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
+            HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
+              AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
           ) sub
         `, withPlant);
+        break;
+      }
+      case "lead_time_by_stage": {
+        // Days per PO spent in each stage (POSITION), same basis as the Lead Time Trend per stage
+        const stageRows = await executeQuery<{ POSITION: string; AVG_DAYS_PER_PO: number; PO_COUNT: number }>(`
+          SELECT POSITION, AVG(pos_minutes)/1440.0 AS AVG_DAYS_PER_PO, COUNT(*) AS PO_COUNT
+          FROM (
+            SELECT PROCESS_ORDER_FG, POSITION, SUM(NET_LEADTIME) AS pos_minutes
+            FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+            WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? AND POSITION IS NOT NULL ${pf}
+            GROUP BY PROCESS_ORDER_FG, POSITION
+          ) sub
+          GROUP BY POSITION ORDER BY AVG_DAYS_PER_PO DESC
+        `, withPlant);
+        rows = stageRows.map((r) => ({ STAGE: stageLabel(r.POSITION), ...r }));
         break;
       }
       case "bulk_loss": {
@@ -255,13 +272,13 @@ async function executeGetWeeklyTrend(args: {
     leadtime: `
       SELECT WEEK, PLANT, AVG(po_days) AS KPI_VALUE FROM (
         SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
-          DATEDIFF('minute', MIN(CASE WHEN ACTIVITY='PO' THEN ACTIVITY_START END),
-            MAX(CASE WHEN ACTIVITY='RECEIVE NDC' THEN ACTIVITY_STOP END))/1440.0 AS po_days
+          DATEDIFF('minute', ${LEAD_TIME_START_SQL},
+            ${NDC_RECEIVED_AT_SQL})/1440.0 AS po_days
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
         WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
         GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
-        HAVING MIN(CASE WHEN ACTIVITY='PO' THEN ACTIVITY_START END) IS NOT NULL
-          AND MAX(CASE WHEN ACTIVITY='RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
+        HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
+          AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     upstream: `
       WITH activity_lvl AS (
@@ -378,11 +395,12 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { messages, context, model: requestedModel, kpiSnapshot, alerts } = body as {
+  const { messages, context, model: requestedModel, kpiSnapshot, kpi, alerts } = body as {
     messages: { role: "user" | "assistant"; content: string }[];
     context?: { plant?: string; startDate?: string; endDate?: string; period?: string };
     model?: string;
     kpiSnapshot?: KPISnapshot;
+    kpi?: unknown;
     alerts?: { severity: string; kpi: string; message: string }[];
   };
 
@@ -400,6 +418,7 @@ export async function POST(req: NextRequest) {
     endDate:     context?.endDate,
     period:      context?.period,
     kpiSnapshot,
+    kpi,
     alerts,
   });
 

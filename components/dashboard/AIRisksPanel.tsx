@@ -46,8 +46,8 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
   const fetchRisks = async (force = false) => {
     if (!kpi || !ready) return;
 
-    // "v2": drops risks cached before AI was limited to in-scope metrics (lib/aiScope.ts)
-    const cacheKey  = `ai_risks_v2_${filters.plant}_${filters.period}`;
+    // "v3": drops risks cached before the narrative (cause → effect) prompt
+    const cacheKey  = `ai_risks_v3_${filters.plant}_${filters.period}`;
     const cacheTime = `${cacheKey}_time`;
     if (!force) {
       try {

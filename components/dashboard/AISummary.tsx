@@ -115,11 +115,11 @@ interface AISummaryProps {
   ready: boolean;
 }
 
-// "_v3": invalidates summaries cached before the model started writing [kpi:ID] tags.
-const CACHE_TEXT = "ai_summary_text_v3";
-const CACHE_TIME = "ai_summary_time_v3";
+// "_v4": invalidates summaries cached before the narrative (cause → effect) prompt.
+const CACHE_TEXT = "ai_summary_text_v4";
+const CACHE_TIME = "ai_summary_time_v4";
 // Filters the cached summary was generated for — a different plant/period regenerates it.
-const CACHE_KEY  = "ai_summary_key_v3";
+const CACHE_KEY  = "ai_summary_key_v4";
 const TTL_MS    = 5 * 60 * 60 * 1000; // 5 hours
 
 export function AISummary({ kpi, filters, ready }: AISummaryProps) {

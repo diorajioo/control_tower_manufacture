@@ -1,4 +1,6 @@
 import { OUT_OF_SCOPE_NOTE } from "@/lib/aiScope";
+import { KPI_RELATIONSHIPS, NARRATIVE_RULES, buildKpiContext } from "@/lib/kpiNarrative";
+import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 // Only in-scope fields are rendered into the prompt (see lib/aiScope.ts).
 export interface KPISnapshot {
@@ -20,6 +22,8 @@ export interface PromptContext {
   endDate?: string;
   period?: string;
   kpiSnapshot?: KPISnapshot;
+  /** In-scope parts of the /api/dashboard/kpi response (leadTime, output, productivity) — richer than kpiSnapshot */
+  kpi?: unknown;
   alerts?: { severity: string; kpi: string; message: string }[];
 }
 
@@ -32,6 +36,13 @@ function buildContextBlock(ctx: PromptContext): string {
   const lines: string[] = [];
   lines.push(`Filter: ${ctx.plant || "All Plant"} | ${ctx.period || "YTD"} | ${ctx.startDate || "—"} to ${ctx.endDate || "—"}`);
 
+  if (ctx.kpi) {
+    lines.push("\nKPI Snapshot (live values from dashboard):");
+    lines.push(buildKpiContext(ctx.kpi));
+    appendAlerts(lines, ctx);
+    return lines.join("\n");
+  }
+
   const snap = ctx.kpiSnapshot;
   if (!snap) return lines.join("\n");
 
@@ -39,20 +50,22 @@ function buildContextBlock(ctx: PromptContext): string {
 
   if (snap.leadTimeGross != null) {
     const v = Number(snap.leadTimeGross);
-    const flag = v > 13 ? "⚠ above 13-day target" : "✓ on target";
+    const flag = v > LEAD_TIME_TARGET_DAYS ? `⚠ above ${LEAD_TIME_TARGET_DAYS}-day target` : "✓ on target";
     lines.push(`- Lead Time Gross: ${n(v)} days  [${flag}]`);
   }
   if (snap.outputBulk != null) lines.push(`- Output Bulk: ${Math.round(Number(snap.outputBulk)).toLocaleString("en-US")} kg`);
   if (snap.outputFg != null) lines.push(`- Output FG: ${Math.round(Number(snap.outputFg)).toLocaleString("en-US")} pcs`);
   if (snap.productivityE2e != null) lines.push(`- E2E Productivity: ${n(snap.productivityE2e)} pcs/mh`);
 
-  if (ctx.alerts?.length) {
-    lines.push("\nActive alerts:");
-    for (const a of ctx.alerts)
-      lines.push(`- [${a.severity.toUpperCase()}] ${a.kpi}: ${a.message}`);
-  }
-
+  appendAlerts(lines, ctx);
   return lines.join("\n");
+}
+
+function appendAlerts(lines: string[], ctx: PromptContext) {
+  if (!ctx.alerts?.length) return;
+  lines.push("\nActive alerts:");
+  for (const a of ctx.alerts)
+    lines.push(`- [${a.severity.toUpperCase()}] ${a.kpi}: ${a.message}`);
 }
 
 export function buildSystemPrompt(ctx: PromptContext): string {
@@ -74,15 +87,24 @@ When the user asks WHY or flags an anomaly:
 5. RECOMMEND — give concrete recommendations only after the hypothesis is validated
 
 Analysis guidance per KPI:
-- High Lead Time → Bottleneck at which stage? (PO → Bulk → Packaging → NDC). Ask which step takes longest.
-- Low Productivity → High manhours or low output driving it?
+- High Lead Time → which stage takes longest (get_kpi_data lead_time_by_stage)? Is it waiting (WIP) or processing?
+- Low Productivity → high manhours or low output driving it? Upstream or downstream?
+
+=== EXPLAIN THE IMPACT, NOT JUST THE NUMBER ===
+Users need to understand how one KPI moves another. Every answer that cites data must include the narrative:
+what the number means, which other KPI it affects or is affected by, and why that matters for the plant.
+Even a simple lookup gets one sentence on the link to another KPI.
+
+${KPI_RELATIONSHIPS}
+
+${NARRATIVE_RULES}
 
 === RESPONSE FORMAT ===
 Always reply in the same language as the user's latest message: if they write in Bahasa Indonesia, answer fully in Bahasa Indonesia (including the follow-up question suggestions); if they write in English, answer in English. Default to English only when the language is unclear.
 Professional but conversational. Like an analyst talking with a colleague — not a formal report.
 
-For simple data lookups: go straight to numbers + 1-2 sentences of context, no need for many sections.
-For WHY analysis: Finding → Hypothesis → 1 Question. Don't dump everything at once — drive investigation step by step.
+For simple data lookups: numbers first, then 1-2 sentences on what they mean and how they connect to another KPI.
+For WHY analysis: Finding → Hypothesis (the KPI chain) → 1 Question. Don't dump everything at once — drive investigation step by step.
 Use emojis as section markers: 📊 data · ⚠️ anomaly · ✅ on-track · 💡 insight · ❓ question
 Include actual vs target and vs previous period when available.
 
@@ -96,5 +118,5 @@ End with "**Want to explore further?**" (when replying in Bahasa Indonesia use e
 Format: > "question text"
 
 === KPI TARGETS ===
-Lead Time Gross ≤ 13 days`;
+Lead Time Gross ≤ ${LEAD_TIME_TARGET_DAYS} days`;
 }

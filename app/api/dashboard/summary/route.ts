@@ -4,27 +4,33 @@ import { authOptions } from "@/lib/auth";
 import { GROQ_MODEL_PRIORITY, isAIModelUnavailable, getClientForModel } from "@/lib/ai-provider";
 import type Groq from "groq-sdk";
 import type OpenAI from "openai";
+import { KPI_RELATIONSHIPS, NARRATIVE_RULES, buildKpiContext } from "@/lib/kpiNarrative";
 
 export const maxDuration = 60;
 
 const SYSTEM_PROMPT = `You are a senior Manufacturing Intelligence analyst at a large pharmaceutical company.
 
-Task: write an executive summary of EXACTLY 3 sentences from the dashboard KPI data.
+Task: write an executive summary of EXACTLY 3 sentences that tells the story behind the dashboard KPIs —
+not a list of numbers, but how one KPI drives another.
 
 Strict rules:
-- EXACTLY 3 sentences, each at most 40 words
-- Every sentence ends with a period (.)
-- Focus on the 3-4 most critical KPIs — you may cite several numbers per sentence but do not list them all
-- Sentence 1: the most notable condition (positive or negative)
-- Sentence 2: supporting context or trend
-- Sentence 3: implication or one recommended action
+- EXACTLY 3 sentences in one paragraph (no line breaks), each ending with a period (.)
+- Hard limit: 40 words per sentence — prefer one clear link over several; cut, do not chain clauses
+- Sentence 1 — what happened: the most important condition, with its number vs target or prior period
+- Sentence 2 — why / the link: the other KPI or lead time stage in the data that explains it, and the effect it has
+  (e.g. waiting time → gross lead time → fewer POs releasing FG)
+- Sentence 3 — so what: the business impact and one concrete action on the root cause
 - Professional English, no bullet points, no headings
-- Right after each KPI value you cite, add its tag with no other text in between: [kpi:leadtime] for lead time, [kpi:output] for output / released FG / bulk, [kpi:productivity] for productivity. Tag only actual values, not targets or percentage changes.
+- Right after each KPI value you cite, add its tag with no other text in between: [kpi:leadtime] for lead time,
+  [kpi:output] for output / released FG / bulk, [kpi:productivity] for productivity.
+  Tag only actual values, not targets or percentage changes.
   Example: "Gross lead time averaged 16.98 days [kpi:leadtime], above the 13-day target."
 
-Target: Lead Time Gross ≤ 13 days.
-Analyze only these metrics: Lead Time, Output and Productivity. Do not mention OEE, OPE, yield/bulk/pack loss, RFT or energy.
-Analyze only the data provided.`;
+${KPI_RELATIONSHIPS}
+
+${NARRATIVE_RULES}
+
+Analyze only Lead Time, Output and Productivity. Do not mention OEE, OPE, yield/bulk/pack loss, RFT or energy.`;
 
 type AnyMessage = Groq.Chat.ChatCompletionMessageParam | OpenAI.Chat.ChatCompletionMessageParam;
 
@@ -64,19 +70,11 @@ export async function POST(req: NextRequest) {
 
   // Only metrics shown on a page are sent (see lib/aiScope.ts).
 
-  const trendText = [
-    kpi.leadTime?.grossTrend   != null ? `Lead Time MoM: ${kpi.leadTime.grossTrend > 0 ? "+" : ""}${kpi.leadTime.grossTrend}%`         : null,
-    kpi.output?.fgTrend        != null ? `Released FG MoM: ${kpi.output.fgTrend > 0 ? "+" : ""}${kpi.output.fgTrend}%`               : null,
-    kpi.productivity?.e2eTrend != null ? `E2E Productivity MoM: ${kpi.productivity.e2eTrend > 0 ? "+" : ""}${kpi.productivity.e2eTrend}%` : null,
-  ].filter(Boolean).join(", ");
-
   const userMessage = `KPI data for ${filters.startDate} to ${filters.endDate}, Plant: ${filters.plant || "All Plant"}:
 
-Lead Time Gross: ${kpi.leadTime?.grossDays ?? "—"} days | Nett: ${kpi.leadTime?.nettDays ?? "—"} days
-Output Bulk: ${(kpi.output?.bulkQty ?? 0).toLocaleString()} kg | Released FG: ${(kpi.output?.fgQty ?? 0).toLocaleString()} pcs
-E2E Productivity: ${kpi.productivity?.e2e ?? "—"} pcs/manhour${trendText ? `\nChange vs prior period: ${trendText}` : ""}
+${buildKpiContext(kpi)}
 
-Write a short executive summary:`;
+Write the 3-sentence executive summary:`;
 
   try {
     const messages: AnyMessage[] = [

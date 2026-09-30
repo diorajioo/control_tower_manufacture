@@ -189,6 +189,8 @@ Generates a 3-sentence executive summary of current KPI state. Cached 5 hours in
 
 Inputs: Lead Time (gross/nett), Output (bulk + FG), E2E Productivity, and their MoM trends.
 
+**AI narrative (`lib/kpiNarrative.ts`):** Summary, AI Risks and Chat get the same compact KPI context (`buildKpiContext`: lead time gross/nett + composition + top 3 stages, output FG/bulk, productivity E2E/upstream/downstream, all with trends) plus computed direction **Signals**, a KPI relationship map and narrative rules (cause → effect, only link KPIs whose directions fit, no assumed data). Summary = 3 sentences: what happened → why / link → so what + action. Chat gets the full `kpi` object from Overview and a `lead_time_by_stage` tool.
+
 **AI scope (`lib/aiScope.ts`):** every AI feature — Summary, AI Risks, Chat (tool `kpi_type` enums + system prompt) and alerts (incl. Teams DMs) — only covers metrics whose data is shown on a page: Lead Time, Output, Productivity. OEE / OPE, Pack Loss, Energy (`CT_MANUF_KEMAS` not ready) and Bulk Loss / RFT (no card) are excluded; widen the lists there when their cards go live.
 
 **Summary model priority (fool-proof, fast, low token cost):**

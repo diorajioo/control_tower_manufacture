@@ -16,6 +16,8 @@ interface Message {
 interface FloatingChatProps {
   filters?: { plant: string; startDate: string; endDate: string; period?: string };
   kpiSnapshot?: KPISnapshot;
+  /** In-scope KPI data (leadTime / output / productivity from /api/dashboard/kpi) for the narrative context */
+  kpi?: unknown;
   alerts?: Pick<KPIAlert, "severity" | "kpi" | "message">[];
 }
 
@@ -141,7 +143,7 @@ const PROVIDER_LABEL: Record<string, { label: string; cls: string }> = {
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
-export function FloatingChat({ filters, kpiSnapshot, alerts }: FloatingChatProps) {
+export function FloatingChat({ filters, kpiSnapshot, kpi, alerts }: FloatingChatProps) {
   const [open,           setOpen]           = useState(false);
   const [messages,       setMessages]       = useState<Message[]>([]);
   const [input,          setInput]          = useState("");
@@ -223,6 +225,7 @@ export function FloatingChat({ filters, kpiSnapshot, alerts }: FloatingChatProps
           context:     filters,
           model:       selectedModel,
           kpiSnapshot: kpiSnapshot ?? undefined,
+          kpi:         kpi ?? undefined,
           alerts:      alerts?.length ? alerts : undefined,
         }),
       });
