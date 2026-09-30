@@ -3,9 +3,9 @@ import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { getLeadTimeStageVsStd, getLeadTimeByPlant } from "@/lib/queries";
+import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
-// On-time = gross lead time within the Lead Time target (same ≤ 13 days as the Tactical KPI table).
-const LEAD_TIME_TARGET_DAYS = 13;
+// On-time = gross lead time within the Lead Time target (LEAD_TIME_TARGET_DAYS, lib/leadTimeDefinition.ts).
 
 // Allow up to 60 s on Vercel — needed when Snowflake warehouse auto-resumes from suspension.
 export const maxDuration = 60;

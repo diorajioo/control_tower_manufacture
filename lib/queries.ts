@@ -1,4 +1,5 @@
 import { executeQuery } from "./snowflake";
+import { LEAD_TIME_START_SQL, NDC_RECEIVED_AT_SQL, PO_CREATED_AT_SQL, PO_RELEASED_AT_SQL, LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 interface QueryFilters {
   plant?: string;
@@ -53,8 +54,41 @@ function periodDateWhere(
   }
 }
 
+// Lead Time phases — both PO phases side by side, independent of LEAD_TIME_BASIS (for the Lead Time page).
+// Per PO: Created → Released, Released → NDC, Created → NDC (days) + share of POs above the target on each basis.
+// Not wired to the UI yet; PO_RELEASED_AT_SQL is still a hypothesis (lib/leadTimeDefinition.ts).
+export async function getLeadTimePhases(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const target = LEAD_TIME_TARGET_DAYS * 1440;
+  const rows = await executeQuery<{
+    PO_COUNT: number; CREATED_TO_RELEASED_DAYS: number; RELEASED_TO_NDC_DAYS: number; CREATED_TO_NDC_DAYS: number;
+    LATE_SHARE_RELEASED: number; LATE_SHARE_CREATED: number;
+  }>(`
+    SELECT
+      COUNT(*)                                     AS PO_COUNT,
+      AVG(created_to_released) / 1440.0            AS CREATED_TO_RELEASED_DAYS,
+      AVG(released_to_ndc)     / 1440.0            AS RELEASED_TO_NDC_DAYS,
+      AVG(created_to_ndc)      / 1440.0            AS CREATED_TO_NDC_DAYS,
+      AVG(IFF(released_to_ndc > ${target}, 1, 0))  AS LATE_SHARE_RELEASED,
+      AVG(IFF(created_to_ndc  > ${target}, 1, 0))  AS LATE_SHARE_CREATED
+    FROM (
+      SELECT
+        PROCESS_ORDER_FG,
+        DATEDIFF('minute', ${PO_CREATED_AT_SQL},  ${PO_RELEASED_AT_SQL})  AS created_to_released,
+        DATEDIFF('minute', ${PO_RELEASED_AT_SQL}, ${NDC_RECEIVED_AT_SQL}) AS released_to_ndc,
+        DATEDIFF('minute', ${PO_CREATED_AT_SQL},  ${NDC_RECEIVED_AT_SQL}) AS created_to_ndc
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG
+      HAVING ${PO_CREATED_AT_SQL} IS NOT NULL AND ${PO_RELEASED_AT_SQL} IS NOT NULL AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
+    ) sub
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  return rows[0];
+}
+
 // Lead Time → CT_MANUF_LEADTIME
-// Gross: DATEDIFF(PO activity start → RECEIVE NDC stop) per PO
+// Gross: DATEDIFF(lead time start → RECEIVE NDC stop) per PO — start per LEAD_TIME_BASIS (lib/leadTimeDefinition.ts)
 // Nett:  SUM(NET_LEADTIME) for ACTUAL rows where LINE_CATEGORY IS NOT NULL per PO
 export async function getLeadTimeKPI(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
@@ -67,15 +101,15 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
         SELECT
           PROCESS_ORDER_FG,
           DATEDIFF('minute',
-            MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
-            MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
+            ${LEAD_TIME_START_SQL},
+            ${NDC_RECEIVED_AT_SQL}
           ) AS gross_minutes
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
         WHERE ${datePred}
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG
-        HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
-          AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
+        HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
+          AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
       ) sub
     `, [...dateBinds, ...plantBinds(filters.plant)]),
     executeQuery<{ AVG_NETT: number }>(`
@@ -268,8 +302,8 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
           PLANT,
           PROCESS_ORDER_FG,
           DATEDIFF('minute',
-            MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
-            MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
+            ${LEAD_TIME_START_SQL},
+            ${NDC_RECEIVED_AT_SQL}
           ) AS gross_minutes,
           SUM(CASE WHEN ACTIVITY_TYPE = 'ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END) AS nett_minutes
         FROM base
@@ -310,15 +344,15 @@ export async function getLeadTimeBySku(filters: QueryFilters) {
         MAX(PRODUCT_CODE) AS PRODUCT_CODE,
         MAX(PRODUCT_NAME) AS PRODUCT_NAME,
         DATEDIFF('minute',
-          MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
-          MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
+          ${LEAD_TIME_START_SQL},
+          ${NDC_RECEIVED_AT_SQL}
         ) AS gross_minutes
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
       WHERE ${datePred}
         ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_FG
-      HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
-        AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
+      HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
+        AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
     ) sub
     WHERE PRODUCT_CODE IS NOT NULL
     GROUP BY PRODUCT_CODE
@@ -341,8 +375,8 @@ export async function getLeadTimeTopSku(filters: QueryFilters) {
         MAX(PRODUCT_CODE) AS PRODUCT_CODE,
         MAX(PRODUCT_NAME) AS PRODUCT_NAME,
         DATEDIFF('minute',
-          MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
-          MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
+          ${LEAD_TIME_START_SQL},
+          ${NDC_RECEIVED_AT_SQL}
         ) / 1440.0 AS gross_days,
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'VA'   THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS va_days,
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS nnva_days,
@@ -351,8 +385,8 @@ export async function getLeadTimeTopSku(filters: QueryFilters) {
       WHERE ${datePred}
         ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_FG
-      HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
-        AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
+      HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
+        AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
     )
     SELECT
       PRODUCT_CODE,
@@ -677,15 +711,15 @@ export async function getLeadTimeWeekly(filters: QueryFilters, grain?: TrendGrai
       SELECT
         DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK,
         DATEDIFF('minute',
-          MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
-          MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
+          ${LEAD_TIME_START_SQL},
+          ${NDC_RECEIVED_AT_SQL}
         ) / 1440.0 AS DAYS
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
       WHERE ${datePred}
         ${plantWhere(filters.plant)}
       GROUP BY 1, PROCESS_ORDER_FG
-      HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
-        AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
+      HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
+        AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
     )
     GROUP BY 1
     ORDER BY 1
@@ -800,15 +834,15 @@ export async function getTrendKPIByPlant(
             DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK,
             PLANT,
             DATEDIFF('minute',
-              MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END),
-              MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)
+              ${LEAD_TIME_START_SQL},
+              ${NDC_RECEIVED_AT_SQL}
             ) / 1440.0 AS po_days
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
           WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
             ${pf}
           GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
-          HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_START END) IS NOT NULL
-            AND MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END) IS NOT NULL
+          HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
+            AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
         ) sub
         GROUP BY WEEK, PLANT
         ORDER BY WEEK

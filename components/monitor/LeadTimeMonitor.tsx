@@ -11,8 +11,9 @@ import { LeadTimeStageChart } from "@/components/dashboard/LeadTimeStageChart";
 import { LeadTimeTopSkuChart } from "@/components/dashboard/LeadTimeTopSkuChart";
 import type { MonitorFilters } from "./StrategicMonitor";
 import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
+import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
-const LT_TARGET = 13;
+const LT_TARGET = LEAD_TIME_TARGET_DAYS;
 
 interface LeadTimeKPI {
   grossDays: number;

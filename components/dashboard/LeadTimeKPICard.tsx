@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { ResponsiveLine } from "@nivo/line";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 // ---------------------------------------------------------------------------
 // Status tone — lead time: lower is better, target = 13 days
 // ---------------------------------------------------------------------------
 
-const TARGET = 13;
+const TARGET = LEAD_TIME_TARGET_DAYS;
 
 const TONES = {
   on:      { color: "#067647", bg: "#f0fdf6", border: "#bbf0d2", icon: "✓", label: "On Track"      },

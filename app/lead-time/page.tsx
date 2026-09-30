@@ -19,6 +19,7 @@ import { LeadTimeStageChart } from "@/components/dashboard/LeadTimeStageChart";
 import { LeadTimeTopSkuChart } from "@/components/dashboard/LeadTimeTopSkuChart";
 import { LineTooltip } from "@/components/charts/StandardLine";
 import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
+import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -867,7 +868,7 @@ function TacticalView() {
 
 // ── Lead Time Strategic card ─────────────────────────────────────────────────
 
-const LT_CARD_TARGET = 13;
+const LT_CARD_TARGET = LEAD_TIME_TARGET_DAYS;
 
 interface LeadTimeKPI {
   grossDays: number;

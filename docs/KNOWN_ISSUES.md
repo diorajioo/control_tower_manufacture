@@ -24,6 +24,17 @@
 
 ---
 
+### Lead Time Measured From PO Created, Target Is From PO Released
+
+**Description:** Gross lead time is Created → NDC, but the 13-day target is defined on Released → NDC. With the working
+hypothesis, Sep 2026 = 16.95 d gross of which 8.98 d is Created → Released; POs above 13 d = 53.4% on the Created basis vs
+13.5% on the Released basis. Lead time KPI, on-time %, AI narrative ("PO stage is the bottleneck") and the planned Risk Score
+label all depend on this.
+**Status:** Framework ready (`lib/leadTimeDefinition.ts`, `getLeadTimePhases`); waiting for the PO Released identifier to be
+confirmed. See `docs/BUSINESS_LOGIC.md` → Lead Time basis.
+
+---
+
 ## Documentation Conflicts
 
 ### PRODUCT.md Describes Removed Dashboard Features

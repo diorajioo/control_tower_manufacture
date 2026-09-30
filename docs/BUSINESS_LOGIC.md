@@ -40,6 +40,31 @@ Filters persist to `localStorage` key `ct-filters`. All KPI cards and charts res
 
 **Target:** ≤ 5 days (green), ≤ 15 days (amber), > 15 days (red).
 
+#### Lead Time basis — PO Created vs PO Released (`lib/leadTimeDefinition.ts`)
+
+A PO has two phases: **PO Created → PO Released** (administration / release) and **PO Released → Receive NDC**
+(manufacturing). Manufacturing measures lead time **from PO Released**, and the **13-day target
+(`LEAD_TIME_TARGET_DAYS`) applies to Released → NDC**.
+
+- **Current state (2026-09-30):** every query still measures **Created → NDC** (`LEAD_TIME_BASIS = "created"`), because the
+  PO Released identifier is not confirmed yet. So the 13-day target is currently compared against Created → NDC.
+- **Hypothesis:** the single `ACTIVITY = 'PO'` row per PO (POSITION `PO`, sequence 1, NNVA) has `ACTIVITY_START` = created and
+  `ACTIVITY_STOP` = released. It is internally consistent: Created → Released + Released → NDC = Created → NDC exactly.
+- All gross lead time SQL uses `LEAD_TIME_START_SQL` / `NDC_RECEIVED_AT_SQL` from that module (no inline copies).
+  `getLeadTimePhases()` in `lib/queries.ts` returns both phases side by side (not wired to the UI yet).
+- Measured with the hypothesis (All Plant):
+
+| Period | Created → Released | Released → NDC | Created → NDC | POs > 13 d (Released basis) | POs > 13 d (Created basis) |
+|---|---|---|---|---|---|
+| Sep 2026 | 8.98 d | 7.97 d | 16.95 d | 13.5% | 53.4% |
+| YTD 2026 | 6.55 d | 9.53 d | 16.08 d | 19.5% | 48.8% |
+
+**Switching to Released → NDC** (after the identifier is confirmed): (1) point `PO_RELEASED_AT_SQL` at the confirmed field if the
+hypothesis is wrong, (2) set `LEAD_TIME_BASIS = "released"`, (3) bump the lead-time cache keys, (4) update this section.
+Then show Created → Released as its own metric on the Lead Time page.
+**Decision (2026-09-30):** the `PO` stage stays in the per-stage breakdowns ("Lead time per stage", composition) — it is shown
+as its own stage, so stage totals are Created-based even after the gross KPI switches to Released.
+
 ---
 
 ### 2. Yield / Loss
