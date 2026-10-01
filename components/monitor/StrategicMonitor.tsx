@@ -16,7 +16,7 @@ import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
 
 interface KPIResponse {
   leadTime: {
-    grossDays: number; nettDays: number;
+    grossDays: number; grossReleasedDays?: number; nettDays: number;
     grossTrend: number | null; nettTrend: number | null;
     byPositionNett: { position: string; avgHours: number }[];
     byPositionGross: { position: string; avgHours: number }[];
@@ -108,7 +108,6 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 grossTrend={kpi?.leadTime?.grossTrend ?? null}
                 nettTrend={kpi?.leadTime?.nettTrend ?? null}
                 byPositionGross={kpi?.leadTime?.byPositionGross ?? []}
-                byPositionNett={kpi?.leadTime?.byPositionNett ?? []}
                 sparkline={kpi?.leadTime?.sparkline ?? []}
                 hasAlert={visibleAlerts.some((a) => a.id.startsWith("leadtime"))}
               />

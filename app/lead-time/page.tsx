@@ -872,7 +872,12 @@ const LT_CARD_TARGET = LEAD_TIME_TARGET_DAYS;
 
 interface LeadTimeKPI {
   grossDays: number;
+  grossReleasedDays?: number;
+  nettDays: number;
   grossTrend: number | null;
+  nettTrend: number | null;
+  byPositionGross: { position: string; avgHours: number }[];
+  byPositionNett:  { position: string; avgHours: number }[];
   sparkline: number[];
   composition?: {
     vaDays: number; nnvaDays: number; unvaDays: number; wipDays: number;
@@ -927,10 +932,13 @@ function useLeadTimeCharts(filters: LeadTimeFilters, refreshKey: number) {
   return { data, loading };
 }
 
-function StrategicView({ filters, refreshKey }: { filters: LeadTimeFilters; refreshKey: number }) {
+function StrategicView({ filters, refreshKey, ltBasis }: { filters: LeadTimeFilters; refreshKey: number; ltBasis: "created" | "released" }) {
   const charts = useLeadTimeCharts(filters, refreshKey);
   const lt   = useLeadTimeKPI(filters, refreshKey);
   const comp = lt?.composition;
+  const displayDays = ltBasis === "released" && lt?.grossReleasedDays != null
+    ? lt.grossReleasedDays
+    : lt?.grossDays ?? null;
   // Share of VA + NNVA + Waste (activities overlap, so this is not a share of gross lead time)
   const compTotal = comp ? comp.vaDays + comp.nnvaDays + comp.unvaDays : 0;
   const share = (days?: number) => (compTotal > 0 && days ? Math.round((days / compTotal) * 100) : 0);
@@ -942,11 +950,10 @@ function StrategicView({ filters, refreshKey }: { filters: LeadTimeFilters; refr
         <KpiHighlightTarget id="leadtime">
           <LiteKPICard
             label="Lead Time"
-            icon={<Clock size={13} color="#d97706" strokeWidth={1.75} />}
-            value={lt ? lt.grossDays.toFixed(1) : "—"}
+            value={displayDays != null ? displayDays.toFixed(2) : "—"}
             unit="days"
-            target={`≤ ${LT_CARD_TARGET} days`}
-            attainment={lt && lt.grossDays > 0 ? (LT_CARD_TARGET / lt.grossDays) * 100 : 0}
+            target={`≤ ${LT_CARD_TARGET}.00 days`}
+            attainment={displayDays != null ? Math.min(100, (LT_CARD_TARGET / displayDays) * 100) : 0}
             trend={lt?.grossTrend ?? null}
             series={lt?.sparkline ?? []}
             noData={!lt}
@@ -1127,6 +1134,7 @@ export default function LeadTimePage() {
   const [filters,       setFilters]     = useState<LeadTimeFilters>(DEFAULT_LT_FILTERS);
   const [plants,        setPlants]      = useState<string[]>(["All Plant"]);
   const [refreshKey,    setRefreshKey]  = useState(0);
+  const [ltBasis,       setLtBasis]     = useState<"created" | "released">("created");
 
   // Plant values come from the same list as Overview (J1/J2/J4/J6 — identical to CT_MANUF_LEADTIME.PLANT)
   useEffect(() => {
@@ -1177,10 +1185,12 @@ export default function LeadTimePage() {
           alertCount={0}
           alerts={[]}
           onMonitorMode={() => router.push("/monitor?page=lead-time")}
+          ltBasis={ltBasis}
+          onLtBasisChange={setLtBasis}
         />
 
         <div className="flex-1 overflow-y-auto min-h-0">
-          {persona === "strategic"   && <StrategicView filters={filters} refreshKey={refreshKey} />}
+          {persona === "strategic"   && <StrategicView filters={filters} refreshKey={refreshKey} ltBasis={ltBasis} />}
           {persona === "tactical"    && !isLockedView("tactical")    && <TacticalView />}
           {persona === "operational" && !isLockedView("operational") && <OperationalView />}
         </div>

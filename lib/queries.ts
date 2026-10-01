@@ -55,33 +55,21 @@ function periodDateWhere(
 }
 
 // Lead Time phases — both PO phases side by side, independent of LEAD_TIME_BASIS (for the Lead Time page).
-// Per PO: Created → Released, Released → NDC, Created → NDC (days) + share of POs above the target on each basis.
-// Not wired to the UI yet; PO_RELEASED_AT_SQL is still a hypothesis (lib/leadTimeDefinition.ts).
-export async function getLeadTimePhases(filters: QueryFilters) {
+// Gross lead time from PO Released → NDC (mirrors getLeadTimeKPI gross but using ACTIVITY_STOP of 'PO' as start).
+export async function getLeadTimeReleasedGross(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
-  const target = LEAD_TIME_TARGET_DAYS * 1440;
-  const rows = await executeQuery<{
-    PO_COUNT: number; CREATED_TO_RELEASED_DAYS: number; RELEASED_TO_NDC_DAYS: number; CREATED_TO_NDC_DAYS: number;
-    LATE_SHARE_RELEASED: number; LATE_SHARE_CREATED: number;
-  }>(`
-    SELECT
-      COUNT(*)                                     AS PO_COUNT,
-      AVG(created_to_released) / 1440.0            AS CREATED_TO_RELEASED_DAYS,
-      AVG(released_to_ndc)     / 1440.0            AS RELEASED_TO_NDC_DAYS,
-      AVG(created_to_ndc)      / 1440.0            AS CREATED_TO_NDC_DAYS,
-      AVG(IFF(released_to_ndc > ${target}, 1, 0))  AS LATE_SHARE_RELEASED,
-      AVG(IFF(created_to_ndc  > ${target}, 1, 0))  AS LATE_SHARE_CREATED
+  const rows = await executeQuery<{ AVG_GROSS: number }>(`
+    SELECT AVG(gross_minutes) / 1440.0 AS AVG_GROSS
     FROM (
       SELECT
         PROCESS_ORDER_FG,
-        DATEDIFF('minute', ${PO_CREATED_AT_SQL},  ${PO_RELEASED_AT_SQL})  AS created_to_released,
-        DATEDIFF('minute', ${PO_RELEASED_AT_SQL}, ${NDC_RECEIVED_AT_SQL}) AS released_to_ndc,
-        DATEDIFF('minute', ${PO_CREATED_AT_SQL},  ${NDC_RECEIVED_AT_SQL}) AS created_to_ndc
+        DATEDIFF('minute', ${PO_RELEASED_AT_SQL}, ${NDC_RECEIVED_AT_SQL}) AS gross_minutes
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
       WHERE ${datePred}
         ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_FG
-      HAVING ${PO_CREATED_AT_SQL} IS NOT NULL AND ${PO_RELEASED_AT_SQL} IS NOT NULL AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
+      HAVING ${PO_RELEASED_AT_SQL} IS NOT NULL
+        AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
     ) sub
   `, [...dateBinds, ...plantBinds(filters.plant)]);
   return rows[0];

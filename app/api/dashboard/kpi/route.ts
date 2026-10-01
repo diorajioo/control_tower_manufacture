@@ -26,6 +26,7 @@ import {
   getRFTWeekly,
   getLeadTimeComposition,
   getLeadTimeCompositionMonthly,
+  getLeadTimeReleasedGross,
 } from "@/lib/queries";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -89,7 +90,7 @@ async function runKPIQueries(
     ltByPosRes, oeeWeeklyRes, e2eWeeklyRes,
     prevOutputRes, productivityDetailsRes, etlTimestampRes,
     leadTimeWeeklyRes, outputWeeklyRes, bulkOutputWeeklyRes, yieldWeeklyRes, rftWeeklyRes,
-    ltCompRes, prevLtCompRes, ltCompMonthlyRes,
+    ltCompRes, prevLtCompRes, ltCompMonthlyRes, ltReleasedGrossRes,
   ] = await Promise.allSettled([
     getLeadTimeKPI(filters),
     getYieldKPI(filters),
@@ -118,6 +119,7 @@ async function runKPIQueries(
     getLeadTimeComposition(filters),
     getLeadTimeComposition(prev),
     getLeadTimeCompositionMonthly(filters),
+    getLeadTimeReleasedGross(filters),
   ]);
 
   const failures = [
@@ -159,6 +161,7 @@ async function runKPIQueries(
   const ltComp           = val(ltCompRes,            emptyComp);
   const prevLtComp       = val(prevLtCompRes,        emptyComp);
   const ltCompMonthly    = val(ltCompMonthlyRes,     [] as { MONTH: string; VA: number; NNVA: number; UNVA: number; WIP: number }[]);
+  const ltReleasedGross  = val(ltReleasedGrossRes, null as { AVG_GROSS: number | null } | null);
 
   const avg = (arr: { OEE: number; QUALITY?: number; PERFORMANCE?: number }[], key: "OEE" | "QUALITY" | "PERFORMANCE") =>
     arr.length > 0 ? arr.reduce((s, r) => s + (r[key] ?? 0), 0) / arr.length : 0;
@@ -170,8 +173,9 @@ async function runKPIQueries(
 
   return {
     leadTime: {
-      grossDays:      Number((leadTime.AVG_GROSS_LEADTIME ?? 0).toFixed(2)),
-      nettDays:       Number((leadTime.AVG_NETT_LEADTIME  ?? 0).toFixed(2)),
+      grossDays:         Number((leadTime.AVG_GROSS_LEADTIME ?? 0).toFixed(2)),
+      grossReleasedDays: ltReleasedGross?.AVG_GROSS != null ? Number(ltReleasedGross.AVG_GROSS.toFixed(2)) : undefined,
+      nettDays:          Number((leadTime.AVG_NETT_LEADTIME  ?? 0).toFixed(2)),
       grossTrend:     delta(leadTime.AVG_GROSS_LEADTIME ?? 0, prevLeadTime.AVG_GROSS_LEADTIME ?? 0),
       nettTrend:      delta(leadTime.AVG_NETT_LEADTIME  ?? 0, prevLeadTime.AVG_NETT_LEADTIME  ?? 0),
       byPositionNett:  ltByPos.nett.map((r) => ({ position: r.POSITION, avgHours: Number(r.AVG_HOURS.toFixed(1)) })),
@@ -262,7 +266,7 @@ const fetchByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runKPIQueries(plant, startDate, endDate, period);
   },
-  ["kpi-by-period-v5"],
+  ["kpi-by-period-v8"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 
@@ -270,7 +274,7 @@ const fetchByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string) => {
     return runKPIQueries(plant, startDate, endDate, undefined);
   },
-  ["kpi-by-dates-v5"],
+  ["kpi-by-dates-v8"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 

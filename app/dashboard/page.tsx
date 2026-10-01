@@ -27,6 +27,7 @@ import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
 interface KPIResponse {
   leadTime: {
     grossDays: number;
+    grossReleasedDays?: number;
     nettDays: number;
     grossTrend: number | null;
     nettTrend: number | null;
@@ -88,6 +89,7 @@ export default function DashboardPage() {
   const [dismissedIds,  setDismissedIds]  = useState<Set<string>>(new Set());
   const [alertPanelOpen, setAlertPanelOpen] = useState(false);
   const [activeView,    setActiveView]    = useState<"strategic" | "tactical">("strategic");
+  const [ltBasis,       setLtBasis]       = useState<"created" | "released">("created");
   const [kpiType,       setKpiType]       = useState("leadtime");
   const [fetchError,    setFetchError]    = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(() => {
@@ -276,6 +278,8 @@ export default function DashboardPage() {
           views={[{ key: "strategic", label: "Strategic" }, { key: "tactical", label: "Tactical" }]}
           activeView={activeView}
           onViewChange={(v) => setActiveView(v as "strategic" | "tactical")}
+          ltBasis={ltBasis}
+          onLtBasisChange={setLtBasis}
           onRefresh={handleRefresh}
           isLoading={loading}
           lastUpdated={lastUpdated}
@@ -313,12 +317,16 @@ export default function DashboardPage() {
               <LeadTimeKPICard
                 compact
                 showBreakdown={false}
-                grossDays={kpi?.leadTime?.grossDays ?? 0}
+                basisOverride={ltBasis}
+                grossDays={
+                  ltBasis === "released" && kpi?.leadTime?.grossReleasedDays != null
+                    ? kpi.leadTime.grossReleasedDays
+                    : kpi?.leadTime?.grossDays ?? 0
+                }
                 nettDays={kpi?.leadTime?.nettDays ?? 0}
                 grossTrend={kpi?.leadTime?.grossTrend ?? null}
                 nettTrend={kpi?.leadTime?.nettTrend ?? null}
                 byPositionGross={kpi?.leadTime?.byPositionGross ?? []}
-                byPositionNett={kpi?.leadTime?.byPositionNett ?? []}
                 sparkline={kpi?.leadTime?.sparkline ?? []}
                 hasAlert={visibleAlerts.some((a) => a.id.startsWith("leadtime"))}
               />

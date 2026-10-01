@@ -92,12 +92,15 @@ interface HeaderProps {
   alerts?: KPIAlert[];
   onDismiss?: (id: string) => void;
   onMonitorMode?: () => void;
+  ltBasis?: "created" | "released";
+  onLtBasisChange?: (b: "created" | "released") => void;
 }
 
 export function Header({
   plants, onFilterChange, activeView, onViewChange, views,
   onRefresh, isLoading, lastUpdated, alertCount = 0, onBellClick,
   alerts = [], onDismiss, onMonitorMode,
+  ltBasis, onLtBasisChange,
 }: HeaderProps) {
   const { data: session } = useSession();
   const { t } = useI18n();
@@ -478,6 +481,31 @@ export function Header({
                     />
                   )}
                   {label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {ltBasis && onLtBasisChange && (
+          <>
+            <div className="w-px h-4 bg-gray-200 shrink-0 mx-0.5" />
+            <div className="flex items-center gap-0.5 bg-white rounded-full p-0.5 border border-gray-200 shrink-0">
+              {(["created", "released"] as const).map((b) => (
+                <button key={b} onClick={() => onLtBasisChange(b)}
+                  className={cn(
+                    "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10",
+                    ltBasis === b ? "text-[#143665]" : "text-gray-500 hover:text-gray-700"
+                  )}>
+                  {ltBasis === b && (
+                    <motion.span
+                      layoutId="lt-basis-pill"
+                      className="absolute inset-0 bg-[#D3DEEE] rounded-full"
+                      style={{ zIndex: -1 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    />
+                  )}
+                  {b === "created" ? "PO Created" : "PO Released"}
                 </button>
               ))}
             </div>
