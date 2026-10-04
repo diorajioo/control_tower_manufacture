@@ -1,4 +1,4 @@
-import { executeQuery } from "./snowflake";
+import { executeQuery } from "@/lib/db";
 import { LEAD_TIME_START_SQL, NDC_RECEIVED_AT_SQL, PO_CREATED_AT_SQL, PO_RELEASED_AT_SQL, LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 interface QueryFilters {

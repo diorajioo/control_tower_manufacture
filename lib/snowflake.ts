@@ -13,7 +13,7 @@ const TABLE_ALLOWLIST = new Set([
   "MIGRATION.INFORMATION_SCHEMA.COLUMNS",
 ]);
 
-function assertTablesAllowed(sql: string): void {
+export function assertTablesAllowed(sql: string): void {
   const refs = sql.match(/\b([A-Z_]+\.[A-Z_]+\.[A-Z_]+)\b/gi) ?? [];
   for (const ref of refs) {
     if (!TABLE_ALLOWLIST.has(ref.toUpperCase())) {

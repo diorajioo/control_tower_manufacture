@@ -277,3 +277,25 @@ Full security documentation: `docs/SECURITY.md`.
 | `TEAMS_WEBHOOK_URL` | Optional | Power Automate webhook (legacy fallback) |
 | `TEAMS_RECIPIENTS` | Optional | JSON array of Teams recipient configs |
 | `RESEND_API_KEY` | Optional | Email notification via Resend |
+
+
+## Data source — Snowflake / ClickHouse (`lib/db.ts`)
+
+Every data query goes through `executeQuery()` in `lib/db.ts`. `DATA_SOURCE=snowflake` (default) or `clickhouse` picks the
+backend; table names are the same on both. Status (2026-10-04): framework ready, ClickHouse Cloud not connected yet.
+
+- **One SQL source.** Queries stay written in Snowflake syntax. For ClickHouse, `lib/sql/clickhouseDialect.ts` translates
+  them (`::DATE` → `toDate`, `DATE_TRUNC('week')` → `toMonday`, `DATEADD` → `addDays/…`, `IFF` → `if`,
+  `PERCENTILE_CONT` → `quantileExactInclusive`, `?` binds → `{p0:String}`, `MIGRATION.CONTROL_TOWER.X` → `<db>.X`, …).
+  An untranslated Snowflake construct throws instead of returning wrong numbers.
+- **Executor.** `lib/clickhouse.ts` calls the ClickHouse HTTP interface with `fetch` (no extra dependency), read-only,
+  JSON rows with 64-bit ints as numbers, 60 s timeout. The table allowlist (`assertTablesAllowed`) applies to both sources.
+- **Checks.** `npx tsx scripts/check-clickhouse-sql.ts` translates every query for every period (no server needed;
+  2026-10-04: 520 queries, 0 failures). `npx tsx scripts/compare-data-sources.ts [plant] [start] [end]` runs the KPI
+  queries on both sources and diffs the numbers (needs both credentials).
+- **Not covered:** the chat route's inline SQL goes through the same translator but is not in the check script;
+  `/api/debug/*` routes stay on Snowflake (`INFORMATION_SCHEMA`).
+- **ClickHouse table requirements:** timestamps as `DateTime64`, columns that can be empty as `Nullable(...)` (queries rely
+  on `IS NOT NULL`), keep `LOAD_TIMESTAMP` / `ETL_BATCH_TIMESTAMP` filled ("Last sync").
+- **Switch:** fill the `CLICKHOUSE_*` env (Vercel + `.env.local`), run the compare script until it reports no differences,
+  then set `DATA_SOURCE=clickhouse` in Vercel.

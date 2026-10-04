@@ -5,7 +5,7 @@ import { getClientForModel, isAIModelUnavailable, buildChatModelPriority } from 
 import { isValidModelId } from "@/lib/ai-models";
 import { routeModel } from "@/lib/agent-router";
 import { buildSystemPrompt, type KPISnapshot } from "@/lib/diagnostic-prompt";
-import { executeQuery } from "@/lib/snowflake";
+import { executeQuery } from "@/lib/db";
 import { AI_KPI_TYPES, AI_TREND_TYPES } from "@/lib/aiScope";
 import { stageLabel } from "@/lib/leadTimeStages";
 import type OpenAI from "openai";
