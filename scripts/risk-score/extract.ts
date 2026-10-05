@@ -36,7 +36,7 @@ const SQL = `
 (async () => {
   const rows = await executeQuery<Record<string, unknown>>(SQL, ["2026-01-01"]);
   const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : v ?? null);
-  const out = rows.map((r) => ({ ...r, START_AT: iso(r.START_AT), STOP_AT: iso(r.STOP_AT) }));
+  const out: Record<string, unknown>[] = rows.map((r) => ({ ...r, START_AT: iso(r.START_AT), STOP_AT: iso(r.STOP_AT) }));
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, "po_steps.json"), JSON.stringify(out));
   console.log(`rows: ${out.length}, POs: ${new Set(out.map((r) => r.PO)).size}`);
