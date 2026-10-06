@@ -5,7 +5,7 @@ import { getKpiSnapshot } from "@/lib/kpiData";
 import { alertsFromKpi, type KPIAlert } from "@/lib/alerts";
 import {
   buildAlertCard, alertSummary, generateAlertNarrative,
-  buildSummaryCard, summaryPreview, generateSummaryNarrative,
+  buildSummaryCard, summaryPreview, generateSummaryStory,
 } from "@/lib/alerts/teams";
 import { resolveToken, sendCardTo } from "@/lib/graph/teams";
 import { readNotifState, type RecipientConfig, type SummaryRange } from "@/lib/notifications/store";
@@ -33,8 +33,23 @@ function snapshot(plant: string, range: SummaryRange, now: number) {
     : getKpiSnapshot(plant, range, "", "");
 }
 
+/** Summary card for one recipient: their plant (vs the network when it is a single plant) over their range. */
+async function summaryFor(r: RecipientConfig, snap: (key: string) => Promise<unknown>) {
+  const cadence = r.summary.mode === "weekly" ? "Weekly" as const : "Daily" as const;
+  const rangeLabel = RANGE_LABEL[r.summary.range];
+  const [kpi, network] = await Promise.all([
+    snap(`${r.plant}|${r.summary.range}`),
+    r.plant === "All Plant" ? undefined : snap(`All Plant|${r.summary.range}`),
+  ]);
+  const ctx = { plant: r.plant, rangeLabel, cadence, kpi, network, dashboardUrl: dashboardUrl() };
+  const story = await generateSummaryStory(ctx);
+  return { card: buildSummaryCard({ ...ctx, story }), preview: summaryPreview(ctx) };
+}
+
 const subscribed = (alerts: KPIAlert[], r: RecipientConfig) =>
   alerts.filter((a) => r.kpis[ALERT_KPI_KEYS[a.kpi] ?? ""] !== false);
+
+const summaryKey = (r: RecipientConfig) => `${r.plant}|${r.summary.range}|${r.summary.mode}`;
 
 function memo<T>(fn: (key: string) => Promise<T>) {
   const cache = new Map<string, Promise<T>>();
@@ -61,10 +76,8 @@ export async function runScheduledNotifications(now = Date.now()): Promise<RunRe
   if (!token) return { sent: [], errors: ["No sender connected — Settings → Microsoft Teams → Sender"] };
 
   const snap = memo((k) => { const [plant, range] = k.split("|"); return snapshot(plant, range as SummaryRange, now); });
-  const sumNarr = memo(async (k) => {
-    const [plant, range] = k.split("|");
-    return generateSummaryNarrative(await snap(k), { plant, rangeLabel: RANGE_LABEL[range as SummaryRange] });
-  });
+  // Recipients with the same plant, range and cadence get the same summary — built once
+  const summaries = memo(async (k) => summaryFor(state.recipients.find((r) => summaryKey(r) === k)!, snap));
   const report: RunReport = { sent: [], errors: [] };
   const alertKeys: string[] = [], scheduleKeys: string[] = [];
 
@@ -94,13 +107,8 @@ export async function runScheduledNotifications(now = Date.now()): Promise<RunRe
       // Summary
       const weekday = r.summary.mode === "weekly" ? r.summary.weekday : undefined;
       if (r.summary.mode !== "off" && isDue(now, state.lastSent[`${r.email}|summary`], r.summary.time, weekday)) {
-        const k = `${r.plant}|${r.summary.range}`;
-        const kpi = await snap(k);
-        const ctx = {
-          plant: r.plant, rangeLabel: RANGE_LABEL[r.summary.range], cadence: r.summary.mode === "weekly" ? "Weekly" as const : "Daily" as const,
-          dashboardUrl: dashboardUrl(), kpi, alerts: alertsFromKpi(kpi), narrative: await sumNarr(k),
-        };
-        const err = await sendCardTo(token, r.email, buildSummaryCard(ctx), summaryPreview(ctx));
+        const { card, preview } = await summaries(summaryKey(r));
+        const err = await sendCardTo(token, r.email, card, preview);
         if (err) report.errors.push(err);
         else { scheduleKeys.push(`${r.email}|summary`); report.sent.push(`${r.email}: ${r.summary.mode} summary`); }
       }
@@ -161,17 +169,13 @@ export async function sendAlertsToRecipients(
 export async function sendTestSummaries(recipients: RecipientConfig[], sessionAccessToken?: string, now = Date.now()): Promise<RunReport> {
   const token = await resolveToken(sessionAccessToken);
   if (!token) return { sent: [], errors: ["No token available — connect a sender, or sign out and back in"] };
+  const snap = memo((k) => { const [plant, range] = k.split("|"); return snapshot(plant, range as SummaryRange, now); });
+  const summaries = memo(async (k) => summaryFor(recipients.find((r) => summaryKey(r) === k)!, snap));
   const report: RunReport = { sent: [], errors: [] };
   for (const r of recipients) {
     try {
-      const kpi = await snapshot(r.plant, r.summary.range, now);
-      const rangeLabel = RANGE_LABEL[r.summary.range];
-      const ctx = {
-        plant: r.plant, rangeLabel, cadence: r.summary.mode === "weekly" ? "Weekly" as const : "Daily" as const,
-        dashboardUrl: dashboardUrl(), kpi, alerts: alertsFromKpi(kpi),
-        narrative: await generateSummaryNarrative(kpi, { plant: r.plant, rangeLabel }),
-      };
-      const err = await sendCardTo(token, r.email, buildSummaryCard(ctx), summaryPreview(ctx));
+      const { card, preview } = await summaries(summaryKey(r));
+      const err = await sendCardTo(token, r.email, card, preview);
       if (err) report.errors.push(err); else report.sent.push(r.email);
     } catch (err) {
       report.errors.push(`${r.email}: ${err instanceof Error ? err.message : String(err)}`);

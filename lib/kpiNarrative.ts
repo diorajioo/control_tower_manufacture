@@ -146,6 +146,10 @@ function cardCauses(lt: any, o: any, p: any): string[] {
         const d = [...e2e].sort((a, b) => Math.sign(diff) * (contrib(b) - contrib(a)))[0];
         const before = d.nPrev ? `${num(d.sumPrev! / d.nPrev)} → ` : "";
         out.push(`productivity: ${d.plant} E2E ${before}${num(d.sum / d.n)} pcs/manhour, ${ofChange(contrib(d), diff, diff > 0 ? "E2E rise" : "E2E drop")}`);
+        // A plant with a tiny share of POs behind most of the change usually means a data issue, not a real shift
+        if (d.n / n < 0.05 && contrib(d) / diff >= 0.4) {
+          out.push(`check: ${d.plant} has ${share(d.n, n)} of POs but drives ${share(contrib(d), diff)} of the E2E ${diff > 0 ? "rise" : "drop"} — worth a data check`);
+        }
       }
     }
     if (!out.some((c) => c.startsWith("productivity:"))) {

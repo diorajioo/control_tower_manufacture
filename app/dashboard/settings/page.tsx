@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Session } from "next-auth";
@@ -331,14 +331,6 @@ function SettingsShell() {
                 onSave={() => localStorage.setItem("ct-notification-settings", JSON.stringify(notif))}
                 teamsNotif={teamsNotif}
                 setTeamsNotif={setTeamsNotif}
-                onSaveTeams={() => {
-                  fetch("/api/settings/teams", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(teamsNotif),
-                  }).catch(() => {});
-                  localStorage.setItem("ct-teams-settings", JSON.stringify(teamsNotif));
-                }}
               />
             ) : (
               <AdminOnly title="Notifications" />
@@ -849,14 +841,13 @@ function AdminSection({
 
 function NotifikasiSection({
   notif, setNotif, onSave,
-  teamsNotif, setTeamsNotif, onSaveTeams,
+  teamsNotif, setTeamsNotif,
 }: {
   notif: NotifSettings;
   setNotif: (n: NotifSettings) => void;
   onSave: () => void;
   teamsNotif: TeamsNotifSettings;
   setTeamsNotif: (n: TeamsNotifSettings) => void;
-  onSaveTeams: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<"email" | "teams">("email");
   return (
@@ -886,7 +877,7 @@ function NotifikasiSection({
       {activeTab === "email" ? (
         <EmailTab notif={notif} setNotif={setNotif} onSave={onSave} />
       ) : (
-        <TeamsTab teamsNotif={teamsNotif} setTeamsNotif={setTeamsNotif} onSave={onSaveTeams} />
+        <TeamsTab teamsNotif={teamsNotif} setTeamsNotif={setTeamsNotif} />
       )}
     </div>
   );
@@ -1118,6 +1109,7 @@ const SUMMARY_MODES: { key: SummaryMode; label: string }[] = [
 const SUMMARY_RANGES: { key: SummaryRange; label: string }[] = [
   { key: "7D", label: "Last 7 days" }, { key: "30D", label: "Last 30 days" }, { key: "YTD", label: "Year to date" },
 ];
+const TEAMS_DOMAIN = "paracorpgroup.com";
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 // Chips only for KPIs that can raise an alert (lib/aiScope.ts); hidden while there is only one
 const ALERT_CHIPS = (Object.keys(KPI_CHIPS) as KpiKey[]).filter((k) => ALERT_KPIS.has(KPI_CHIPS[k]));
@@ -1126,26 +1118,64 @@ const fieldCls = "text-sm border border-gray-200 rounded-lg px-2.5 py-1 bg-white
 const fmtWib = (ms: number) =>
   new Date(ms).toLocaleString("en-GB", { timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short" }) + " WIB";
 
+const AUTOSAVE_MS = 800;
+
+/** Server + localStorage cache. keepalive lets a save started while leaving the tab finish. */
+async function persistTeams(n: TeamsNotifSettings): Promise<boolean> {
+  try { localStorage.setItem("ct-teams-settings", JSON.stringify(n)); } catch { /* cache only */ }
+  try {
+    const res = await fetch("/api/settings/teams", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: n.enabled, recipients: n.recipients }),
+      keepalive: true,
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
 function TeamsTab({
-  teamsNotif, setTeamsNotif, onSave,
+  teamsNotif, setTeamsNotif,
 }: {
   teamsNotif: TeamsNotifSettings;
   setTeamsNotif: (n: TeamsNotifSettings) => void;
-  onSave: () => void;
 }) {
   const { data: session } = useSession();
-  const set = (patch: Partial<TeamsNotifSettings>) => setTeamsNotif({ ...teamsNotif, ...patch });
 
-  // Persist enabled toggle immediately to server + localStorage cache
+  // ── Autosave: every edit saves after AUTOSAVE_MS; Save saves at once; leaving the tab flushes ──
+  const [saveState, setSaveState] = useState<"saved" | "dirty" | "saving" | "error">("saved");
+  const edits = useRef(0);
+  const latest = useRef({ teamsNotif, dirty: false });
+  latest.current = { teamsNotif, dirty: saveState === "dirty" || saveState === "error" };
+
+  const saveNow = async (n: TeamsNotifSettings = teamsNotif) => {
+    const version = edits.current;
+    setSaveState("saving");
+    const ok = await persistTeams(n);
+    if (edits.current === version) setSaveState(ok ? "saved" : "error"); // a newer edit keeps it dirty
+  };
+
+  useEffect(() => {
+    if (saveState !== "dirty") return;
+    const t = setTimeout(() => { void saveNow(); }, AUTOSAVE_MS);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamsNotif, saveState]);
+
+  useEffect(() => () => { if (latest.current.dirty) void persistTeams(latest.current.teamsNotif); }, []);
+
+  const set = (patch: Partial<TeamsNotifSettings>) => {
+    edits.current++;
+    setTeamsNotif({ ...teamsNotif, ...patch });
+    setSaveState("dirty");
+  };
+
+  // The enabled toggle saves at once (with any pending edits)
   const setEnabled = (v: boolean) => {
+    edits.current++;
     const updated = { ...teamsNotif, enabled: v };
     setTeamsNotif(updated);
-    localStorage.setItem("ct-teams-settings", JSON.stringify(updated));
-    fetch("/api/settings/teams", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updated),
-    }).catch(() => {});
+    void saveNow(updated);
   };
   const [emailInput, setEmailInput] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -1162,13 +1192,20 @@ function TeamsTab({
       .catch(() => {});
   }, []);
 
+  // Admin types the username only; a pasted full address works if it is on the company domain
   const addEmail = () => {
-    const t = emailInput.trim().toLowerCase();
-    if (!t) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) {
-      setEmailError("Invalid email format");
+    const raw = emailInput.trim().toLowerCase();
+    if (!raw) return;
+    const [user, domain] = raw.split("@");
+    if (domain !== undefined && domain !== TEAMS_DOMAIN) {
+      setEmailError(`Only @${TEAMS_DOMAIN} accounts can receive Teams DMs`);
       return;
     }
+    if (!/^[a-z0-9._%+-]+$/.test(user)) {
+      setEmailError("Invalid username");
+      return;
+    }
+    const t = `${user}@${TEAMS_DOMAIN}`;
     if (teamsNotif.recipients.some((r) => r.email === t)) {
       setEmailError("Email already added");
       return;
@@ -1311,16 +1348,20 @@ function TeamsTab({
         <Card title="Teams Recipients">
           <div className="space-y-3">
             <div className="flex gap-2">
-              <div className="relative flex-1">
-                <MessageSquare size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <div className="flex flex-1 items-center border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-brand-400 focus-within:border-transparent">
+                <MessageSquare size={14} className="ml-3 text-gray-400 shrink-0" />
                 <input
-                  type="email"
-                  placeholder="name@paracorpgroup.com"
+                  type="text"
+                  aria-label="Recipient username"
+                  placeholder="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   value={emailInput}
                   onChange={(e) => { setEmailInput(e.target.value); setEmailError(""); }}
                   onKeyDown={(e) => e.key === "Enter" && addEmail()}
-                  className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                  className="flex-1 min-w-0 pl-2 py-2 text-sm bg-transparent focus:outline-none"
                 />
+                <span className="pr-3 text-sm text-gray-400 select-none">@{TEAMS_DOMAIN}</span>
               </div>
               <button
                 onClick={addEmail}
@@ -1482,7 +1523,14 @@ function TeamsTab({
             </button>
           ))}
         </div>
-        <SaveButton onSave={onSave} />
+        <div className="flex items-center gap-3">
+          {saveState !== "saved" && (
+            <span className={cn("text-xs", saveState === "error" ? "text-red-500" : "text-gray-500")} aria-live="polite">
+              {saveState === "dirty" ? "Unsaved changes" : saveState === "saving" ? "Saving…" : "Not saved — click Save to retry"}
+            </span>
+          )}
+          <SaveButton onSave={() => { edits.current++; void saveNow(); }} />
+        </div>
       </div>
     </div>
   );

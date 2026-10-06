@@ -9,8 +9,8 @@
  *   action   Open dashboard
  * Facts and narrative need the KPI snapshot (lib/kpiData.ts); without it the card keeps the header only.
  *
- * buildSummaryCard() is the scheduled summary in the same shape: header (cadence · plant, headline,
- * range · time), KPI facts + active alerts, main drivers, 3-sentence AI "what it means".
+ * buildSummaryCard() is the scheduled summary: a friendly story (greeting, 2–3 sentences, 3 emoji KPI bullets,
+ * focus line) written by the AI from facts computed in code — see the Summary section below.
  */
 
 import type { KPIAlert } from "@/lib/alerts";
@@ -210,104 +210,153 @@ async function complete(system: string, user: string): Promise<string | undefine
   return undefined;
 }
 
-// ── Summary card (scheduled daily / weekly) ──────────────────────────────────
+// ── Summary (scheduled daily / weekly) ──────────────────────────────────────
+// Friendly ChatGPT-style update: greeting · 2–3 sentence story · 3 KPI bullets · focus line.
+// Facts and numbers are computed here; the AI only writes the sentences (as JSON) and the card adds the
+// emojis and bold in code. A plant recipient gets their plant compared with the network (all plants).
+// No AI → the same shape from a code template, without story and focus.
+
+interface SummaryBullet { verdict: string; text: string }
+export interface SummaryStory {
+  greeting: string;
+  story?: string;
+  bullets: { leadtime: SummaryBullet; output: SummaryBullet; productivity: SummaryBullet };
+  focus?: string;
+}
 
 export interface SummaryContext {
-  plant?:        string;
+  plant:         string;
   /** e.g. "Last 30 days" */
   rangeLabel:    string;
   cadence:       "Daily" | "Weekly";
   dashboardUrl?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   kpi:           any;
-  /** Alerts active for the same snapshot */
-  alerts:        KPIAlert[];
-  narrative?:    string;
+  /** All Plant snapshot for the same range — only for a single-plant recipient */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  network?:      any;
+  story:         SummaryStory;
 }
 
-const pctText = (v: unknown) => (typeof v === "number" && isFinite(v) ? `${v > 0 ? "+" : ""}${v.toFixed(1)}% vs prior period` : "no prior period data");
+const isNum = (v: unknown): v is number => typeof v === "number" && isFinite(v);
+const signedPct = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+const vsPrior = (v: unknown) => (isNum(v) ? `${signedPct(v)} vs prior period` : "no prior period data");
 const compact = (v: number) => Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(v);
+const stripLargest = (s?: string) => s?.replace(/ \((largest (stage|plant))\)$/, "");
+const trendWord = (v: unknown, up: string, down: string, flat: string) => (!isNum(v) || Math.abs(v) < 0.5 ? flat : v > 0 ? up : down);
 
-/** Headline: one clause per KPI, computed in code. */
+/** Plant FG row from the network snapshot (CT_MANUF_TRENDS) — the card's FG source has no PLANT. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function summaryHeadline(kpi: any): string {
+function plantFg(network: any, plant: string) {
+  const rows: { plant: string; fg: number; fgPrev: number | null }[] = network?.output?.plantDrivers ?? [];
+  const mine = rows.find((r) => r.plant === plant);
+  const total = rows.reduce((a, r) => a + r.fg, 0);
+  return mine
+    ? { fg: mine.fg, trend: mine.fgPrev ? ((mine.fg - mine.fgPrev) / mine.fgPrev) * 100 : null, share: total > 0 ? Math.round((mine.fg / total) * 100) : null }
+    : null;
+}
+
+/** Headline for the push preview: one clause per KPI (a single plant uses its own FG trend). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function summaryHeadline(kpi: any, plant: string, network?: any): string {
   const parts: string[] = [];
   const lt = kpi?.leadTime?.grossDays;
-  if (typeof lt === "number" && lt > 0) {
+  if (isNum(lt) && lt > 0) {
     const over = lt - LEAD_TIME_TARGET_DAYS;
     parts.push(over > 0 ? `Lead time ${over.toFixed(2)} days over target` : "Lead time within target");
   }
-  const fg = kpi?.output?.fgTrend;
-  if (typeof fg === "number") parts.push(`Released FG ${fg > 0 ? "up" : "down"} ${Math.abs(fg).toFixed(1)}%`);
+  const fg = network ? plantFg(network, plant)?.trend : kpi?.output?.fgTrend;
+  if (isNum(fg)) parts.push(`Released FG ${fg > 0 ? "up" : "down"} ${Math.abs(fg).toFixed(1)}%`);
   const e2e = kpi?.productivity?.e2eTrend;
-  if (typeof e2e === "number") parts.push(`E2E productivity ${e2e > 0 ? "up" : "down"} ${Math.abs(e2e).toFixed(1)}%`);
+  if (isNum(e2e)) parts.push(`E2E productivity ${e2e > 0 ? "up" : "down"} ${Math.abs(e2e).toFixed(1)}%`);
   return parts.join(" · ") || "No KPI data for this period";
 }
 
-export function summaryPreview(ctx: Pick<SummaryContext, "cadence" | "plant" | "kpi">): string {
-  return `${ctx.cadence} summary · ${ctx.plant || "All Plant"}: ${summaryHeadline(ctx.kpi)}`;
+export function summaryPreview(ctx: Pick<SummaryContext, "cadence" | "plant" | "kpi" | "network">): string {
+  return `${ctx.cadence} summary · ${ctx.plant}: ${summaryHeadline(ctx.kpi, ctx.plant, ctx.network)}`;
 }
 
-export function buildSummaryCard(ctx: SummaryContext): AdaptiveCard {
-  const { kpi } = ctx;
-  const lt = kpi?.leadTime, o = kpi?.output, p = kpi?.productivity;
-  const values: { title: string; value: string }[] = [];
-  if (typeof lt?.grossDays === "number") values.push({ title: "Gross lead time", value: `${lt.grossDays.toFixed(2)} days · target ≤ ${LEAD_TIME_TARGET_DAYS} · ${pctText(lt.grossTrend)}` });
-  if (typeof o?.fgQty === "number") values.push({ title: "Released FG", value: `${compact(o.fgQty)} pcs · ${pctText(o.fgTrend)}` });
-  if (typeof p?.e2e === "number") values.push({ title: "E2E productivity", value: `${p.e2e.toFixed(1)} pcs/manhour · ${pctText(p.e2eTrend)}` });
-  values.push({
-    title: "Alerts",
-    value: ctx.alerts.length > 0 ? ctx.alerts.map((a) => `${SEVERITY_LABEL[a.severity]} · ${a.message}`).join("; ") : "None",
-  });
+/** Facts for the model (numbers pre-formatted, to be copied) + the no-AI template for the same bullets. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function summaryFacts(plant: string, kpi: any, network: any): { lines: string[]; fallback: SummaryStory["bullets"] } {
+  const lt = kpi?.leadTime ?? {}, o = kpi?.output ?? {}, p = kpi?.productivity ?? {};
+  const g = isNum(lt.grossDays) ? lt.grossDays : 0;
+  const waiting = g > 0 && isNum(lt.nettDays) ? Math.round(((g - lt.nettDays) / g) * 100) : null;
+  const ltCause = stripLargest(cardCause(kpi, "leadtime"));
+  const ltVerdict = g > LEAD_TIME_TARGET_DAYS ? "Above target" : "Within target";
+  const e2eVerdict = trendWord(p.e2eTrend, "Productivity up", "Productivity down", "Productivity steady");
+  const lines: string[] = [];
 
-  const drivers = (["leadtime", "output", "productivity"] as const)
-    .map((id) => ({ title: { leadtime: "Lead time", output: "Output", productivity: "Productivity" }[id], value: cardCause(kpi, id) }))
-    .filter((d): d is { title: string; value: string } => !!d.value)
-    .map((d) => ({ ...d, value: d.value.replace(/ \(largest (stage|plant)\)$/, "") }));
+  if (!network) {
+    const outCause = stripLargest(cardCause(kpi, "output"));
+    const prodCause = stripLargest(cardCause(kpi, "productivity"));
+    const check = cardCause(kpi, "check");
+    lines.push(
+      `- Lead time: ${g.toFixed(2)} days vs ${LEAD_TIME_TARGET_DAYS}-day target, ${vsPrior(lt.grossTrend)}${waiting !== null ? `; ${waiting}% of it is waiting outside active processing` : ""}`,
+      ltCause ? `- Lead time cause: ${ltCause}` : "",
+      `- Output: Released FG ${compact(o.fgQty ?? 0)} pcs, ${vsPrior(o.fgTrend)}`,
+      outCause ? `- Output cause: ${outCause}` : "",
+      `- Productivity: E2E ${(p.e2e ?? 0).toFixed(1)} pcs/manhour, ${vsPrior(p.e2eTrend)}`,
+      prodCause ? `- Productivity cause: ${prodCause}` : "",
+      check ? `- Check (productivity): ${check}` : "",
+    );
+    return {
+      lines: lines.filter(Boolean),
+      fallback: {
+        leadtime:     { verdict: ltVerdict, text: `${g.toFixed(2)} days vs the ${LEAD_TIME_TARGET_DAYS}-day target${ltCause ? `; ${ltCause}` : ""}.` },
+        output:       { verdict: trendWord(o.fgTrend, "Output up", "Output down", "Output steady"), text: `Released FG ${compact(o.fgQty ?? 0)} pcs, ${vsPrior(o.fgTrend)}.` },
+        productivity: { verdict: e2eVerdict, text: `E2E ${(p.e2e ?? 0).toFixed(1)} pcs/manhour, ${vsPrior(p.e2eTrend)}.` },
+      },
+    };
+  }
 
-  const body: ACElement[] = [
-    {
-      type: "Container",
-      style: "emphasis",
-      bleed: true,
-      items: [
-        { type: "TextBlock", text: `${ctx.cadence.toUpperCase()} SUMMARY · ${(ctx.plant || "All Plant").toUpperCase()}`, size: "Small", weight: "Bolder", color: "Accent" },
-        { type: "TextBlock", text: summaryHeadline(kpi), size: "Medium", weight: "Bolder", wrap: true, spacing: "Small" },
-        { type: "TextBlock", text: `${ctx.rangeLabel} · ${nowWib()} WIB`, size: "Small", isSubtle: true, wrap: true, spacing: "None" },
-      ],
-    },
-    { type: "FactSet", facts: values, spacing: "Medium" },
-  ];
-  if (drivers.length > 0) {
-    body.push(
-      { type: "TextBlock", text: "MAIN DRIVERS", size: "Small", weight: "Bolder", isSubtle: true, spacing: "Large" },
-      { type: "FactSet", facts: drivers, spacing: "Small" },
-    );
-  }
-  if (ctx.narrative) {
-    body.push(
-      { type: "TextBlock", text: "WHAT IT MEANS", size: "Small", weight: "Bolder", isSubtle: true, spacing: "Large" },
-      { type: "TextBlock", text: ctx.narrative, wrap: true, spacing: "Small" },
-    );
-  }
+  // Single plant vs network. FG per plant comes from CT_MANUF_TRENDS (the card's FG source has no PLANT):
+  // show its pcs and share, the network total stays the card value.
+  const nlt = network.leadTime ?? {}, no = network.output ?? {}, np = network.productivity ?? {};
+  const mine = plantFg(network, plant);
+  const fgTrend = mine?.trend ?? null;
+  const outText = mine
+    ? `${plant} released ${compact(mine.fg)} pcs (${vsPrior(fgTrend)}), ${mine.share}% of network FG · network Released FG ${compact(no.fgQty ?? 0)} pcs (${vsPrior(no.fgTrend)})`
+    : `no ${plant} split available · network Released FG ${compact(no.fgQty ?? 0)} pcs (${vsPrior(no.fgTrend)})`;
+  // Lower lead time is better, higher productivity is better — spelled out so the model cannot flip it
+  const ltGap = g - (nlt.grossDays ?? 0);
+  const prodGap = (p.e2e ?? 0) - (np.e2e ?? 0);
+  lines.push(
+    `- Lead time: ${plant} ${g.toFixed(2)} days (${vsPrior(lt.grossTrend)}) · network ${(nlt.grossDays ?? 0).toFixed(2)} days · target ${LEAD_TIME_TARGET_DAYS} days · ${plant} is ${Math.abs(ltGap) < 0.05 ? "level with" : ltGap < 0 ? "faster than" : "slower than"} the network`,
+    ltCause || waiting !== null ? `- Lead time cause (${plant}): ${[ltCause, waiting !== null ? `${waiting}% of ${plant} lead time is waiting outside active processing` : ""].filter(Boolean).join("; ")}` : "",
+    `- Output: ${outText}`,
+    `- Productivity: ${plant} E2E ${(p.e2e ?? 0).toFixed(1)} pcs/manhour (${vsPrior(p.e2eTrend)}) · network ${(np.e2e ?? 0).toFixed(1)} pcs/manhour · ${plant} is ${Math.abs(prodGap) < 0.05 ? "level with" : prodGap > 0 ? "above" : "below"} the network`,
+  );
   return {
-    type: "AdaptiveCard",
-    $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-    version: "1.4",
-    body,
-    actions: ctx.dashboardUrl ? [{ type: "Action.OpenUrl", title: "Open dashboard", url: ctx.dashboardUrl }] : undefined,
+    lines: lines.filter(Boolean),
+    fallback: {
+      leadtime:     { verdict: ltVerdict, text: `${plant} at ${g.toFixed(2)} days vs network ${(nlt.grossDays ?? 0).toFixed(2)}, target ${LEAD_TIME_TARGET_DAYS}${ltCause ? `; ${ltCause}` : ""}.` },
+      output:       { verdict: trendWord(fgTrend, "Output up", "Output down", "Output steady"), text: `${outText}.` },
+      productivity: { verdict: e2eVerdict, text: `${plant} E2E ${(p.e2e ?? 0).toFixed(1)} pcs/manhour vs network ${(np.e2e ?? 0).toFixed(1)}, ${vsPrior(p.e2eTrend)}.` },
+    },
   };
 }
 
-const SUMMARY_PROMPT = `You write the "what it means" part of a scheduled Microsoft Teams summary of the manufacturing dashboard,
-read by plant and operations managers.
+const SUMMARY_PROMPT = `You write a short, friendly Microsoft Teams update about the manufacturing dashboard for plant and
+operations managers, in the style of a helpful ChatGPT reply — like a colleague explaining the period.
+For a single plant, it covers THEIR plant and compares it with the network (all plants).
+
+Return ONLY a JSON object, no other text:
+{"greeting": "...", "story": "...", "bullets": {"leadtime": {"verdict": "...", "text": "..."}, "output": {"verdict": "...", "text": "..."}, "productivity": {"verdict": "...", "text": "..."}}, "focus": "..."}
+
+- greeting: one warm line naming the plant and period (e.g. "Good morning, J2 — here's your last 30 days at a glance."). No emoji.
+- story: 2–3 sentences: what happened and how the KPIs connect (e.g. waiting time → lead time → output); for a plant,
+  how it stands against the network (use the "faster/slower/above/below the network" words from Facts).
+  NO numbers in the story — the bullets carry them.
+- bullets.*.verdict: 2–4 words (e.g. "Waiting, not working", "Network engine").
+- bullets.*.text: one sentence of at most 25 words: the value with its comparison, then the cause. At most 3 numbers.
+- focus: one imperative sentence starting with a verb — a concrete action on the biggest issue (do not write "this week").
+- If Facts contain a "Check" line, say in that bullet that it is worth a data check.
 
 Rules:
-- EXACTLY 3 sentences, at most 60 words in total, plain English. No markdown, bullets, headings or emojis.
-- Sentence 1 — the most important condition and how it connects to another KPI (the story, not a list of numbers).
-- Sentence 2 — why: the cause from the "Card causes" lines and Signals; keep numbers exactly as given, with units.
-- Sentence 3 — so what: the business impact and one concrete action for this week.
-- The card already lists each KPI value and % change; cite at most two numbers.
+- Friendly, plain, confident English; at most 140 words across all fields. No emojis, no markdown.
+- Copy numbers exactly as written in Facts, with units; never compute new numbers.
+- Never mention hours worked, manhours, headcount, overtime, effort, demand or any cause that is not in Facts.
 
 ${KPI_RELATIONSHIPS}
 
@@ -315,13 +364,56 @@ ${NARRATIVE_RULES}
 
 Only Lead Time, Output and Productivity have data. Do not mention OEE, OPE, yield/bulk/pack loss, RFT or energy.`;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function generateSummaryNarrative(kpi: any, ctx: { plant?: string; rangeLabel: string }): Promise<string | undefined> {
-  if (!kpi?.leadTime) return undefined;
-  return complete(SUMMARY_PROMPT, `KPI data (Plant: ${ctx.plant || "All Plant"}, ${ctx.rangeLabel}):
-${buildKpiContext(kpi)}
+const clean = (v: unknown, max: number) =>
+  typeof v === "string" && v.trim() ? v.replace(/\*\*/g, "").replace(/\s+/g, " ").trim().slice(0, max) : undefined;
 
-Write the 3 sentences:`);
+/** Story for one recipient's plant + range. Never throws; any field the AI misses falls back to the template. */
+export async function generateSummaryStory(ctx: Pick<SummaryContext, "plant" | "rangeLabel" | "cadence" | "kpi" | "network">): Promise<SummaryStory> {
+  const { lines, fallback } = summaryFacts(ctx.plant, ctx.kpi, ctx.network);
+  const base: SummaryStory = { greeting: `Here's ${ctx.plant} for the ${ctx.rangeLabel.toLowerCase()}.`, bullets: fallback };
+  if (!ctx.kpi?.leadTime) return base;
+
+  const raw = await complete(SUMMARY_PROMPT, `Facts (Plant: ${ctx.plant}, ${ctx.rangeLabel}, ${ctx.cadence.toLowerCase()} update):
+${lines.join("\n")}
+
+Write the JSON:`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let j: any;
+  try { j = JSON.parse(raw?.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1) ?? ""); } catch { return base; }
+  const bullet = (k: keyof SummaryStory["bullets"]): SummaryBullet => {
+    const verdict = clean(j?.bullets?.[k]?.verdict, 40), text = clean(j?.bullets?.[k]?.text, 260);
+    return verdict && text ? { verdict, text } : fallback[k];
+  };
+  return {
+    greeting: clean(j?.greeting, 120) ?? base.greeting,
+    story:    clean(j?.story, 600),
+    bullets:  { leadtime: bullet("leadtime"), output: bullet("output"), productivity: bullet("productivity") },
+    focus:    clean(j?.focus, 240),
+  };
+}
+
+export function buildSummaryCard(ctx: SummaryContext): AdaptiveCard {
+  const { story } = ctx;
+  const line = (emoji: string, b: SummaryBullet, first = false): ACTextBlock =>
+    ({ type: "TextBlock", text: `${emoji} **${b.verdict}** — ${b.text}`, wrap: true, spacing: first ? "Medium" : "Small" });
+  const body: ACElement[] = [
+    { type: "TextBlock", text: `${ctx.cadence === "Weekly" ? "👋" : "☀️"} ${story.greeting}`, weight: "Bolder", wrap: true },
+  ];
+  if (story.story) body.push({ type: "TextBlock", text: story.story, wrap: true, spacing: "Medium" });
+  body.push(
+    line("⏱️", story.bullets.leadtime, true),
+    line("📦", story.bullets.output),
+    line("⚙️", story.bullets.productivity),
+  );
+  if (story.focus) body.push({ type: "TextBlock", text: `👉 **Focus this week:** ${story.focus}`, wrap: true, spacing: "Medium" });
+  body.push({ type: "TextBlock", text: `${ctx.cadence} summary · ${ctx.plant} · ${ctx.rangeLabel} · ${nowWib()} WIB`, size: "Small", isSubtle: true, wrap: true, spacing: "Medium" });
+  return {
+    type: "AdaptiveCard",
+    $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+    version: "1.4",
+    body,
+    actions: ctx.dashboardUrl ? [{ type: "Action.OpenUrl", title: "Open dashboard", url: ctx.dashboardUrl }] : undefined,
+  };
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
