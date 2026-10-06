@@ -86,6 +86,18 @@ confirmed. See `docs/BUSINESS_LOGIC.md` → Lead Time basis.
 
 ## Technical Limitations
 
+### Scheduled Teams sends run once a day on Vercel Hobby
+
+**Status: Open (hosting limit) · Area: `/api/cron/notifications`, `vercel.json`**
+
+Hobby allows one cron run per day, so the runner is called at 07:00 WIB (Vercel may fire it any time in that hour). Summaries and digests set to another time go out at the next 07:00 run; "As they happen" alerts are checked then and whenever someone opens the dashboard. Resolves on the internal Kubernetes cluster (CronJob every 15 min, `NOTIF_RUNNER=frequent`). Settings shows this in its note.
+
+### Teams settings need a persistent store on Vercel
+
+**Status: Resolved on Vercel once the Blob store is connected (2026-10-06) · Area: `lib/notifications/store.ts`**
+
+Without `BLOB_STORE_ID` (or `BLOB_READ_WRITE_TOKEN`) the store is a JSON file, which Vercel does not keep. Settings shows a warning; dashboard alerts still work with the recipients cached in the browser, scheduled sends do not.
+
 ### E2E Productivity Has No Prior-Period Trend for YTD
 
 **Status: Open (data limitation)**

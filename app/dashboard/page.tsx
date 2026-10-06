@@ -21,7 +21,7 @@ import { LeadTimeStageStdChart, type StageStdPoint } from "@/components/dashboar
 import { LeadTimePlantTable, type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
 import { FitToScreen } from "@/components/ui/FitToScreen";
 import { formatThousands } from "@/lib/utils";
-import { computeAlerts, type KPIAlert } from "@/lib/alerts";
+import { alertsFromKpi, type KPIAlert } from "@/lib/alerts";
 import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 
@@ -190,12 +190,7 @@ export default function DashboardPage() {
       setKpi(kpiRes);
       setLastUpdated(new Date());
       setRefreshCount((n) => n + 1);
-      const newAlerts = computeAlerts({
-        leadTime:     { value: kpiRes.leadTime?.grossDays ?? 0, trend: kpiRes.leadTime?.grossTrend ?? null },
-        yield:        { bulkLossPct: kpiRes.yield?.bulkLossPct ?? 0, packLossPct: kpiRes.yield?.packLossPct ?? 0, bulkLossTrend: kpiRes.yield?.bulkLossTrend ?? null, packLossTrend: kpiRes.yield?.packLossTrend ?? null },
-        rightFirstTime: { value: kpiRes.rightFirstTime?.value ?? 100, trend: kpiRes.rightFirstTime?.trend ?? null },
-        oee:          { value: kpiRes.oee?.value ?? 100, trend: kpiRes.oee?.trend ?? null },
-      });
+      const newAlerts = alertsFromKpi(kpiRes);
       setAlerts(newAlerts);
       setDismissedIds(new Set());
 
@@ -215,7 +210,8 @@ export default function DashboardPage() {
             alerts: newCritical,
             plant: f.plant,
             period: f.period,
-            withRecommendation: true,
+            startDate: f.startDate,
+            endDate: f.endDate,
             ...(teamsRecipients ? { recipients: teamsRecipients } : {}),
           }),
         }).catch(() => {/* silent — Teams is optional */});
@@ -316,6 +312,8 @@ export default function DashboardPage() {
             onDismiss={handleDismissAlert}
             plant={filters.plant}
             period={filters.period}
+            startDate={filters.startDate}
+            endDate={filters.endDate}
           />
 
           {activeView === "strategic" && (<>
@@ -378,11 +376,6 @@ export default function DashboardPage() {
                         onChange={setProdView}
                       />
                     }
-                    secondary={{
-                      value: `${(kpi?.productivity?.upstream ?? 0).toFixed(1)} · ${(kpi?.productivity?.downstream ?? 0).toFixed(1)}`,
-                      unit: "pcs/mh",
-                      label: "Upstream · Downstream",
-                    }}
                     footerLeft={v.footer}
                     footerRight={prodView === "e2e" && kpi?.productivity?.manhours ? `${formatThousands(Math.round(kpi.productivity.manhours))} mh` : undefined}
                   />
@@ -416,7 +409,6 @@ export default function DashboardPage() {
                     value="—"
                     unit="%"
                     subLabel="target ≥ 65%"
-                    secondary={{ value: "—", unit: "%", label: "OPE (OEE × 0.8)" }}
                     footerLeft="CT_MANUF_KEMAS not connected yet"
                     footerRight="Target ≥ 65%"
                   />
@@ -433,7 +425,6 @@ export default function DashboardPage() {
                     value="—"
                     unit="%"
                     subLabel="target ≤ 3%"
-                    secondary={{ value: "—", unit: "%", label: "Bulk loss · Pack loss" }}
                     footerLeft="CT_MANUF_KEMAS not connected yet"
                     footerRight="Target ≤ 3%"
                   />
@@ -450,7 +441,6 @@ export default function DashboardPage() {
                     value="—"
                     unit="kWh/unit"
                     subLabel="target not set"
-                    secondary={{ value: "—", unit: "kWh/unit", label: "Prior period" }}
                     footerLeft="No source table yet"
                   />
                 </KpiHighlightTarget>

@@ -60,6 +60,8 @@ export interface OutputKPICardProps {
   bulkSparkline: number[];
   /** KPI id whose AI one-liner (KpiOneLiner) shows as a bar below the status row */
   insightId?:   string;
+  /** KPI card standard: off — a card shows only its toggled value; true only for a documented exception */
+  showSecondary?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,6 +77,7 @@ export function OutputKPICard({
   bulkSparkline,
   compact = false,
   insightId,
+  showSecondary = false,
 }: OutputKPICardProps) {
   // Size scale for spacing/sparkline: 1 = regular, 0.8 = compact. Font sizes are always regular.
   const z = (n: number) => (compact ? Math.round(n * 0.8 * 2) / 2 : n);
@@ -291,63 +294,65 @@ export function OutputKPICard({
 
           <KpiOneLiner id={insightId} z={z} />
 
-          {/* ── Secondary metric row ── */}
-          <div
-            style={{
-              marginTop: z(10),
-              paddingTop: z(10),
-              borderTop: "1px solid #eceef2",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingBottom: z(12),
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: z(2) }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: z(4) }}>
-                <span
+          {/* ── Secondary metric row (the other toggle value — off by default, KPI card standard) ── */}
+          {showSecondary ? (
+            <div
+              style={{
+                marginTop: z(10),
+                paddingTop: z(10),
+                borderTop: "1px solid #eceef2",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingBottom: z(12),
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: z(2) }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: z(4) }}>
+                  <span
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: "#101828",
+                      fontFamily: "Lato, sans-serif",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {fmt(secondaryValue)}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "#98a2b3",
+                      fontFamily: "Lato, sans-serif",
+                    }}
+                  >
+                    {secondaryUnit}
+                  </span>
+                </div>
+                <div style={{ fontSize: 10.5, color: "#a3a8b5", fontFamily: "Lato, sans-serif" }}>
+                  {secondaryLabel}
+                </div>
+              </div>
+
+              {/* Secondary trend chip */}
+              {secondaryTrend !== null && (
+                <div
                   style={{
-                    fontSize: 20,
+                    fontSize: 11,
                     fontWeight: 700,
-                    color: "#101828",
+                    color: TONES[toneFromTrend(secondaryTrend)].color,
+                    borderRadius: 5,
+                    padding: `${z(3)}px ${z(9)}px`,
                     fontFamily: "Lato, sans-serif",
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >
-                  {fmt(secondaryValue)}
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: "#98a2b3",
-                    fontFamily: "Lato, sans-serif",
-                  }}
-                >
-                  {secondaryUnit}
-                </span>
-              </div>
-              <div style={{ fontSize: 10.5, color: "#a3a8b5", fontFamily: "Lato, sans-serif" }}>
-                {secondaryLabel}
-              </div>
+                  {trendArrow(secondaryTrend)} {fmtTrend(secondaryTrend)}
+                </div>
+              )}
             </div>
-
-            {/* Secondary trend chip */}
-            {secondaryTrend !== null && (
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: TONES[toneFromTrend(secondaryTrend)].color,
-                  borderRadius: 5,
-                  padding: `${z(3)}px ${z(9)}px`,
-                  fontFamily: "Lato, sans-serif",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {trendArrow(secondaryTrend)} {fmtTrend(secondaryTrend)}
-              </div>
-            )}
-          </div>
+          ) : <div style={{ height: z(12) }} />}
         </div>
       </div>
 
@@ -368,18 +373,20 @@ export function OutputKPICard({
             ? "Finished goods released to warehouse · pcs"
             : "Bulk output accepted this period · kg"}
         </span>
-        <span
-          style={{
-            fontSize: 10,
-            color: "#a3a8b5",
-            fontFamily: "Lato, sans-serif",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {mode === "fg"
-            ? `Bulk: ${fmt(bulkQty)} kg`
-            : `FG: ${fmt(fgQty)} pcs`}
-        </span>
+        {showSecondary && (
+          <span
+            style={{
+              fontSize: 10,
+              color: "#a3a8b5",
+              fontFamily: "Lato, sans-serif",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {mode === "fg"
+              ? `Bulk: ${fmt(bulkQty)} kg`
+              : `FG: ${fmt(fgQty)} pcs`}
+          </span>
+        )}
       </div>
     </div>
   );

@@ -12,6 +12,8 @@ import {
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { cn } from "@/lib/utils";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { ALERT_KPIS } from "@/lib/aiScope";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,9 +31,27 @@ interface NotifSettings {
   digestTime: string;
 }
 
+// Teams: per-recipient plant, alert delivery and summary schedule (server: lib/notifications/store.ts)
+type AlertMode = "off" | "instant" | "digest";
+type SummaryMode = "off" | "daily" | "weekly";
+type SummaryRange = "7D" | "30D" | "YTD";
+
+interface TeamsRecipient {
+  email: string;
+  plant: string;
+  kpis: Partial<Record<KpiKey, boolean>>;
+  alerts: { mode: AlertMode; time: string };
+  summary: { mode: SummaryMode; time: string; weekday: number; range: SummaryRange };
+}
+
 interface TeamsNotifSettings {
   enabled: boolean;
-  recipients: RecipientConfig[];
+  recipients: TeamsRecipient[];
+  // Read-only, from GET /api/settings/teams
+  sender?: { email: string; name?: string; connectedAt: number };
+  runner?: "daily" | "frequent";
+  persistent?: boolean;
+  lastRun?: number;
 }
 
 interface ThresholdSettings {
@@ -110,15 +130,24 @@ function loadNotif(): NotifSettings {
   } catch { return DEFAULT_NOTIF; }
 }
 
+/** Fills defaults for recipients saved before 2026-10-06 ({ email, kpis } or a plain email). Mirrors normalizeRecipient() on the server. */
+function normalizeTeamsRecipient(r: string | Partial<TeamsRecipient> & { email: string }): TeamsRecipient {
+  const o = typeof r === "string" ? { email: r } : r;
+  return {
+    email:   o.email,
+    plant:   o.plant ?? "All Plant",
+    kpis:    o.kpis ?? { ...ALL_KPIS_ON },
+    alerts:  { mode: o.alerts?.mode ?? "instant", time: o.alerts?.time ?? "07:00" },
+    summary: { mode: o.summary?.mode ?? "off", time: o.summary?.time ?? "07:00", weekday: o.summary?.weekday ?? 1, range: o.summary?.range ?? "30D" },
+  };
+}
+
 function loadTeamsNotif(): TeamsNotifSettings {
   try {
     const raw = localStorage.getItem("ct-teams-settings");
     if (!raw) return DEFAULT_TEAMS_NOTIF;
-    const p = JSON.parse(raw) as Partial<TeamsNotifSettings & { recipients: (string | RecipientConfig)[] }>;
-    const recipients: RecipientConfig[] = (p.recipients ?? []).map((r) =>
-      typeof r === "string" ? { email: r, kpis: { ...ALL_KPIS_ON } } : r
-    );
-    return { ...DEFAULT_TEAMS_NOTIF, enabled: p.enabled ?? false, recipients };
+    const p = JSON.parse(raw) as Partial<TeamsNotifSettings>;
+    return { ...DEFAULT_TEAMS_NOTIF, enabled: p.enabled ?? false, recipients: (p.recipients ?? []).map(normalizeTeamsRecipient) };
   } catch { return DEFAULT_TEAMS_NOTIF; }
 }
 
@@ -218,8 +247,9 @@ function SettingsShell() {
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data) {
-          setTeamsNotif(data);
-          localStorage.setItem("ct-teams-settings", JSON.stringify(data));
+          const loaded = { ...data, recipients: (data.recipients ?? []).map(normalizeTeamsRecipient) };
+          setTeamsNotif(loaded);
+          localStorage.setItem("ct-teams-settings", JSON.stringify(loaded));
         } else {
           setTeamsNotif(loadTeamsNotif());
         }
@@ -1079,6 +1109,23 @@ function EmailTab({
   );
 }
 
+const ALERT_MODES: { key: AlertMode; label: string }[] = [
+  { key: "off", label: "Off" }, { key: "instant", label: "As they happen" }, { key: "digest", label: "Daily digest" },
+];
+const SUMMARY_MODES: { key: SummaryMode; label: string }[] = [
+  { key: "off", label: "Off" }, { key: "daily", label: "Daily" }, { key: "weekly", label: "Weekly" },
+];
+const SUMMARY_RANGES: { key: SummaryRange; label: string }[] = [
+  { key: "7D", label: "Last 7 days" }, { key: "30D", label: "Last 30 days" }, { key: "YTD", label: "Year to date" },
+];
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+// Chips only for KPIs that can raise an alert (lib/aiScope.ts); hidden while there is only one
+const ALERT_CHIPS = (Object.keys(KPI_CHIPS) as KpiKey[]).filter((k) => ALERT_KPIS.has(KPI_CHIPS[k]));
+
+const fieldCls = "text-sm border border-gray-200 rounded-lg px-2.5 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-brand-400";
+const fmtWib = (ms: number) =>
+  new Date(ms).toLocaleString("en-GB", { timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short" }) + " WIB";
+
 function TeamsTab({
   teamsNotif, setTeamsNotif, onSave,
 }: {
@@ -1086,6 +1133,7 @@ function TeamsTab({
   setTeamsNotif: (n: TeamsNotifSettings) => void;
   onSave: () => void;
 }) {
+  const { data: session } = useSession();
   const set = (patch: Partial<TeamsNotifSettings>) => setTeamsNotif({ ...teamsNotif, ...patch });
 
   // Persist enabled toggle immediately to server + localStorage cache
@@ -1101,8 +1149,18 @@ function TeamsTab({
   };
   const [emailInput, setEmailInput] = useState("");
   const [emailError, setEmailError] = useState("");
-  const [testState, setTestState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [plants, setPlants] = useState<string[]>(["All Plant"]);
+  const [testState, setTestState] = useState<"idle" | "alert" | "summary" | "success" | "error">("idle");
   const [testMsg, setTestMsg] = useState("");
+  const [senderState, setSenderState] = useState<"idle" | "busy" | "error">("idle");
+  const [senderMsg, setSenderMsg] = useState("");
+
+  useEffect(() => {
+    fetch("/api/dashboard/plants")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (Array.isArray(d?.plants)) setPlants(d.plants); })
+      .catch(() => {});
+  }, []);
 
   const addEmail = () => {
     const t = emailInput.trim().toLowerCase();
@@ -1115,7 +1173,7 @@ function TeamsTab({
       setEmailError("Email already added");
       return;
     }
-    set({ recipients: [...teamsNotif.recipients, { email: t, kpis: { ...ALL_KPIS_ON } }] });
+    set({ recipients: [...teamsNotif.recipients, normalizeTeamsRecipient(t)] });
     setEmailInput("");
     setEmailError("");
   };
@@ -1123,25 +1181,44 @@ function TeamsTab({
   const removeRecipient = (email: string) =>
     set({ recipients: teamsNotif.recipients.filter((r) => r.email !== email) });
 
-  const toggleKpi = (email: string, kpi: KpiKey) =>
-    set({
-      recipients: teamsNotif.recipients.map((r) =>
-        r.email === email ? { ...r, kpis: { ...r.kpis, [kpi]: !r.kpis[kpi] } } : r
-      ),
-    });
+  const updateRecipient = (email: string, patch: (r: TeamsRecipient) => TeamsRecipient) =>
+    set({ recipients: teamsNotif.recipients.map((r) => (r.email === email ? patch(r) : r)) });
 
-  const handleTest = async () => {
-    if (testState === "loading") return;
-    setTestState("loading");
+  const toggleKpi = (email: string, kpi: KpiKey) =>
+    updateRecipient(email, (r) => ({ ...r, kpis: { ...r.kpis, [kpi]: r.kpis[kpi] === false } }));
+
+  // ── Sender connection ──
+  const reloadSender = async () => {
+    const d = await fetch("/api/settings/teams").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (d) setTeamsNotif({ ...teamsNotif, sender: d.sender, lastRun: d.lastRun });
+  };
+  const connectSender = async () => {
+    setSenderState("busy"); setSenderMsg("");
+    const res = await fetch("/api/settings/teams/sender", { method: "POST" }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    if (!res?.ok) { setSenderState("error"); setSenderMsg(d.error ?? "Could not connect the sender"); return; }
+    setSenderState("idle");
+    await reloadSender();
+  };
+  const disconnectSender = async () => {
+    setSenderState("busy"); setSenderMsg("");
+    await fetch("/api/settings/teams/sender", { method: "DELETE" }).catch(() => null);
+    setSenderState("idle");
+    await reloadSender();
+  };
+
+  const handleTest = async (kind: "alert" | "summary") => {
+    if (testState === "alert" || testState === "summary") return;
+    setTestState(kind);
     setTestMsg("");
     try {
       const recipients = teamsNotif.recipients.length > 0 ? teamsNotif.recipients : undefined;
       const res = await fetch("/api/notifications/teams/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipients }),
+        body: JSON.stringify({ kind, recipients }),
       });
-      const data = (await res.json()) as { ok?: boolean; error?: string; hint?: string; sent?: number };
+      const data = (await res.json()) as { ok?: boolean; error?: string; hint?: string; sent?: number; errors?: string[] };
       if (!res.ok) {
         const hint = data.hint === "sign-out-signin"
           ? " Try signing out and back in to refresh Teams permissions."
@@ -1149,15 +1226,20 @@ function TeamsTab({
         throw new Error((data.error ?? "Failed to send") + hint);
       }
       const count = data.sent ?? teamsNotif.recipients.length;
+      const failed = data.errors?.length ? ` · not sent: ${data.errors.join("; ")}` : "";
       setTestState("success");
-      setTestMsg(`Test message sent to ${count} recipient(s)`);
-      setTimeout(() => setTestState("idle"), 3500);
+      setTestMsg(`Test ${kind} sent to ${count} recipient(s)${failed}`);
+      setTimeout(() => setTestState("idle"), failed ? 8000 : 3500);
     } catch (err) {
       setTestMsg(err instanceof Error ? err.message : "Failed to send");
       setTestState("error");
       setTimeout(() => setTestState("idle"), 6000);
     }
   };
+
+  const sender = teamsNotif.sender;
+  const myEmail = session?.user?.email?.toLowerCase();
+  const testing = testState === "alert" || testState === "summary";
 
   return (
     <div className="space-y-4">
@@ -1166,14 +1248,66 @@ function TeamsTab({
           <div>
             <p className="text-sm font-semibold text-gray-800">Enable Teams Notifications</p>
             <p className="text-xs text-gray-500 mt-0.5">
-              Send a Teams DM when an alert fires, for the metrics each recipient selects
+              Alerts and scheduled summaries as Teams DMs, per recipient
             </p>
           </div>
           <Toggle checked={teamsNotif.enabled} onChange={setEnabled} />
         </div>
       </Card>
 
+      {teamsNotif.persistent === false && (
+        <div className="flex items-start gap-2.5 rounded-xl px-4 py-3 border border-[#F5E3A3] bg-[#FFFBE4]">
+          <AlertCircle size={14} className="text-[#342900] shrink-0 mt-0.5" />
+          <p className="text-xs text-[#342900] leading-relaxed">
+            Settings are not stored on this deployment yet, so scheduled sends cannot run. Connect a Vercel Blob store to the project (adds BLOB_STORE_ID), redeploy, then save again.
+          </p>
+        </div>
+      )}
+
       <div className={cn("space-y-4", !teamsNotif.enabled && "opacity-40 pointer-events-none")}>
+        <Card title="Sender">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              {sender ? (
+                <>
+                  <p className="text-sm font-medium text-gray-800 truncate">{sender.name ?? sender.email}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">{sender.email} · connected {fmtWib(sender.connectedAt)}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-gray-800">No sender connected</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Scheduled alerts and summaries need one. Alerts sent from the dashboard go out from your own account.</p>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {sender && (
+                <button
+                  onClick={disconnectSender}
+                  disabled={senderState === "busy"}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Disconnect
+                </button>
+              )}
+              {sender?.email !== myEmail && (
+                <button
+                  onClick={connectSender}
+                  disabled={senderState === "busy"}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 transition-colors"
+                >
+                  {senderState === "busy" && <Loader2 size={13} className="animate-spin" />}
+                  Use my account
+                </button>
+              )}
+            </div>
+          </div>
+          {senderState === "error" && <p className="text-xs text-red-500 mt-2">{senderMsg}</p>}
+          <p className="text-xs text-gray-400 mt-3">
+            To send from a service account, sign in with it and click Use my account.
+          </p>
+        </Card>
+
         <Card title="Teams Recipients">
           <div className="space-y-3">
             <div className="flex gap-2">
@@ -1199,26 +1333,56 @@ function TeamsTab({
             {emailError && <p className="text-xs text-red-500">{emailError}</p>}
             {teamsNotif.recipients.length > 0 ? (
               <ul className="space-y-2">
-                {teamsNotif.recipients.map((recipient) => (
-                  <li key={recipient.email} className="bg-gray-50 rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-2.5">
-                      <span className="text-sm font-medium text-gray-700">{recipient.email}</span>
+                {teamsNotif.recipients.map((r) => (
+                  <li key={r.email} className="bg-gray-50 rounded-xl p-3 space-y-2.5">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-gray-700 flex-1 truncate">{r.email}</span>
+                      <select
+                        aria-label={`Plant for ${r.email}`}
+                        value={r.plant}
+                        onChange={(e) => updateRecipient(r.email, (x) => ({ ...x, plant: e.target.value }))}
+                        className={fieldCls}
+                      >
+                        {(plants.includes(r.plant) ? plants : [...plants, r.plant]).map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
                       <button
-                        onClick={() => removeRecipient(recipient.email)}
+                        onClick={() => removeRecipient(r.email)}
                         className="text-gray-400 hover:text-red-500 transition-colors"
-                        aria-label={`Remove ${recipient.email}`}
+                        aria-label={`Remove ${r.email}`}
                       >
                         <X size={13} />
                       </button>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(Object.keys(KPI_CHIPS) as KpiKey[]).map((kpi) => (
+                    {sender && sender.email === r.email && (
+                      <p className="text-xs text-[#342900] bg-[#FFFBE4] rounded-md px-2 py-1">
+                        This is the sender account — Teams cannot send a DM to it.
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="w-16 text-xs font-semibold text-gray-500">Alerts</span>
+                      <SegmentedToggle
+                        ariaLabel={`Alerts for ${r.email}`}
+                        options={ALERT_MODES}
+                        value={r.alerts.mode}
+                        onChange={(mode) => updateRecipient(r.email, (x) => ({ ...x, alerts: { ...x.alerts, mode } }))}
+                      />
+                      {r.alerts.mode === "digest" && (
+                        <input
+                          type="time"
+                          aria-label="Digest time (WIB)"
+                          value={r.alerts.time}
+                          onChange={(e) => updateRecipient(r.email, (x) => ({ ...x, alerts: { ...x.alerts, time: e.target.value } }))}
+                          className={fieldCls}
+                        />
+                      )}
+                      {r.alerts.mode !== "off" && ALERT_CHIPS.length > 1 && ALERT_CHIPS.map((kpi) => (
                         <button
                           key={kpi}
-                          onClick={() => toggleKpi(recipient.email, kpi)}
+                          onClick={() => toggleKpi(r.email, kpi)}
                           className={cn(
                             "text-xs px-2.5 py-1 rounded-full border transition-colors",
-                            recipient.kpis[kpi]
+                            r.kpis[kpi] !== false
                               ? "bg-brand-50 text-brand-700 border-brand-200"
                               : "bg-white text-gray-400 border-gray-200 line-through"
                           )}
@@ -1226,6 +1390,45 @@ function TeamsTab({
                           {KPI_CHIPS[kpi]}
                         </button>
                       ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="w-16 text-xs font-semibold text-gray-500">Summary</span>
+                      <SegmentedToggle
+                        ariaLabel={`Summary for ${r.email}`}
+                        options={SUMMARY_MODES}
+                        value={r.summary.mode}
+                        onChange={(mode) => updateRecipient(r.email, (x) => ({ ...x, summary: { ...x.summary, mode } }))}
+                      />
+                      {r.summary.mode === "weekly" && (
+                        <select
+                          aria-label="Weekday"
+                          value={r.summary.weekday}
+                          onChange={(e) => updateRecipient(r.email, (x) => ({ ...x, summary: { ...x.summary, weekday: Number(e.target.value) } }))}
+                          className={fieldCls}
+                        >
+                          {WEEKDAYS.map((d, i) => <option key={d} value={i + 1}>{d}</option>)}
+                        </select>
+                      )}
+                      {r.summary.mode !== "off" && (
+                        <>
+                          <input
+                            type="time"
+                            aria-label="Summary time (WIB)"
+                            value={r.summary.time}
+                            onChange={(e) => updateRecipient(r.email, (x) => ({ ...x, summary: { ...x.summary, time: e.target.value } }))}
+                            className={fieldCls}
+                          />
+                          <select
+                            aria-label="Period the summary covers"
+                            value={r.summary.range}
+                            onChange={(e) => updateRecipient(r.email, (x) => ({ ...x, summary: { ...x.summary, range: e.target.value as SummaryRange } }))}
+                            className={fieldCls}
+                          >
+                            {SUMMARY_RANGES.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                          </select>
+                        </>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -1236,17 +1439,22 @@ function TeamsTab({
           </div>
         </Card>
 
-        <div className="flex items-start gap-2.5 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
-          <MessageSquare size={14} className="text-indigo-400 shrink-0 mt-0.5" />
-          <p className="text-xs text-indigo-700 leading-relaxed">
-            Alerts are sent as soon as they fire. Each recipient only gets DMs for the metrics they select.
+        <div className="flex items-start gap-2.5 bg-[#EEF4FB] border border-[#C3CEE3] rounded-xl px-4 py-3">
+          <Clock size={14} className="text-[#1E4076] shrink-0 mt-0.5" />
+          <p className="text-xs text-[#16305C] leading-relaxed">
+            Times are WIB. Each recipient gets alerts and summaries for their plant only.{" "}
+            {teamsNotif.runner === "frequent"
+              ? "Schedules are checked every 15 minutes."
+              : "On this deployment schedules are checked once a day at 07:00 WIB — a schedule at another time goes out at the next 07:00 check."}
+            {" "}Alerts as they happen are also sent when someone opens the dashboard.
+            {teamsNotif.lastRun ? ` Last check: ${fmtWib(teamsNotif.lastRun)}.` : ""}
           </p>
         </div>
 
         {testState === "error" && (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
             <AlertCircle size={15} className="shrink-0 mt-0.5" />
-            <span>{testMsg || "Failed to send. Make sure TEAMS_REFRESH_TOKEN is configured in Vercel."}</span>
+            <span>{testMsg || "Failed to send."}</span>
           </div>
         )}
         {testState === "success" && (
@@ -1258,22 +1466,22 @@ function TeamsTab({
       </div>
 
       <div className="flex items-center justify-between pt-5 border-t border-gray-100">
-        <button
-          onClick={handleTest}
-          disabled={testState === "loading"}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-all",
-            testState === "loading"
-              ? "border-gray-200 text-gray-500 cursor-wait"
-              : "border-gray-300 text-gray-700 hover:bg-gray-50"
-          )}
-        >
-          {testState === "loading" ? (
-            <><Loader2 size={14} className="animate-spin" />Sending…</>
-          ) : (
-            <><Send size={14} />Send Test Teams Message</>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          {(["alert", "summary"] as const).map((kind) => (
+            <button
+              key={kind}
+              onClick={() => handleTest(kind)}
+              disabled={testing}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-all",
+                testing ? "border-gray-200 text-gray-500 cursor-wait" : "border-gray-300 text-gray-700 hover:bg-gray-50"
+              )}
+            >
+              {testState === kind ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              {testState === kind ? "Sending…" : `Send test ${kind}`}
+            </button>
+          ))}
+        </div>
         <SaveButton onSave={onSave} />
       </div>
     </div>

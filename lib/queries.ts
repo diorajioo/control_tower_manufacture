@@ -544,6 +544,33 @@ export async function getE2EProductivity(filters: QueryFilters) {
   return { avgE2EProd: Number((rows[0]?.AVG_E2E_PROD ?? 0).toFixed(1)) };
 }
 
+// Per-plant FG and E2E productivity — only to find which plant drives the Output / Productivity
+// cards (AI one-liner causes, lib/kpiNarrative.ts). FG comes from CT_MANUF_TRENDS because the card's
+// FG table has no PLANT column: use its shares, never its pcs, next to the card value.
+// E2E keeps SUM + COUNT so per-plant contributions add up exactly to the card's AVG.
+export async function getPlantDrivers(filters: QueryFilters) {
+  const fgDate  = periodDateWhere("PO_FG_DONE_DATE",    filters.period, filters.startDate, filters.endDate);
+  const e2eDate = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
+  const [fgRows, e2eRows] = await Promise.all([
+    executeQuery<{ PLANT: string; FG: number }>(`
+      SELECT PLANT, SUM(RELEASE_FG) AS FG
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_TRENDS
+      WHERE ${fgDate.sql}
+      GROUP BY PLANT
+    `, fgDate.binds),
+    executeQuery<{ PLANT: string; E2E_SUM: number; E2E_N: number }>(`
+      SELECT PLANT, SUM(E2E_PRODUCTIVITY) AS E2E_SUM, COUNT(E2E_PRODUCTIVITY) AS E2E_N
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+      WHERE ${e2eDate.sql}
+      GROUP BY PLANT
+    `, e2eDate.binds),
+  ]);
+  return {
+    fg:  fgRows.filter((r) => r.PLANT).map((r) => ({ plant: r.PLANT, fg: Number(r.FG ?? 0) })),
+    e2e: e2eRows.filter((r) => r.PLANT).map((r) => ({ plant: r.PLANT, sum: Number(r.E2E_SUM ?? 0), n: Number(r.E2E_N ?? 0) })),
+  };
+}
+
 // Upstream Productivity → CT_MANUF_OLAH
 // Tableau LOD: {FIXED [Process Order Sfg]: MAX(Release_Bulk_per_SFG) / (SUM(Leadtime_per_ActivityID)/60) / SUM(Operator_per_Position)}
 export async function getUpstreamProductivity(filters: QueryFilters) {

@@ -88,6 +88,8 @@ export interface LeadTimeKPICardProps {
   basisOverride?:  "created" | "released";
   /** KPI id whose AI one-liner (KpiOneLiner) shows as a bar below the status row */
   insightId?:      string;
+  /** KPI card standard: off — a card shows only its toggled value; true only for a documented exception */
+  showSecondary?:  boolean;
 }
 
 export function LeadTimeKPICard({
@@ -102,6 +104,7 @@ export function LeadTimeKPICard({
   showBreakdown = true,
   basisOverride = "created",
   insightId,
+  showSecondary = false,
 }: LeadTimeKPICardProps) {
   const [unit, setUnit] = useState<"days" | "hours">("days");
   const [type, setType] = useState<"gross" | "nett">("gross");
@@ -251,36 +254,38 @@ export function LeadTimeKPICard({
 
           <KpiOneLiner id={insightId} z={z} />
 
-          {/* ── Secondary metric row ── */}
-          <div
-            style={{
-              marginTop: z(10),
-              paddingTop: z(10),
-              borderTop: "1px solid #eceef2",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingBottom: z(12),
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: z(2) }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: z(4) }}>
-                <span style={{ fontSize: 20, fontWeight: 700, color: "#101828", fontVariantNumeric: "tabular-nums" }}>
-                  {fmtVal(secondaryDays)}
-                </span>
-                <span style={{ fontSize: 11, color: "#98a2b3" }}>{unitLabel}</span>
+          {/* ── Secondary metric row (the other toggle value — off by default, KPI card standard) ── */}
+          {showSecondary ? (
+            <div
+              style={{
+                marginTop: z(10),
+                paddingTop: z(10),
+                borderTop: "1px solid #eceef2",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingBottom: z(12),
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: z(2) }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: z(4) }}>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: "#101828", fontVariantNumeric: "tabular-nums" }}>
+                    {fmtVal(secondaryDays)}
+                  </span>
+                  <span style={{ fontSize: 11, color: "#98a2b3" }}>{unitLabel}</span>
+                </div>
+                <div style={{ fontSize: 10.5, color: "#a3a8b5" }}>
+                  {type === "gross" ? "Nett" : "Gross"} lead time this period
+                </div>
               </div>
-              <div style={{ fontSize: 10.5, color: "#a3a8b5" }}>
-                {type === "gross" ? "Nett" : "Gross"} lead time this period
-              </div>
-            </div>
 
-            {secondaryTrend !== null && (
-              <div style={{ fontSize: 11, fontWeight: 700, color: trendColor(secondaryTrend), borderRadius: 5, padding: `${z(3)}px ${z(9)}px`, fontVariantNumeric: "tabular-nums" }}>
-                {trendArrow(secondaryTrend)} {trendLabel(secondaryTrend)}
-              </div>
-            )}
-          </div>
+              {secondaryTrend !== null && (
+                <div style={{ fontSize: 11, fontWeight: 700, color: trendColor(secondaryTrend), borderRadius: 5, padding: `${z(3)}px ${z(9)}px`, fontVariantNumeric: "tabular-nums" }}>
+                  {trendArrow(secondaryTrend)} {trendLabel(secondaryTrend)}
+                </div>
+              )}
+            </div>
+          ) : <div style={{ height: z(12) }} />}
 
           {/* Breakdown bars */}
           {showBreakdown && positions.length > 0 && (

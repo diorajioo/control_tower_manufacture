@@ -137,11 +137,6 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 trend={kpi?.productivity?.e2eTrend ?? null}
                 subLabel={kpi?.productivity?.e2ePrev ? `vs prior period ${kpi.productivity.e2ePrev.toFixed(1)}` : "vs prior period"}
                 sparkline={kpi?.productivity?.sparkline ?? []}
-                secondary={{
-                  value: `${(kpi?.productivity?.upstream ?? 0).toFixed(1)} · ${(kpi?.productivity?.downstream ?? 0).toFixed(1)}`,
-                  unit: "pcs/mh",
-                  label: "Upstream · Downstream",
-                }}
                 footerLeft="Output per operator manhour, end to end"
                 footerRight={kpi?.productivity?.manhours ? `${formatThousands(Math.round(kpi.productivity.manhours))} mh` : undefined}
               />
@@ -163,7 +158,6 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 icon={<Gauge size={13} color="#8b5cf6" strokeWidth={1.75} />}
                 value="—" unit="%"
                 subLabel="target ≥ 65%"
-                secondary={{ value: "—", unit: "%", label: "OPE (OEE × 0.8)" }}
                 footerLeft="CT_MANUF_KEMAS not connected yet"
                 footerRight="Target ≥ 65%"
               />
@@ -175,7 +169,6 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 icon={<Droplets size={13} color="#f59e0b" strokeWidth={1.75} />}
                 value="—" unit="%"
                 subLabel="target ≤ 3%"
-                secondary={{ value: "—", unit: "%", label: "Bulk loss · Pack loss" }}
                 footerLeft="CT_MANUF_KEMAS not connected yet"
                 footerRight="Target ≤ 3%"
               />
@@ -187,7 +180,6 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 icon={<Zap size={13} color="#eab308" strokeWidth={1.75} />}
                 value="—" unit="kWh/unit"
                 subLabel="target not set"
-                secondary={{ value: "—", unit: "kWh/unit", label: "Prior period" }}
                 footerLeft="No source table yet"
               />
             </KpiHighlightTarget>

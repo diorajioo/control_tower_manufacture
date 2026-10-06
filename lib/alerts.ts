@@ -167,3 +167,14 @@ export function computeAlerts(kpi: KPISnapshot): KPIAlert[] {
   // Only KPIs with data on a page raise alerts (see lib/aiScope.ts)
   return alerts.filter((a) => ALERT_KPIS.has(a.kpi));
 }
+
+/** Alerts from a /api/dashboard/kpi snapshot — the dashboard and the scheduled Teams runner use the same mapping. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function alertsFromKpi(kpi: any): KPIAlert[] {
+  return computeAlerts({
+    leadTime:       { value: kpi.leadTime?.grossDays ?? 0, trend: kpi.leadTime?.grossTrend ?? null },
+    yield:          { bulkLossPct: kpi.yield?.bulkLossPct ?? 0, packLossPct: kpi.yield?.packLossPct ?? 0, bulkLossTrend: kpi.yield?.bulkLossTrend ?? null, packLossTrend: kpi.yield?.packLossTrend ?? null },
+    rightFirstTime: { value: kpi.rightFirstTime?.value ?? 100, trend: kpi.rightFirstTime?.trend ?? null },
+    oee:            { value: kpi.oee?.value ?? 100, trend: kpi.oee?.trend ?? null },
+  });
+}

@@ -91,8 +91,10 @@ lib/
 ├── agent-router.ts                 # Complexity classifier → model selector
 ├── diagnostic-prompt.ts            # Dynamic system prompt builder
 ├── chat-history.ts                 # Chat session history (localStorage)
-├── graph/teams.ts                  # Teams Graph API (send DM, HTML escaping)
-├── alerts/teams.ts                 # Teams alert formatter
+├── graph/teams.ts                  # Teams Graph API (send DM with Adaptive Card attachment)
+├── alerts/teams.ts                 # Teams alert card (buildAlertCard) + AI narrative + legacy webhook
+├── kpiData.ts                      # KPI snapshot + cache behind /api/dashboard/kpi (also read by Teams alerts)
+├── notifications/                  # Teams store (Blob / file), schedule math, delivery (runner + interactive)
 ├── email.ts                        # Resend email integration
 ├── settings.ts                     # Settings persistence
 ├── types.ts                        # Shared TypeScript types
@@ -161,7 +163,7 @@ Lead Time "monitor" button → router.push('/monitor?page=lead-time')
 
 ## Caching Strategy
 
-Two cached wrapper functions in `/api/dashboard/kpi/route.ts`:
+Two cached wrapper functions in `lib/kpiData.ts` (`getKpiSnapshot()`; the route only parses params):
 - `fetchByPeriod`: keyed by `plant + preset period` — all requests for the same plant+period hit the same cache entry.
 - `fetchByDates`: keyed by `plant + startDate + endDate` — custom date ranges.
 
@@ -189,7 +191,7 @@ Generates a 3-sentence executive summary of current KPI state. Cached 5 hours in
 
 Inputs: Lead Time (gross/nett), Output (bulk + FG), E2E Productivity, and their MoM trends.
 
-Output: the paragraph, then a `[[CARDS]]` line and one `leadtime: / output: / productivity:` one-liner each (≤ 12 words). `AISummary.tsx` shows only the paragraph and publishes the one-liners to the KPI cards through `components/ui/KpiOneLiner.tsx` (one call, one cache — `ai_summary_*_v5`).
+Output: the paragraph, then a `[[CARDS]]` line and one `leadtime: / output: / productivity:` one-liner each (≤ 14 words) that states a cause, not the card's own numbers — taken from the "Card causes" lines `cardCauses()` (`lib/kpiNarrative.ts`) computes: largest stage and its share of gross lead time; the plant driving the Released FG / E2E change (`getPlantDrivers()`, `output.plantDrivers` / `productivity.plantDrivers` in `/api/dashboard/kpi`, All Plant only). `AISummary.tsx` shows only the paragraph and publishes the one-liners to the KPI cards through `components/ui/KpiOneLiner.tsx` (one call, one cache — `ai_summary_*_v6`).
 
 **AI narrative (`lib/kpiNarrative.ts`):** Summary, AI Risks and Chat get the same compact KPI context (`buildKpiContext`: lead time gross/nett + composition + top 3 stages, output FG/bulk, productivity E2E/upstream/downstream, all with trends) plus computed direction **Signals**, a KPI relationship map and narrative rules (cause → effect, only link KPIs whose directions fit, no assumed data). Summary = 3 sentences: what happened → why / link → so what + action. Chat gets the full `kpi` object from Overview and a `lead_time_by_stage` tool.
 
@@ -279,7 +281,50 @@ Full security documentation: `docs/SECURITY.md`.
 | `TEAMS_WEBHOOK_URL` | Optional | Power Automate webhook (legacy fallback) |
 | `TEAMS_RECIPIENTS` | Optional | JSON array of Teams recipient configs |
 | `RESEND_API_KEY` | Optional | Email notification via Resend |
+| `BLOB_STORE_ID` | Yes for Teams on Vercel | Notification store (Vercel Blob, private). Added when a Blob store is connected to the project; auth is the runtime Vercel OIDC token (no secret to copy). Outside Vercel use `BLOB_READ_WRITE_TOKEN` instead. Neither set → JSON file in `NOTIF_STORE_DIR` |
+| `NOTIF_STORE_DIR` | Optional | File store directory (default `./data`) — local dev, or a persistent volume on Kubernetes |
+| `NOTIF_STORE_KEY` | Optional | Key that encrypts the sender's refresh token at rest; defaults to `NEXTAUTH_SECRET` (rotating it means reconnecting the sender) |
+| `CRON_SECRET` | Yes for scheduled sends | Bearer secret for `/api/cron/notifications`; Vercel cron sends it automatically |
+| `NOTIF_RUNNER` | Optional | `frequent` when the runner is called every 15 min (Kubernetes) — only changes the Settings copy; default `daily` |
 
+
+## Scheduled notifications (Teams alerts + summaries)
+
+Settings → Notifications → Microsoft Teams sets, per recipient: plant, alerts (`Off` / `As they happen` / `Daily digest` + time) and summary (`Off` / `Daily` / `Weekly` + weekday, time, range 7D / 30D / YTD). Times are WIB.
+
+| Piece | Where |
+|---|---|
+| Store (settings, schedules, dedup log, sender) | `lib/notifications/store.ts` — Vercel Blob `notifications/state.json` (private, read without CDN cache, `ifMatch` ETag writes with retry) or a JSON file. Legacy `data/teams-settings.json` is read as a fallback |
+| Due logic | `lib/notifications/schedule.ts` — `isDue()`: latest occurrence not sent yet and ≤ 24 h old |
+| Delivery | `lib/notifications/run.ts` — `runScheduledNotifications()` (runner), `sendAlertsToRecipients()` (dashboard sends), `sendTestSummaries()` (Settings test) |
+| Cards | `lib/alerts/teams.ts` — `buildAlertCard()`, `buildSummaryCard()` + AI narratives |
+| Runner endpoint | `GET /api/cron/notifications`, `Authorization: Bearer $CRON_SECRET` |
+| Sender | `POST/DELETE /api/settings/teams/sender` — stores the signed-in user's refresh token (encrypted, rotated on use). Today the user's own account; a service account later signs in and clicks "Use my account" |
+
+Rules: alerts go only to recipients of the same plant; `instant` alerts are deduped per recipient for 20 h (`email|alert|plant|id`), so the runner and open dashboards never double-send. Scheduled alert checks use the last 30 days vs the 30 days before. A schedule is marked sent only after Teams accepted the message; saving settings marks new schedules as sent "now", so the first one goes out at the next occurrence.
+
+**Runner cadence**
+- Vercel Hobby: `vercel.json` cron `0 0 * * *` (07:00 WIB, once a day — plan limit). A schedule at another time goes out at the next 07:00 run.
+- Kubernetes (planned): a CronJob every 15 minutes, set `NOTIF_RUNNER=frequent` and a persistent `NOTIF_STORE_DIR` volume (or keep Blob):
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata: { name: control-tower-notifications }
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: curlimages/curl
+              args: ["-fsS", "-H", "Authorization: Bearer $(CRON_SECRET)", "http://control-tower/api/cron/notifications"]
+              env: [{ name: CRON_SECRET, valueFrom: { secretKeyRef: { name: control-tower, key: CRON_SECRET } } }]
+```
 
 ## Data source — Snowflake / ClickHouse (`lib/db.ts`)
 

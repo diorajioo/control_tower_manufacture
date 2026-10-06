@@ -2,116 +2,102 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
-import { sendTeamsAlerts } from "@/lib/alerts/teams";
-import { sendGraphAlerts, sendGraphAlertsRouted, type TeamsRecipientConfig } from "@/lib/graph/teams";
+import { sendTeamsAlerts, generateAlertNarrative } from "@/lib/alerts/teams";
+import { sendGraphAlerts } from "@/lib/graph/teams";
 import type { KPIAlert } from "@/lib/alerts";
-import { getTeamsSettings, filterUnsentAlerts, markAlertsSent } from "@/lib/settings";
+import { getTeamsSettings, alertKey, filterUnsentKeys, markSent } from "@/lib/settings";
+import { normalizeRecipient, type RecipientConfig } from "@/lib/notifications/store";
+import { sendAlertsToRecipients, dashboardUrl } from "@/lib/notifications/run";
+import { getKpiSnapshot } from "@/lib/kpiData";
 
+// KPI snapshot (cache miss → Snowflake) + AI narrative before sending
+export const maxDuration = 60;
+
+/**
+ * Alerts computed in the browser (dashboard auto-send, alert panel, header button).
+ * Routing, per-recipient dedup and the card: lib/notifications/run.ts. Scheduled sends: /api/cron/notifications.
+ */
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json() as {
-    alerts:              KPIAlert[];
-    plant?:              string;
-    period?:             string;
-    withRecommendation?: boolean;
-    /** Recipients from UI settings (client-sent, used as fallback) */
-    recipients?:         TeamsRecipientConfig[];
-    /** Set true to skip deduplication (e.g. manual "Send to Teams" button) */
-    force?:              boolean;
+    alerts:      KPIAlert[];
+    plant?:      string;
+    period?:     string;
+    /** Needed for custom periods; presets resolve their own dates */
+    startDate?:  string;
+    endDate?:    string;
+    /** Recipients cached in the browser — used only when the server has none */
+    recipients?: Array<Partial<RecipientConfig> & { email: string }>;
+    /** Manual send: skip dedup and include digest recipients */
+    force?:      boolean;
   };
 
   if (!Array.isArray(body.alerts) || body.alerts.length === 0) {
     return NextResponse.json({ error: "No alerts to send" }, { status: 400 });
   }
 
-  const opts = {
-    plant:              body.plant,
-    period:             body.period,
-    withRecommendation: body.withRecommendation ?? false,
-    dashboardUrl:       process.env.NEXTAUTH_URL,
-  };
-
-  // ── Deduplication ─────────────────────────────────────────────────────────
-  // Skip for manual sends (force=true); enforce for auto-sends so multiple
-  // open sessions don't each trigger the same alert.
-  let alertsToSend = body.alerts;
-  if (!body.force) {
-    const unsentIds = await filterUnsentAlerts(body.alerts.map((a) => a.id));
-    if (unsentIds.length === 0) {
-      return NextResponse.json({ ok: true, sent: 0, skipped: body.alerts.length, reason: "dedup" });
-    }
-    alertsToSend = body.alerts.filter((a) => unsentIds.includes(a.id));
-  }
-
-  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-
-  // ── Master switch ─────────────────────────────────────────────────────────
-  // Read server settings first. If the feature has been configured via UI
-  // (recipients.length > 0) and is currently disabled, block ALL sends —
-  // even from sessions that still have a stale enabled=true in their ref,
-  // and even if TEAMS_RECIPIENTS env var is set.
-  const serverSettings = await getTeamsSettings();
-  if (!serverSettings.enabled && serverSettings.recipients.length > 0) {
+  // ── Master switch: once configured in Settings, "off" blocks every send ──
+  const server = await getTeamsSettings();
+  if (!server.enabled && server.recipients.length > 0) {
     return NextResponse.json({ ok: true, sent: 0, reason: "disabled" });
   }
 
-  // ── Resolve recipients: server settings > client-sent > env var ───────────
-  const recipients: TeamsRecipientConfig[] =
-    serverSettings.enabled && serverSettings.recipients.length > 0
-      ? serverSettings.recipients
-      : Array.isArray(body.recipients) && body.recipients.length > 0
-        ? body.recipients
+  const plant = body.plant || "All Plant";
+  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+
+  // ── Recipients: server settings > client-sent ─────────────────────────────
+  const recipients: RecipientConfig[] =
+    server.enabled && server.recipients.length > 0
+      ? server.recipients
+      : Array.isArray(body.recipients)
+        ? body.recipients.filter((r) => typeof r?.email === "string").map(normalizeRecipient)
         : [];
 
-  // ── Send ──────────────────────────────────────────────────────────────────
-
   if (recipients.length > 0) {
-    const result = await sendGraphAlertsRouted(alertsToSend, recipients, {
-      ...opts,
-      accessToken: jwt?.accessToken as string | undefined,
+    const result = await sendAlertsToRecipients(body.alerts, recipients, {
+      plant, period: body.period, startDate: body.startDate, endDate: body.endDate,
+      force: body.force, sessionAccessToken: jwt?.accessToken as string | undefined,
     });
-
-    if (result.sent > 0) await markAlertsSent(alertsToSend.map((a) => a.id));
-
-    if (!result.ok) {
+    if (result.errors.length > 0) {
       return NextResponse.json(
-        { error: result.errors.join("; "), sent: result.sent },
-        { status: result.sent > 0 ? 207 : 502 }
+        { error: result.errors.join("; "), sent: result.sent.length },
+        { status: result.sent.length > 0 ? 207 : 502 },
       );
     }
-    return NextResponse.json({ ok: true, sent: result.sent });
+    return NextResponse.json({ ok: true, sent: result.sent.length, reason: result.skipped });
   }
 
-  // ── Env-var fallback (all alerts → all recipients) ────────────────────────
-  if (process.env.TEAMS_RECIPIENTS) {
-    const result = await sendGraphAlerts(alertsToSend, {
-      ...opts,
-      accessToken: jwt?.accessToken as string | undefined,
-    });
-
-    if (result.sent > 0) await markAlertsSent(alertsToSend.map((a) => a.id));
-
-    if (!result.ok) {
-      return NextResponse.json(
-        { error: result.errors.join("; "), sent: result.sent },
-        { status: result.sent > 0 ? 207 : 502 }
-      );
+  // ── Legacy fallbacks: TEAMS_RECIPIENTS (all alerts → all) or webhook ─────
+  if (process.env.TEAMS_RECIPIENTS || process.env.TEAMS_WEBHOOK_URL) {
+    let alerts = body.alerts;
+    if (!body.force) {
+      const fresh = new Set(await filterUnsentKeys(alerts.map((a) => alertKey("env", plant, a.id))));
+      alerts = alerts.filter((a) => fresh.has(alertKey("env", plant, a.id)));
+      if (alerts.length === 0) return NextResponse.json({ ok: true, sent: 0, reason: "dedup" });
     }
-    return NextResponse.json({ ok: true, sent: result.sent });
-  }
+    const keys = alerts.map((a) => alertKey("env", plant, a.id));
+    const kpi = await getKpiSnapshot(plant, body.period ?? "", body.startDate ?? "", body.endDate ?? "").catch(() => undefined);
+    const narrative = kpi ? await generateAlertNarrative(alerts, kpi, { plant, period: body.period }) : undefined;
+    const opts = { plant, period: body.period, dashboardUrl: dashboardUrl(), kpi, narrative };
 
-  // ── Webhook fallback (legacy) ─────────────────────────────────────────────
-  if (process.env.TEAMS_WEBHOOK_URL) {
-    const result = await sendTeamsAlerts(alertsToSend, opts);
-    if (result.ok) await markAlertsSent(alertsToSend.map((a) => a.id));
+    if (process.env.TEAMS_RECIPIENTS) {
+      const result = await sendGraphAlerts(alerts, { ...opts, accessToken: jwt?.accessToken as string | undefined });
+      if (!result.ok) {
+        return NextResponse.json({ error: result.errors.join("; "), sent: result.sent }, { status: result.sent > 0 ? 207 : 502 });
+      }
+      await markSent(keys);
+      return NextResponse.json({ ok: true, sent: result.sent });
+    }
+    const result = await sendTeamsAlerts(alerts, opts);
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
-    return NextResponse.json({ ok: true, sent: alertsToSend.length });
+    await markSent(keys);
+    return NextResponse.json({ ok: true, sent: alerts.length });
   }
 
   return NextResponse.json(
-    { error: "Teams is not configured yet. Set TEAMS_RECIPIENTS or configure recipients in Settings." },
+    { error: "Teams is not configured yet. Add recipients in Settings → Microsoft Teams." },
     { status: 503 }
   );
 }

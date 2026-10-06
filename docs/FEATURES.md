@@ -148,7 +148,18 @@ Only **critical** alerts are auto-sent to Teams via Graph API.
 - **Primary**: Microsoft Teams DM via Graph API (delegated auth, no admin consent needed). Uses `Chat.Create + ChatMessage.Send` scopes.
 - **Fallback**: Power Automate webhook (`TEAMS_WEBHOOK_URL` env var), used if `TEAMS_RECIPIENTS` is not configured.
 - Recipients configured in Settings page and persisted server-side.
-- Alert content HTML-escaped (`escHtml()` in `lib/graph/teams.ts`) before embedding in Teams card body.
+- **Message format (2026-10-06): Adaptive Card + AI narrative**, the same card on every path (`buildAlertCard()` in `lib/alerts/teams.ts`; Graph sends it as a chat attachment, `summary` = push preview line):
+  - Header (severity-colored container): `CRITICAL · LEAD TIME`, the alert message, plant · period · time WIB.
+  - Facts: gross lead time + basis, target and days over, **Main driver** (largest stage + share of gross, `cardCause()` in `lib/kpiNarrative.ts`). The % change is only in the header.
+  - **Why and what to do**: 2 AI sentences (≤ 45 words) — cause + one action this week (`generateAlertNarrative()`, shares `buildKpiContext` / `KPI_RELATIONSHIPS` with AI Summary). Omitted if the AI call fails.
+  - Button: Open dashboard (`NEXTAUTH_URL/dashboard`).
+  - The route reads the KPI snapshot server-side (`getKpiSnapshot()` in `lib/kpiData.ts`, same cache as `/api/dashboard/kpi`); senders pass plant, period, startDate, endDate. No snapshot → header-only card.
+- Card text is JSON (Adaptive Card TextBlocks), not HTML — nothing is embedded as markup.
+- **Scheduled summaries (2026-10-06)** — same card shape: `DAILY|WEEKLY SUMMARY · PLANT`, headline (lead time vs target · FG change · E2E change), facts (3 KPIs + active alerts), Main drivers (`cardCause`), "What it means" (3 AI sentences), Open dashboard.
+- **Per-recipient settings**: plant · alerts Off / As they happen / Daily digest (time) · summary Off / Daily / Weekly (weekday, time, range Last 7 days / Last 30 days / Year to date). Alerts go only to recipients of the plant they fired for.
+- **Sender**: Settings → Sender → "Use my account" stores the signed-in account as the sender of every Teams message (now the user's own account; later a service account does the same). Without a sender, scheduled sends do not run; dashboard alerts use the session of whoever triggers them.
+- **Runner**: `/api/cron/notifications` — once a day 07:00 WIB on Vercel Hobby, every 15 min on Kubernetes. Details: `docs/ARCHITECTURE.md` → Scheduled notifications.
+- Test buttons: "Send test alert" (sample card) and "Send test summary" (each recipient's real summary now).
 - Settings page: add/remove recipients, test send button, toggle on/off per recipient.
 
 ---

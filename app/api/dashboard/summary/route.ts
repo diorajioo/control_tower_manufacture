@@ -36,10 +36,13 @@ After the paragraph, write a new line with exactly [[CARDS]] and then one line p
 leadtime: <one-liner>
 output: <one-liner>
 productivity: <one-liner>
-One-liner rules: max 12 words, one clause, plain English, no [kpi:] tags, no ending period.
-Say what moves that KPI and the direction, using the same facts as the paragraph; at most one number,
-copied exactly from the data with its unit. Productivity = E2E productivity.
-Example: "leadtime: Above target, driven by waiting before Weighing in J2"`;
+One-liner rules: max 14 words, one clause, plain English, no [kpi:] tags, no ending period.
+Each one-liner names the CAUSE behind its card: rewrite that card's line from "Card causes" in plain words,
+keeping its numbers exactly (with units). Never repeat what the card already shows — the KPI value itself,
+its target, or its % change vs prior period. If a card has no cause line, name the linked KPI or stage from
+the data that explains it, still without the card's own numbers. Productivity = E2E productivity.
+Examples: "leadtime: PO and approval 6.18 days, 41% of gross lead time"
+"output: J2 drives 73% of the FG increase, up 13.4%"`;
 
 type AnyMessage = Groq.Chat.ChatCompletionMessageParam | OpenAI.Chat.ChatCompletionMessageParam;
 

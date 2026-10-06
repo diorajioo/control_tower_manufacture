@@ -91,9 +91,9 @@ API responses ke client hanya mengembalikan pesan generik. Detail error (pesan S
 
 Jika refresh token Azure AD gagal, `session.expires` di-set ke epoch 0. Middleware mendeteksi ini dan redirect ke `/login?error=SessionExpired`.
 
-### Teams HTML injection — **Implemented** (`lib/graph/teams.ts`)
+### Teams message injection — **Implemented** (`lib/alerts/teams.ts`, `lib/graph/teams.ts`)
 
-Semua konten alert (kpi name, message, URL, recommendation) dilewatkan `escHtml()` sebelum diembed ke body HTML Teams message.
+Since 2026-10-06 the alert goes out as an Adaptive Card: all content (KPI name, message, facts, AI narrative) sits in JSON TextBlock fields, never in HTML. The HTML body only holds `<attachment id>` with a server-generated UUID. Facts and narrative come from the server-side KPI snapshot, not from client text. TextBlocks render a Markdown subset, so the alert `message` sent by the client can still carry a Markdown link; the risk is low because only signed-in users can send, and only to the configured recipients.
 
 ---
 
@@ -166,6 +166,11 @@ The chat system prompt includes strict instructions, but also:
 
 ---
 
+- **Teams notification store** (`lib/notifications/store.ts`): recipient emails, schedules, sent log and the connected sender's Azure AD refresh token. Blob access is `private`; the refresh token is additionally encrypted with AES-256-GCM (key `NOTIF_STORE_KEY`, else derived from `NEXTAUTH_SECRET`). The token is never returned by any API — Settings only gets the sender's name, email and connected time. Disconnecting the sender deletes it.
+- `/api/cron/notifications` has no session; it requires `Authorization: Bearer $CRON_SECRET` (constant-time compare) and returns 503 when the secret is unset.
+
+---
+
 ## 8. Logging & Observability
 
 - Do **not** log raw Snowflake rows or AI responses to stdout — log only counts and errors.
@@ -181,6 +186,8 @@ The chat system prompt includes strict instructions, but also:
 - [ ] `NEXTAUTH_URL` set to the canonical deployment URL
 - [ ] `GROQ_API_KEY` set, not exposed to client
 - [ ] `TEAMS_WEBHOOK_URL` set if Teams alerts are enabled
+- [ ] `CRON_SECRET` set (32+ char random) if scheduled Teams sends are on
+- [ ] Blob store connected on Vercel (`BLOB_STORE_ID`, OIDC auth) — or `BLOB_READ_WRITE_TOKEN` outside Vercel, or `NOTIF_STORE_DIR` on a non-public volume (Kubernetes)
 - [ ] `.env.local` is in `.gitignore`
 - [ ] Snowflake service account has SELECT-only privileges
 - [ ] HTTPS enforced at edge/proxy layer

@@ -10,6 +10,8 @@ interface AlertPanelProps {
   onDismiss: (id: string) => void;
   plant?: string;
   period?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 const SEVERITY_CONFIG = {
@@ -38,7 +40,7 @@ const SEVERITY_CONFIG = {
 
 type SendState = "idle" | "sending" | "sent" | "error";
 
-export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps) {
+export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDate }: AlertPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [sendState, setSendState] = useState<SendState>("idle");
   const [sendError, setSendError] = useState<string | null>(null);
@@ -76,7 +78,8 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
           alerts,
           plant,
           period,
-          withRecommendation: criticalCount > 0,
+          startDate,
+          endDate,
           ...(recipients ? { recipients } : {}),
         }),
       });

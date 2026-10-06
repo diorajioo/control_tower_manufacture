@@ -209,7 +209,8 @@ export function Header({
           alerts,
           plant:  applied.plant,
           period: applied.period,
-          withRecommendation: false,
+          startDate: applied.startDate,
+          endDate: applied.endDate,
           force: true, // manual send — skip dedup
           ...(teamsRecipients ? { recipients: teamsRecipients } : {}),
         }),

@@ -105,6 +105,20 @@
 
 ---
 
+## Decision: Teams notification store on Vercel Blob, runner as a plain HTTP endpoint (2026-10-06)
+
+**Status: Active**
+
+**Context:** Scheduled summaries and alert digests need server-side settings, a sent log and a sender token. The old store was `data/teams-settings.json`, which does not persist on Vercel. Hosting moves to the internal Kubernetes cluster later; Vercel is on the Hobby plan (cron once a day).
+
+**Decision:** `lib/notifications/store.ts` with two backends picked by env — Vercel Blob (private, ETag-conditional writes) or a JSON file (`NOTIF_STORE_DIR`, a volume on Kubernetes). The runner is `GET /api/cron/notifications` (Bearer `CRON_SECRET`), idempotent and catch-up based, so Vercel cron (daily) and a Kubernetes CronJob (every 15 min) call the same code. Messages are sent from a "connected sender" (refresh token stored encrypted, rotated on use): the user's own account now, a service account later with no code change.
+
+**Reason:** Blob was the user's choice (no new service, fits low write volume). Graph does not allow app-only chat messages, so a delegated sender account is required for sends without a session.
+
+**Impact:** Vercel needs a Blob store connected (`BLOB_STORE_ID`, OIDC auth) and `CRON_SECRET`. Rotating `NEXTAUTH_SECRET` (when `NOTIF_STORE_KEY` is unset) disconnects the sender.
+
+---
+
 ## Decision: No Backend Separation (Next.js Full-Stack)
 
 **Status: Active**

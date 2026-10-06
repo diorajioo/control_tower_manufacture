@@ -193,6 +193,7 @@ export function RegularKPICard({
               )}
             </div>
           )}
+          {!secondary && <div style={{ height: z(12) }} />}
         </div>
       </div>
 

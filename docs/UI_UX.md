@@ -148,11 +148,9 @@ The view toggle only renders when `views` prop has 2+ items. On `/dashboard`, St
 │ 16.95 days  ↗ +3.95 days  (30 bold · 12 unit · 11.5 delta)   │     right column:
 │ vs target 13.00 days (+30.4%)        (11 #98a2b3)  ╱╲╱‾ spark │     toggles, sparkline
 │ ● Above Target   (StatusDot 11.5 bold, tone color)  15 weeks │     150×42, caption 10px
-│ ┌ AI  Above target, driven by waiting before Weighing ──────┐ │  ← KpiOneLiner bar
+│ ┌ AI  WIP stage averages 9.19 days, 57% of gross lead time ─┐ │  ← KpiOneLiner bar
 │ └───────────────────────────────────────────────────────────┘ │
-│ ───────────────────────────────────────────────────────────── │
-│ 3.10 days                                      ↘ −1.5%       │  ← secondary row
-│ Nett lead time this period (10.5 #a3a8b5)                    │     (20 bold value)
+│                                                   (12px gap) │  ← no secondary row
 ├──────────────────────────────────────────────────────────────┤
 │ PO Created → Receive NDC (11 #667085)    Target ≤ 13.00 days  │  ← footer
 └──────────────────────────────────────────────────────────────┘
@@ -169,7 +167,7 @@ The view toggle only renders when `views` prop has 2+ items. On `/dashboard`, St
 | Toggles | top of the right column, `SegmentedToggle` (or the inline compact copy in Lead Time / Output); a not-yet-available option is `locked` (lock icon, not clickable) |
 | Sparkline | right column, 150×42 (×0.8 compact), Nivo line only, 1.6px, Paragon Blue `#1E4076`, no area/points/axes, not interactive; caption "{n} weeks · {unit}" 10px `#a3a8b5`; < 2 points → "no sparkline data" |
 | AI one-liner | `<KpiOneLiner id={insightId}>` bar right below the status row, full width — see KpiOneLiner below; only on cards with data (Lead Time, Output, Productivity E2E) |
-| Secondary row | hairline top border `#eceef2`; value 20px bold, unit 11px, label 10.5px `#a3a8b5`; optional trend as colored text (no pill) |
+| Secondary row | hairline top border `#eceef2`; value 20px bold, unit 11px, label 10.5px `#a3a8b5`; optional trend as colored text (no pill). **Standard since 2026-10-06: not shown.** A KPI card shows only its toggled value — never the other toggle value (Gross/Nett, FG/Bulk) or an extra metric below; the user clicks the toggle to switch. `showSecondary` on `LeadTimeKPICard` / `OutputKPICard` defaults to `false` (also hides Output's footer "Bulk: / FG:"); don't pass `secondary` to `RegularKPICard`. A 12px spacer replaces the row. Applies to the Overview and the Strategic Monitor. |
 | Footer | white, hairline top border, 11px `#667085` left (definition / basis / data source), 10px `#a3a8b5` right (target or total) |
 | No data | value "—" in `#d0d5dd`, status "No Data", no sparkline, footer says what is missing (e.g. "CT_MANUF_KEMAS not connected yet") |
 | Wrapper | always inside `<KpiHighlightTarget id>` (see Interactions) |
@@ -185,7 +183,7 @@ Legacy, not rendered anywhere: `components/dashboard/KPICard.tsx` (5px accent ba
 - Skeleton bars `bg-white/20`; "truncated" note `#FFE38A`; error text white with icon
 
 ### KpiOneLiner (`components/ui/KpiOneLiner.tsx`)
-- One-line AI insight per data KPI card (Lead Time, Output, Productivity E2E), its own bar right below the status row (above the secondary metric row), full card width
+- One-line AI insight per data KPI card (Lead Time, Output, Productivity E2E), its own bar right below the status row (above the footer), full card width
 - `bg #EEF4FB`, radius 6, padding 5×8 (scaled in compact cards); "AI" tag 9px bold `#1E4076`; text 11px `#16305C`, one line with ellipsis, full text in `title`
 - Comes from the same model call as the AI Summary (`[[CARDS]]` block); nothing is rendered while the summary loads, on error, or when the model gave no line for that KPI
 

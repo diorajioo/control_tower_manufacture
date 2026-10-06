@@ -72,6 +72,12 @@ export function buildKpiContext(kpi: any): string {
   lines.push(`E2E Productivity: ${num(p.e2e)} pcs/manhour${pct(p.e2eTrend) ? ` (${pct(p.e2eTrend)} vs prior period)` : ""}; ` +
     `Upstream (bulk) ${num(p.upstream)} · Downstream (packing) ${num(p.downstream)} per manhour`);
 
+  const causes = cardCauses(lt, o, p);
+  if (causes.length > 0) {
+    lines.push("Card causes (computed from the data — numbers not shown on the KPI cards):");
+    causes.forEach((c) => lines.push(`- ${c}`));
+  }
+
   const signals = directionSignals(lt, o);
   if (signals.length > 0) {
     lines.push("Signals (computed from the numbers above — treat as facts, do not contradict them):");
@@ -79,6 +85,77 @@ export function buildKpiContext(kpi: any): string {
   }
 
   return lines.join("\n");
+}
+
+/** The computed cause for one KPI (`leadtime` | `output` | `productivity`), e.g. for Teams alerts. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function cardCause(kpi: any, id: string): string | undefined {
+  const line = cardCauses(kpi?.leadTime ?? {}, kpi?.output ?? {}, kpi?.productivity ?? {}).find((l) => l.startsWith(`${id}: `));
+  return line?.slice(id.length + 2);
+}
+
+/**
+ * One cause per KPI card, computed in code so the card one-liner explains the value instead of
+ * repeating it: the stage with the most time (lead time) and the plant that drives the change
+ * (output, E2E productivity). Plant rows exist only for "All Plant" (see /api/dashboard/kpi);
+ * without a prior period the plant cause is a share of the current level.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function cardCauses(lt: any, o: any, p: any): string[] {
+  const out: string[] = [];
+  const isNum = (v: unknown): v is number => typeof v === "number" && isFinite(v);
+  const share = (part: number, whole: number) => `${Math.round((part / whole) * 100)}%`;
+  // Part of a change; above 100% the other plants moved the other way
+  const ofChange = (part: number, whole: number, what: string) =>
+    part / whole > 1 ? `more than the whole ${what} (other plants offset it)` : `${share(part, whole)} of the ${what}`;
+
+  const stages: { position: string; avgHours: number }[] = lt.byPositionGross ?? [];
+  const top = [...stages].sort((a, b) => b.avgHours - a.avgHours)[0];
+  if (top && isNum(lt.grossDays) && lt.grossDays > 0) {
+    const days = top.avgHours / 24;
+    out.push(`leadtime: ${stageLabel(top.position)} stage averages ${num(days, 2)} days, ${share(days, lt.grossDays)} of gross lead time (largest stage)`);
+  }
+
+  const fg: { plant: string; fg: number; fgPrev: number | null }[] = o.plantDrivers ?? [];
+  const fgTotal = fg.reduce((a, r) => a + r.fg, 0);
+  if (fg.length > 1 && fgTotal > 0) {
+    const diff = fg.reduce((a, r) => a + r.fg - (r.fgPrev ?? 0), 0);
+    const sameWay = !isNum(o.fgTrend) || Math.sign(o.fgTrend) === Math.sign(diff);
+    if (fg[0].fgPrev !== null && diff !== 0 && sameWay) {
+      const d = [...fg].sort((a, b) => Math.sign(diff) * ((b.fg - b.fgPrev!) - (a.fg - a.fgPrev!)))[0];
+      const chg = d.fgPrev ? pct(((d.fg - d.fgPrev) / d.fgPrev) * 100) : null;
+      out.push(`output: ${d.plant} Released FG ${chg ?? "new"} vs prior period, ${ofChange(d.fg - d.fgPrev!, diff, diff > 0 ? "FG increase" : "FG decrease")}`);
+    } else {
+      const d = [...fg].sort((a, b) => b.fg - a.fg)[0];
+      out.push(`output: ${d.plant} makes ${share(d.fg, fgTotal)} of Released FG (largest plant)`);
+    }
+  }
+
+  const e2e: { plant: string; sum: number; n: number; sumPrev: number | null; nPrev: number | null }[] = p.plantDrivers ?? [];
+  const n = e2e.reduce((a, r) => a + r.n, 0);
+  if (e2e.length > 1 && n > 0) {
+    const avg = e2e.reduce((a, r) => a + r.sum, 0) / n;
+    const nPrev = e2e.reduce((a, r) => a + (r.nPrev ?? 0), 0);
+    if (nPrev > 0) {
+      // contribution_i = sum_i / N − sumPrev_i / N′ — adds up exactly to the change of the card's average
+      const avgPrev = e2e.reduce((a, r) => a + (r.sumPrev ?? 0), 0) / nPrev;
+      const diff = avg - avgPrev;
+      const contrib = (r: typeof e2e[number]) => r.sum / n - (r.sumPrev ?? 0) / nPrev;
+      const sameWay = !isNum(p.e2eTrend) || Math.sign(p.e2eTrend) === Math.sign(diff);
+      if (diff !== 0 && sameWay) {
+        const d = [...e2e].sort((a, b) => Math.sign(diff) * (contrib(b) - contrib(a)))[0];
+        const before = d.nPrev ? `${num(d.sumPrev! / d.nPrev)} → ` : "";
+        out.push(`productivity: ${d.plant} E2E ${before}${num(d.sum / d.n)} pcs/manhour, ${ofChange(contrib(d), diff, diff > 0 ? "E2E rise" : "E2E drop")}`);
+      }
+    }
+    if (!out.some((c) => c.startsWith("productivity:"))) {
+      // Level cause: the plant that pulls the average furthest from the overall value
+      const pull = (r: typeof e2e[number]) => (r.n * (r.sum / r.n - avg)) / n;
+      const d = [...e2e].sort((a, b) => Math.abs(pull(b)) - Math.abs(pull(a)))[0];
+      out.push(`productivity: ${d.plant} averages ${num(d.sum / d.n)} pcs/manhour on ${share(d.n, n)} of POs, pulling E2E ${pull(d) < 0 ? "down" : "up"} the most`);
+    }
+  }
+  return out;
 }
 
 /**

@@ -21,6 +21,8 @@
  */
 
 import type { KPIAlert } from "@/lib/alerts";
+import { buildAlertCard, alertSummary, type AdaptiveCard } from "@/lib/alerts/teams";
+import { getSenderRefreshToken, saveSenderRefreshToken } from "@/lib/settings";
 
 const GRAPH    = "https://graph.microsoft.com/v1.0";
 const TOKEN_EP = `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/oauth2/v2.0/token`;
@@ -34,6 +36,11 @@ const TOKEN_EP = `https://login.microsoftonline.com/${process.env.AZURE_AD_TENAN
  * while logged in.
  */
 export async function getTokenFromRefresh(refreshToken: string): Promise<string | null> {
+  return (await redeemRefreshToken(refreshToken))?.accessToken ?? null;
+}
+
+/** Refresh-token grant; Azure AD also returns a rotated refresh token to keep. */
+async function redeemRefreshToken(refreshToken: string): Promise<{ accessToken: string; refreshToken?: string } | null> {
   const res = await fetch(TOKEN_EP, {
     method:  "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -46,8 +53,8 @@ export async function getTokenFromRefresh(refreshToken: string): Promise<string 
     }),
   });
   if (!res.ok) return null;
-  const data = await res.json() as { access_token?: string };
-  return data.access_token ?? null;
+  const data = await res.json() as { access_token?: string; refresh_token?: string };
+  return data.access_token ? { accessToken: data.access_token, refreshToken: data.refresh_token } : null;
 }
 
 /**
@@ -78,12 +85,25 @@ export async function getAppToken(): Promise<string | null> {
 }
 
 /**
- * Resolve the best available token.
- * Callers pass sessionAccessToken from getToken(req) — it's the final fallback.
+ * Resolve the best available token:
+ *   1. app token (TEAMS_USE_APP_TOKEN)
+ *   2. connected sender (Settings → Teams → Sender; refresh token in the notification store, rotated on use)
+ *   3. TEAMS_REFRESH_TOKEN env
+ *   4. sessionAccessToken from getToken(req) — interactive sends only; the scheduled runner has none
  */
 export async function resolveToken(sessionAccessToken?: string): Promise<string | null> {
   const appToken = await getAppToken();
   if (appToken) return appToken;
+
+  const stored = await getSenderRefreshToken().catch(() => null);
+  if (stored) {
+    const t = await redeemRefreshToken(stored);
+    if (t) {
+      if (t.refreshToken && t.refreshToken !== stored) await saveSenderRefreshToken(t.refreshToken).catch(() => {});
+      return t.accessToken;
+    }
+    console.error("[teams] connected sender token could not be refreshed — reconnect the sender in Settings");
+  }
 
   if (process.env.TEAMS_REFRESH_TOKEN) {
     const t = await getTokenFromRefresh(process.env.TEAMS_REFRESH_TOKEN);
@@ -150,6 +170,10 @@ export async function findOrCreateChat(
     };
   }
 
+  if (recipientUser.id === me.id) {
+    return { chatId: null, graphError: { message: `${recipientEmail} is the sender account — Teams cannot send a DM to itself` } };
+  }
+
   const { data: chat, errorBody } = await gPost<{ id?: string }>(token, "/chats", {
     chatType: "oneOnOne",
     members: [
@@ -168,113 +192,22 @@ export async function findOrCreateChat(
   return { chatId: chat?.id ?? null, graphError: errorBody };
 }
 
-/** Send an HTML message to an existing chat. */
-export async function sendMessageToChat(token: string, chatId: string, html: string): Promise<boolean> {
+/** Send an Adaptive Card to an existing chat; `summary` is the push-notification / chat-list preview. */
+export async function sendCardToChat(token: string, chatId: string, card: AdaptiveCard, summary: string): Promise<boolean> {
+  const id = crypto.randomUUID();
   const { status } = await gPost(token, `/chats/${chatId}/messages`, {
-    body: { contentType: "html", content: html },
+    summary,
+    body: { contentType: "html", content: `<attachment id="${id}"></attachment>` },
+    attachments: [{ id, contentType: "application/vnd.microsoft.card.adaptive", contentUrl: null, content: JSON.stringify(card) }],
   });
   return status === 201;
 }
 
-// ── Message builder ────────────────────────────────────────────────────────────
-
-function escHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
-
-export function buildAlertHtml(
-  alerts: KPIAlert[],
-  opts: { plant?: string; period?: string; dashboardUrl?: string; recommendation?: string }
-): string {
-  const now = new Date().toLocaleString("en-GB", {
-    timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short",
-  });
-
-  const rows = alerts
-    .map((a) => {
-      const icon  = a.severity === "critical" ? "🔴" : a.severity === "warning" ? "🟡" : "🔵";
-      const trend = a.trend != null
-        ? ` <span style="color:${a.trend < 0 ? "#dc2626" : "#16a34a"}">(${a.trend > 0 ? "+" : ""}${a.trend.toFixed(1)}%)</span>`
-        : "";
-      return `<li>${icon} <b>${escHtml(a.kpi)}</b>: ${escHtml(a.message)}${trend}</li>`;
-    })
-    .join("");
-
-  const rec  = opts.recommendation
-    ? `<p>💡 <b>AI Recommendation:</b> ${escHtml(opts.recommendation)}</p>`
-    : "";
-  const link = opts.dashboardUrl
-    ? `<p><a href="${escHtml(opts.dashboardUrl)}">Open Dashboard →</a></p>`
-    : "";
-
-  return [
-    `<p><b>⚠️ Control Tower Manufacturing — KPI Alert</b></p>`,
-    `<p style="color:#6b7280;font-size:13px">${opts.plant ?? "All Plant"} · ${opts.period ?? ""} · ${now} WIB</p>`,
-    `<ul>${rows}</ul>`,
-    rec,
-    link,
-  ].join("");
-}
-
-// ── Per-recipient routing ─────────────────────────────────────────────────────
-
-const KPI_LABEL_TO_KEY: Record<string, string> = {
-  "Lead Time":        "leadTime",
-  "Bulk Loss":        "bulkLoss",
-  "Pack Loss":        "packLoss",
-  "Right First Time": "rft",
-  "OEE":              "oee",
-};
-
-export interface TeamsRecipientConfig {
-  email: string;
-  kpis: Record<string, boolean>;
-}
-
-/**
- * Send alerts to explicit UI-configured recipients, filtered per their KPI subscription.
- * Each recipient only receives a message if at least one of their subscribed KPIs triggered.
- */
-export async function sendGraphAlertsRouted(
-  alerts: KPIAlert[],
-  recipients: TeamsRecipientConfig[],
-  opts: SendGraphAlertsOptions = {}
-): Promise<{ ok: boolean; sent: number; errors: string[] }> {
-  if (alerts.length === 0 || recipients.length === 0) return { ok: true, sent: 0, errors: [] };
-
-  const token = await resolveToken(opts.accessToken);
-  if (!token) {
-    return {
-      ok:     false,
-      sent:   0,
-      errors: ["No token available — user must sign out and sign back in to grant Teams permissions"],
-    };
-  }
-
-  const errors: string[] = [];
-  let sent = 0;
-
-  for (const recipient of recipients) {
-    const filtered = alerts.filter((a) => {
-      const key = KPI_LABEL_TO_KEY[a.kpi];
-      return !key || recipient.kpis[key] !== false;
-    });
-    if (filtered.length === 0) continue;
-
-    const { chatId, graphError } = await findOrCreateChat(token, recipient.email);
-    if (!chatId) {
-      const detail = graphError ? ` — ${JSON.stringify(graphError)}` : "";
-      errors.push(`${recipient.email}: could not find or create chat${detail}`);
-      continue;
-    }
-    const html = buildAlertHtml(filtered, opts);
-    const ok = await sendMessageToChat(token, chatId, html);
-    if (ok) sent++;
-    else errors.push(`${recipient.email}: message delivery failed`);
-  }
-
-  return { ok: sent > 0, sent, errors };
+/** One card to one person: find/create the 1:1 chat, then send. Returns an error text or null. */
+export async function sendCardTo(token: string, email: string, card: AdaptiveCard, summary: string): Promise<string | null> {
+  const { chatId, graphError } = await findOrCreateChat(token, email);
+  if (!chatId) return `${email}: could not find or create chat${graphError ? ` — ${JSON.stringify(graphError)}` : ""}`;
+  return (await sendCardToChat(token, chatId, card, summary)) ? null : `${email}: message delivery failed`;
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────────
@@ -283,7 +216,11 @@ export interface SendGraphAlertsOptions {
   plant?:          string;
   period?:         string;
   dashboardUrl?:   string;
-  recommendation?: string;
+  /** KPI snapshot for the card's facts block */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  kpi?:            any;
+  /** 2-sentence why + action (generateAlertNarrative) */
+  narrative?:      string;
   /** Access token from the current user session (falls back to stored refresh token) */
   accessToken?:    string;
 }
@@ -316,7 +253,8 @@ export async function sendGraphAlerts(
     return { ok: false, sent: 0, errors: ["TEAMS_RECIPIENTS is not configured"] };
   }
 
-  const html   = buildAlertHtml(alerts, opts);
+  const card    = buildAlertCard(alerts, opts);
+  const summary = alertSummary(alerts);
   const errors: string[] = [];
   let sent = 0;
 
@@ -327,7 +265,7 @@ export async function sendGraphAlerts(
       errors.push(`${email}: could not find or create chat${detail}`);
       continue;
     }
-    const ok = await sendMessageToChat(token, chatId, html);
+    const ok = await sendCardToChat(token, chatId, card, summary);
     if (ok) sent++;
     else errors.push(`${email}: message delivery failed`);
   }
