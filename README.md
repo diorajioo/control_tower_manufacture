@@ -33,6 +33,7 @@ owns the files that protect you; you own the application and its Dockerfile.
 | `CLAUDE.md` | Platform Team (the rules) + you (project details) |
 | `.env.example` | Seeded by us, **extended by you** |
 | `CODEOWNERS` | Platform Team |
+| `.claude/skills/apply-event-tracking/` | Platform Team — the usage-tracking standard (OpenPanel). Claude Code loads it automatically; ask it to "add tracking". Copied from `paragon-is/dai/infra` `skills/apply-event-tracking` at commit `780bf21`: change it there, not here |
 
 | You create this | Notes |
 |---|---|
