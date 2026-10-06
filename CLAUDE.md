@@ -102,6 +102,15 @@ https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQCKOkUYBmkZRailNr6rK
         file must be git-ignored -- never commit it. The callback path
         is /oauth2callback.
 
+## Usage tracking -- the platform standard
+14. For any usage tracking or analytics (OpenPanel, "who uses this
+    dashboard", page views, events), use the apply-event-tracking skill in
+    .claude/skills/apply-event-tracking. Its event names, guards and
+    privacy rules are the standard: never invent event names, never send
+    data values, names or emails in event properties, never call the
+    analytics SDK outside the skill's events module. It covers npm-built
+    web frontends; for Streamlit, ask the DAI Platform team.
+
 ## Performance rules
 - Do the aggregation in SQL in the warehouse, not in the application.
 - Cache query results with a sensible TTL, using whatever caching your
