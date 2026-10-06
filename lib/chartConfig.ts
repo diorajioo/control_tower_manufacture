@@ -15,7 +15,7 @@ export const SERIES_COLORS = [
 ] as const;
 export const SERIES_OVERFLOW_COLOR = "#98a2b3";
 // Aggregate series (e.g. "Total") — Paragon Blue; separates from every SERIES_COLORS slot (validated)
-export const SERIES_TOTAL_COLOR = "#215AA8";
+export const SERIES_TOTAL_COLOR = "#1E4076";
 
 // Urutan warna per plant konsisten di seluruh dashboard (TrendChart, StackedBarChart, Header, dll)
 export const PLANT_COLORS = SERIES_COLORS.slice(0, 6);
@@ -29,6 +29,16 @@ export const KPI_OPTIONS = [
   { value: "bulkloss", label: "Yield Loss", unit: "%"    },
   { value: "rft",      label: "RFT",        unit: "%"    },
 ] as const;
+
+// Overview trend chart tabs — the metrics the Overview KPI cards cover. Energy is locked until it has data.
+export const TREND_KPI_OPTIONS: { value: string; label: string; unit: string; locked?: boolean }[] = [
+  { value: "leadtime",     label: "Lead Time",    unit: "days"  },
+  { value: "output",       label: "Output",       unit: "pcs"   },
+  { value: "productivity", label: "Productivity", unit: "pcs/mh" },
+  { value: "oee",          label: "OEE",          unit: "%"     },
+  { value: "bulkloss",     label: "Yield Loss",   unit: "%"     },
+  { value: "energy",       label: "Energy",       unit: "",     locked: true },
+];
 
 export type KpiValue = (typeof KPI_OPTIONS)[number]["value"];
 

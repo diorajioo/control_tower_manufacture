@@ -18,8 +18,8 @@ const H = 3600e3, D = 24 * H;
 const TRAIN_FROM = Date.parse("2026-01-01"), TEST_FROM = Date.parse("2026-07-01"), TEST_TO = Date.parse("2026-09-10");
 const START_SEQ = 1, END_SEQ = 45;
 
-type Row = { PO: string; PLANT: string; PRODUCT: string; SKU_GROUP: string; SEDIAAN: string; SEQ: number; ACTIVITY: string; START_AT: string | null; STOP_AT: string | null };
-type Step = { seq: number; start: number; stop: number };
+type Row = { PO: string; PLANT: string; PRODUCT: string; SKU_GROUP: string; SEDIAAN: string; SEQ: number; ACTIVITY: string; LINE?: string | null; START_AT: string | null; STOP_AT: string | null };
+type Step = { seq: number; start: number; stop: number; line: string | null };
 type PO = {
   id: string; plant: string; product: string; group: string; sediaan: string;
   release: number; ndc: number | null; steps: Step[];           // process steps only, sorted by seq
@@ -35,6 +35,7 @@ const byPo = new Map<string, Row[]>();
 for (const r of rows) (byPo.get(r.PO) ?? byPo.set(r.PO, []).get(r.PO)!).push(r);
 
 const pos: PO[] = [];
+const r0Plant = (rs: Row[]) => rs[0].PLANT;
 for (const [id, rs] of byPo) {
   const po = rs.find((r) => r.SEQ === START_SEQ);
   const release = t(po?.STOP_AT ?? null);
@@ -43,7 +44,7 @@ for (const [id, rs] of byPo) {
   const ndc = Number.isFinite(t(ndcRow?.STOP_AT ?? null)) ? t(ndcRow!.STOP_AT) : null;
   const steps = rs
     .filter((r) => r.SEQ !== START_SEQ && r.SEQ !== END_SEQ && !r.ACTIVITY.startsWith("WIP"))
-    .map((r) => ({ seq: r.SEQ, start: t(r.START_AT), stop: t(r.STOP_AT) }))
+    .map((r) => ({ seq: r.SEQ, start: t(r.START_AT), stop: t(r.STOP_AT), line: r.LINE ? `${r0Plant(rs)}|${r.LINE}` : null }))
     .filter((s) => Number.isFinite(s.start) && Number.isFinite(s.stop))
     .sort((a, b) => a.seq - b.seq);
   const lt = ndc != null ? (ndc - release) / D : null;
@@ -120,6 +121,42 @@ function history(p: PO, level: "group" | "product") {
   return (pr.late - (prodL.has(p.product) ? self : 0) + 10 * pg) / (pr.n - (prodL.has(p.product) ? selfN : 0) + 10);
 }
 
+// ── Line history: late rate of training POs that ran on each line (plant|LINE_NAME), shrunk to the plant rate.
+// At a snapshot the PO is scored on the worst line it has started so far (lines of later steps are not known yet).
+const lineL = new Map<string, { n: number; late: number }>(), plantL = new Map<string, { n: number; late: number }>();
+for (const p of train) {
+  const pe = plantL.get(p.plant) ?? plantL.set(p.plant, { n: 0, late: 0 }).get(p.plant)!; pe.n++; pe.late += p.late!;
+  for (const l of new Set(p.steps.map((s) => s.line).filter(Boolean) as string[])) {
+    const e = lineL.get(l) ?? lineL.set(l, { n: 0, late: 0 }).get(l)!; e.n++; e.late += p.late!;
+  }
+}
+function lineRisk(p: PO, line: string) {
+  const own = p.split === "train" ? 1 : 0, self = own ? p.late! : 0;
+  const pl = plantL.get(p.plant) ?? { n: 0, late: 0 };
+  const pr = pl.n - own > 0 ? (pl.late - self) / (pl.n - own) : baseRate;
+  const e = lineL.get(line) ?? { n: 0, late: 0 };
+  const inLine = lineL.has(line) && p.steps.some((s) => s.line === line) ? own : 0;
+  return (e.late - (inLine ? self : 0) + 20 * pr) / (e.n - inLine + 20);
+}
+
+// Line vs. its peers: late rate of training POs per (line, step), shrunk to the step's plant-wide rate,
+// minus that step rate. > 0 = this line runs later than other lines doing the same step.
+const lineStepL = new Map<string, { n: number; late: number }>(), stepL = new Map<string, { n: number; late: number }>();
+for (const p of train) for (const st of p.steps) {
+  if (!st.line) continue;
+  for (const [m, k] of [[lineStepL, `${st.line}|${st.seq}`], [stepL, `${p.plant}|${st.seq}`]] as const) {
+    const e = m.get(k) ?? m.set(k, { n: 0, late: 0 }).get(k)!; e.n++; e.late += p.late!;
+  }
+}
+function lineExcess(p: PO, st: Step) {
+  if (!st.line) return 0;
+  const own = p.split === "train" ? 1 : 0, self = own ? p.late! : 0;
+  const sr = stepL.get(`${p.plant}|${st.seq}`) ?? { n: 0, late: 0 };
+  const stepRate = sr.n - own > 0 ? (sr.late - self) / (sr.n - own) : baseRate;
+  const lr = lineStepL.get(`${st.line}|${st.seq}`) ?? { n: 0, late: 0 };
+  return (lr.late - (lr.n ? self : 0) + 20 * stepRate) / (lr.n - (lr.n ? own : 0) + 20) - stepRate;
+}
+
 // ── Queue timelines (hourly): open POs per plant, POs waiting for each step, step starts ──
 const T0 = TRAIN_FROM - 30 * D, NH = Math.ceil((asOf - T0) / H) + 2;
 const hr = (ms: number) => Math.max(0, Math.min(NH - 1, Math.floor((ms - T0) / H)));
@@ -176,6 +213,8 @@ function snapshot(p: PO, day: number): Snap | null {
       PH_product: history(p, "product"),
       QL_old: at(`open|${p.plant}`, ts) - 1,                              // other open POs in the plant
       QL_new: queue / Math.max(perDay, 1 / 14),                           // days of backlog in front of the next step
+      LN_step: started.length ? lineExcess(p, started[started.length - 1]) : 0, // line of the current step vs. other lines on that step
+      LN: Math.max(lineRisk(p, ""), ...started.map((s) => (s.line ? lineRisk(p, s.line) : 0))), // worst line started so far ("" = plant rate)
     },
   };
 }
@@ -282,6 +321,8 @@ const VARIANTS: Record<string, string[]> = {
   "V5 remaining hours instead of progress":                        ["REM", "WT", "PH_product", "QL_new"],
   "V6 V3 without waiting":                                         ["SP_new", "PH_product", "QL_new"],
   "V7 V3 with waiting at current position":                        ["SP_new", "WT_cur", "PH_product", "QL_new"],
+  "V8 V7 + line history":                                          ["SP_new", "WT_cur", "PH_product", "QL_new", "LN"],
+  "V9 V7 + line vs peers on current step":                         ["SP_new", "WT_cur", "PH_product", "QL_new", "LN_step"],
 };
 const report: Record<string, unknown> = {
   asOf: new Date(asOf).toISOString(),

@@ -123,13 +123,13 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
     <div className="bg-white border border-[#EBEBEB] rounded-lg flex flex-col overflow-hidden">
       <div className="px-3.5 py-2 border-b border-[#EBEBEB] flex items-center gap-2 shrink-0">
         <span className="text-[11px] font-bold uppercase tracking-[0.08em]">
-          <span className="text-[#215AA8]">AI</span>{" "}
+          <span className="text-[#1E4076]">AI</span>{" "}
           <span className="text-slate-400">Risks &amp; Recommendations</span>
         </span>
         <button
           onClick={() => fetchRisks(true)}
           disabled={loading}
-          className="ml-auto text-[#215AA8] hover:text-[#1A4886] transition-colors disabled:opacity-40"
+          className="ml-auto text-[#1E4076] hover:text-[#16305C] transition-colors disabled:opacity-40"
           title="Refresh AI analysis"
         >
           <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
@@ -174,8 +174,8 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
           ) : (
             <div className="space-y-1">
               {displayActions.map((a, i) => (
-                <div key={i} className="bg-[#F0F6FF] border border-[#D3DEEE] rounded-md px-2.5 py-1.5">
-                  <p className="text-[10px] font-bold text-[#215AA8] uppercase tracking-[0.06em] mb-0.5">
+                <div key={i} className="bg-[#F0F6FF] border border-[#EEF4FB] rounded-md px-2.5 py-1.5">
+                  <p className="text-[10px] font-bold text-[#1E4076] uppercase tracking-[0.06em] mb-0.5">
                     {a.num} · {a.title}
                   </p>
                   <p className="text-[11.5px] text-[#2A3D4A] leading-[1.35]">{a.desc}</p>

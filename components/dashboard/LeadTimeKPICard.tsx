@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ResponsiveLine } from "@nivo/line";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 const TARGET = LEAD_TIME_TARGET_DAYS;
@@ -85,6 +86,8 @@ export interface LeadTimeKPICardProps {
   hasAlert?:       boolean;
   showBreakdown?:  boolean;
   basisOverride?:  "created" | "released";
+  /** KPI id whose AI one-liner (KpiOneLiner) shows as a bar below the status row */
+  insightId?:      string;
 }
 
 export function LeadTimeKPICard({
@@ -98,6 +101,7 @@ export function LeadTimeKPICard({
   compact       = false,
   showBreakdown = true,
   basisOverride = "created",
+  insightId,
 }: LeadTimeKPICardProps) {
   const [unit, setUnit] = useState<"days" | "hours">("days");
   const [type, setType] = useState<"gross" | "nett">("gross");
@@ -222,7 +226,7 @@ export function LeadTimeKPICard({
                     xScale={{ type: "point" }}
                     yScale={{ type: "linear", min: "auto", max: "auto" }}
                     enableArea={false}
-                    colors={["#215AA8"]}
+                    colors={["#1E4076"]}
                     lineWidth={1.6}
                     enablePoints={false}
                     enableGridX={false}
@@ -244,6 +248,8 @@ export function LeadTimeKPICard({
               </div>
             </div>
           </div>
+
+          <KpiOneLiner id={insightId} z={z} />
 
           {/* ── Secondary metric row ── */}
           <div
@@ -284,8 +290,8 @@ export function LeadTimeKPICard({
                   <span style={{ fontSize: 10, color: "#475569", width: z(90), flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.position}>
                     {p.position}
                   </span>
-                  <div style={{ flex: 1, background: "#dbeafe", borderRadius: 999, height: 4, overflow: "hidden" }}>
-                    <div style={{ height: "100%", background: "#3b82f6", borderRadius: 999, width: `${(p.avgHours / maxHours) * 100}%` }} />
+                  <div style={{ flex: 1, background: "#EEF4FB", borderRadius: 999, height: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", background: "#1E4076", borderRadius: 999, width: `${(p.avgHours / maxHours) * 100}%` }} />
                   </div>
                   <span style={{ fontSize: 10, color: "#64748b", width: z(40), textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                     {unit === "hours" ? `${Math.round(p.avgHours)}h` : `${(p.avgHours / 24).toFixed(2)}d`}

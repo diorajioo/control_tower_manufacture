@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ResponsiveLine } from "@nivo/line";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
 
 // ---------------------------------------------------------------------------
 // Status tone system
@@ -57,6 +58,8 @@ export interface OutputKPICardProps {
   bulkTrend:    number | null;
   sparkline:    number[];
   bulkSparkline: number[];
+  /** KPI id whose AI one-liner (KpiOneLiner) shows as a bar below the status row */
+  insightId?:   string;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +74,7 @@ export function OutputKPICard({
   sparkline,
   bulkSparkline,
   compact = false,
+  insightId,
 }: OutputKPICardProps) {
   // Size scale for spacing/sparkline: 1 = regular, 0.8 = compact. Font sizes are always regular.
   const z = (n: number) => (compact ? Math.round(n * 0.8 * 2) / 2 : n);
@@ -243,7 +247,7 @@ export function OutputKPICard({
                     xScale={{ type: "point" }}
                     yScale={{ type: "linear", min: "auto", max: "auto" }}
                     enableArea={false}
-                    colors={["#215AA8"]}
+                    colors={["#1E4076"]}
                     lineWidth={1.6}
                     enablePoints={false}
                     enableGridX={false}
@@ -284,6 +288,8 @@ export function OutputKPICard({
               </div>
             </div>
           </div>
+
+          <KpiOneLiner id={insightId} z={z} />
 
           {/* ── Secondary metric row ── */}
           <div

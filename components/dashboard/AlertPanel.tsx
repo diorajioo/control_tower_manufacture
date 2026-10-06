@@ -133,7 +133,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period }: AlertPanelProps
           }
           className={cn(
             "ml-3 flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all",
-            sendState === "idle"    && "bg-[#215AA8] hover:bg-[#1A4886] text-white",
+            sendState === "idle"    && "bg-[#1E4076] hover:bg-[#16305C] text-white",
             sendState === "sending" && "bg-gray-200 text-gray-400 cursor-wait",
             sendState === "sent"    && "bg-emerald-100 text-emerald-700 cursor-default",
             sendState === "error"   && "bg-red-100 text-red-600 cursor-pointer",

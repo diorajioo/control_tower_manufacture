@@ -23,7 +23,7 @@ import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const VA_COLOR   = "#215AA8";
+const VA_COLOR   = "#1E4076";
 const NNVA_COLOR = "#d97706";
 const UNVA_COLOR = "#b91c1c";
 
@@ -37,7 +37,7 @@ const nivoTheme = {
     domain: { line: { strokeWidth: 0 } },
   },
   grid: { line: { stroke: "#f3f4f6", strokeWidth: 1 } },
-  crosshair: { line: { stroke: "#215AA8", strokeWidth: 1, strokeOpacity: 0.3 } },
+  crosshair: { line: { stroke: "#1E4076", strokeWidth: 1, strokeOpacity: 0.3 } },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ function ChartTitle({ label, badge }: { label: string; badge?: string }) {
     <div className="flex items-center justify-between mb-1">
       <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">{label}</span>
       {badge && (
-        <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold">{badge}</span>
+        <span className="text-[10px] bg-[#EEF4FB] text-[#16305C] px-2.5 py-0.5 rounded-full font-semibold">{badge}</span>
       )}
     </div>
   );
@@ -71,7 +71,7 @@ function SegmentedControl({ options, value, onChange }: {
           onClick={() => onChange(key)}
           className={cn(
             "px-3 py-1.5 rounded-md text-[11px] font-semibold transition-all",
-            value === key ? "bg-[#215AA8] text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
+            value === key ? "bg-[#1E4076] text-white shadow-sm" : "text-slate-500 hover:text-slate-700"
           )}
         >
           {label}
@@ -414,7 +414,7 @@ function SKUTable({ skus, title, variant }: {
       <div className="px-4 py-2.5 border-b border-[#EBEBEB] flex items-center gap-2">
         <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">{title}</span>
         <span className={cn("text-[9.5px] font-bold px-2 py-0.5 rounded-full ml-auto",
-          variant === "top" ? "bg-[#D3DEEE] text-[#143665]" : "bg-[#FFEDEF] text-[#8A0011]"
+          variant === "top" ? "bg-[#EEF4FB] text-[#16305C]" : "bg-[#FFEDEF] text-[#8A0011]"
         )}>
           {variant === "top" ? "Highest Volume" : "Lowest Volume"}
         </span>
@@ -433,7 +433,7 @@ function SKUTable({ skus, title, variant }: {
             <tr key={sku.rank} className="border-t border-[#EBEBEB] hover:bg-[#F8FAFC] transition-colors">
               <td className="px-3 py-2">
                 <span className={cn("w-5 h-5 rounded flex items-center justify-center text-[9px] font-bold",
-                  variant === "top" ? "bg-[#D3DEEE] text-[#143665]" : "bg-[#FFEDEF] text-[#8A0011]"
+                  variant === "top" ? "bg-[#EEF4FB] text-[#16305C]" : "bg-[#FFEDEF] text-[#8A0011]"
                 )}>{sku.rank}</span>
               </td>
               <td className="px-3 py-2 max-w-[180px]">
@@ -481,7 +481,7 @@ function OnTimePOTrend() {
     <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
       <div className="flex items-center justify-between mb-1">
         <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">On-Time PO Trend</span>
-        <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold">Monthly · 2026</span>
+        <span className="text-[10px] bg-[#EEF4FB] text-[#16305C] px-2.5 py-0.5 rounded-full font-semibold">Monthly · 2026</span>
       </div>
       <p className="text-[10.5px] text-slate-400 mb-2">% of POs delivered on time vs NDC target · Average {avg}%</p>
       <div style={{ height: 180 }}>
@@ -584,7 +584,7 @@ function LTParetoSKU() {
     <div className="bg-white rounded-lg border border-[#EBEBEB] p-4 hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200">
       <div className="flex items-center justify-between mb-1">
         <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">Lead Time Pareto per SKU</span>
-        <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold">Top 10 · YTD 2026</span>
+        <span className="text-[10px] bg-[#EEF4FB] text-[#16305C] px-2.5 py-0.5 rounded-full font-semibold">Top 10 · YTD 2026</span>
       </div>
       <p className="text-[10.5px] text-slate-400 mb-2">SKUs sorted by highest lead time · Orange line = cumulative %</p>
       <div style={{ height: 200 }}>
@@ -678,7 +678,7 @@ function TacticalView() {
         />
         <LTSummaryCard
           icon={<Zap size={13} />}
-          iconColor="#215AA8"
+          iconColor="#1E4076"
           label="VA — PROCESS TIME"
           value="11.14"
           unit="days"
@@ -1160,7 +1160,7 @@ export default function LeadTimePage() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F4F6F9]">
-        <div className="w-6 h-6 border-2 border-[#215AA8] border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-[#1E4076] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }

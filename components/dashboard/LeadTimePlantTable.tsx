@@ -38,12 +38,13 @@ function excessTint(value: number | undefined, network: number | undefined): str
 
 // Header: Paragon Blue group row, light-blue stage row (no red — red is reserved for the cell signal)
 const TH = "px-3 py-2 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap";
-const TH_TOP = "bg-[#215AA8] text-white";
-const TH_SUB = "bg-[#EAF0F8] text-[#215AA8]";
+const TH_TOP = "bg-[#1E4076] text-white";
+const TH_SUB = "bg-[#EEF4FB] text-[#1E4076]";
 const TH_DIV = "border-l border-white/25";
 const TD = "px-3 py-2.5 text-[12px] text-slate-700 text-right tabular-nums whitespace-nowrap";
 
-export function LeadTimePlantTable({ data, targetDays, loading }: { data: PlantBreakdown[] | null; targetDays: number; loading: boolean }) {
+export function LeadTimePlantTable({ data, targetDays, loading, basis = "created" }: { data: PlantBreakdown[] | null; targetDays: number; loading: boolean; basis?: "created" | "released" }) {
+  const basisLabel = basis === "released" ? "PO Released → Receive NDC" : "PO Created → Receive NDC";
   const network = data?.find((p) => p.plant == null);
   const plants = (data ?? []).filter((p) => p.plant != null);
 
@@ -61,7 +62,7 @@ export function LeadTimePlantTable({ data, targetDays, loading }: { data: PlantB
     <ChartCard
       title="Lead time breakdown per plant"
       subtitle="Days per PO per stage. Red cell = above the network value for that stage (darker = further above)."
-      info={`Stage values use the same basis as "Lead time per stage" above. Red compares each plant with the network row, not with a standard, because ACTIVITY_LEADTIME_STD is only usable for Weighing, Processing and Processing Cleaning. On-time = share of POs with gross lead time ≤ ${targetDays} days (the Lead Time target); there is no due-date column yet.`}
+      info={`Stage values use the same basis as "Lead time per stage" above. Red compares each plant with the network row, not with a standard, because ACTIVITY_LEADTIME_STD is only usable for Weighing, Processing and Processing Cleaning. Gross LT and On-time follow the basis toggle in the header (now ${basisLabel}); stage columns do not change with it. On-time = share of POs with gross lead time ≤ ${targetDays} days (the Lead Time target); there is no due-date column yet.`}
     >
       {!network ? (
         <div style={{ height: 160 }}><EmptyState loading={loading} /></div>
@@ -81,7 +82,7 @@ export function LeadTimePlantTable({ data, targetDays, loading }: { data: PlantB
                 </tr>
                 <tr className="border-b border-[#EBEBEB]">
                   {ordered.map((s, i) => (
-                    <th key={s} className={cn(TH, TH_SUB, "text-right", (i === 0 || s === down[0] || s === rest[0]) && "border-l border-[#D5E0EF]")}>
+                    <th key={s} className={cn(TH, TH_SUB, "text-right", (i === 0 || s === down[0] || s === rest[0]) && "border-l border-[#C3CEE3]")}>
                       {stageLabel(s)}
                     </th>
                   ))}
@@ -112,7 +113,7 @@ export function LeadTimePlantTable({ data, targetDays, loading }: { data: PlantB
             </table>
           </div>
           <p className="mt-3 pt-3 border-t border-[#f0f1f4] text-[11px] text-slate-500">
-            {plants.length} plants · {network.poCount.toLocaleString("en-US")} POs · Gross and nett in days per PO · On-time = gross ≤ {targetDays} days
+            {plants.length} plants · {network.poCount.toLocaleString("en-US")} POs · Gross ({basisLabel}) and nett in days per PO · On-time = gross ≤ {targetDays} days
           </p>
         </>
       )}

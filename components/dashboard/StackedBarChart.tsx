@@ -155,10 +155,10 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
             {t("chart_kpi_by_plant")}
           </span>
           {loading && (
-            <span className="w-3 h-3 border border-[#215AA8] border-t-transparent rounded-full animate-spin inline-block" />
+            <span className="w-3 h-3 border border-[#1E4076] border-t-transparent rounded-full animate-spin inline-block" />
           )}
         </div>
-        <span className="text-[10px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
+        <span className="text-[10px] bg-[#EEF4FB] text-[#16305C] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
           {selectedKpi.label}
         </span>
       </div>
@@ -172,7 +172,7 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
               onClick={() => onKpiChange(opt.value)}
               className={`text-[10px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
                 kpiType === opt.value
-                  ? "bg-[#215AA8] text-white"
+                  ? "bg-[#1E4076] text-white"
                   : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
               }`}
             >

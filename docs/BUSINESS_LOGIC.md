@@ -175,6 +175,16 @@ Three variants, all computed server-side:
 
 The dashboard card shows E2E productivity as the headline value, with Manhours and Avg Operators as sub-stats.
 
+**Overview card toggle — E2E · Mixing · Filpac** (`getStageProductivity()` in `lib/queries.ts`; sub-stat Upstream · Downstream stays on every view):
+
+| View | Table / filter | Formula | Unit | Date column |
+|---|---|---|---|---|
+| **E2E** | `CT_MANUF_E2E` | as above | pcs/mh | `KEMAS_COMPLETED_AT` |
+| **Mixing** | `CT_MANUF_OLAH`, `ACTIVITY = 'MIXING'` | `Σ RELEASE_BULK / Σ MANHOUR` — RELEASE_BULK taken once per `PROCESS_ORDER_SFG` (it repeats on every row), MANHOUR summed (one row per operator) | kg/mh | `OLAH_COMPLETED_AT` |
+| **Filpac** | `CT_MANUF_KEMAS`, `ACTIVITY = 'FILPAC'` | `Σ QTY_FG_GOOD / Σ (LEADTIME_IN_MINUTE/60 × OPERATOR_COUNT)` — taken once per `ACTIVITY_ID` | pcs/mh | `KEMAS_COMPLETED_AT` |
+
+`CT_MANUF_KEMAS` has **one row per operator** (same qty, minutes and OPERATOR_COUNT on each), so Filpac must be deduplicated per `ACTIVITY_ID`; summing raw rows over-weights activities with many operators (Sep 2026: 172 vs 222 pcs/mh). Trend = % vs the prior period of equal length; sparkline = weekly.
+
 ---
 
 ## Alert Thresholds
@@ -204,7 +214,7 @@ Used in the Lead Time page stage breakdown:
 
 | Class | Color | Meaning |
 |---|---|---|
-| **VA** (Value-Adding) | `#215AA8` (Paragon Blue) | Activities that directly transform the product |
+| **VA** (Value-Adding) | `#1E4076` (Paragon Blue) | Activities that directly transform the product |
 | **NNVA** (Non-Necessary Value-Adding) | `#d97706` (amber) | Required but non-transforming activities (QC, transport) |
 | **UNVA** (Unnecessary Non-Value-Adding) | `#b91c1c` (red) | Pure waste: waiting, rework, approval queues |
 
@@ -259,11 +269,34 @@ Statistical Process Control limits are shown on the Trend Chart as UCL / Mean / 
 ```
 mean  = average of all values
 stdev = standard deviation
-UCL   = mean + 2 × stdev
-LCL   = mean - 2 × stdev
+UCL   = mean + 3 × stdev
+LCL   = max(0, mean - 3 × stdev)
 ```
 
-Per-plant limits are computed separately (`computePerPlantLimits` in `lib/chartConfig.ts`). The control zone between UCL and LCL is rendered as a filled band in `#E9EFF6` (brand-50).
+Per-plant limits are computed separately (`computePerPlantLimits` in `lib/chartConfig.ts`) and shown in the tooltip. Limits are hairline markers, no shaded band.
+
+**All Overview trend metrics are control charts** (since 2026-10-06), each with an Overall view (the API's exact "All plants" row per period — `GROUPING SETS ((WEEK, PLANT), (WEEK))` in `getTrendKPIByPlant()`) and a By plant view:
+
+| Metric | Chart | Plotted value | n per point |
+|---|---|---|---|
+| Lead Time | Laney P′ | % PO with gross > 13 days | POs |
+| RFT | Laney P′ | % activities without ADJUST | activity rows |
+| Output | XmR | Σ released FG pcs | — |
+| OEE / OPE | XmR | OEE % (OPE = × 0.8) | — |
+| Yield Loss | XmR | bulk loss % = ABS(Σ theoretical − Σ realization) / Σ theoretical | — (no PLANT → Overall only) |
+
+XmR: center = mean of the plotted points, UCL/LCL = mean ± 2.66 × average moving range, clamped to 0 (and 100 for %). YTD to 27 Sep 2026 (All plants): Lead Time 1 / 38 weeks outside, Output 1, OEE 2, Yield Loss 1. RFT is 100% in every week (no ADJUST rows in the data), so its P′ limits are undefined and none are drawn.
+
+**Lead Time = Laney P′ chart of % PO > 13 days** (since 2026-10-06, Overview TrendChart and Strategic Monitor). Each point i is the share of its nᵢ POs (done in that week/month, per plant) with gross lead time > `LEAD_TIME_TARGET_DAYS`:
+
+```
+pᵢ     = lateᵢ / nᵢ                    p̄ = Σ lateᵢ / Σ nᵢ          (per plant)
+σpᵢ    = √( p̄(1 − p̄) / nᵢ )           zᵢ = (pᵢ − p̄) / σpᵢ
+σz     = mean |zᵢ − zᵢ₋₁| / 1.128      (Laney: week-to-week variation the process normally has)
+UCLᵢ   = min(100%, p̄ + 3 · σpᵢ · σz)  LCLᵢ = max(0, p̄ − 3 · σpᵢ · σz)
+```
+
+nᵢ / lateᵢ come from `getTrendKPIByPlant()` (`N`, `LATE`; `KPI_VALUE` stays avg days) → `/api/dashboard/trends` `pointStats` → `laneyPLimits()` in `components/charts/StandardLine.tsx`. Gross basis = `LEAD_TIME_START_SQL` (PO Created). Classic p limits (σz = 1) are far too narrow with 20–300 POs per week: YTD to 27 Sep 2026 they flag 71 of 148 plant-weeks on the Created basis; Laney flags 2. On the Released basis (where the 13-day target is defined) classic flags 34 and Laney 10.
 
 Status legend in StackedBarChart: "In Control" (emerald), "Above UCL" (red), "Below LCL" (amber).
 
@@ -281,4 +314,4 @@ Status legend in StackedBarChart: "In Control" (emerald), "Above UCL" (red), "Be
 
 ## Lead Time On-Time % (Overview Tactical)
 
-Share of POs whose gross lead time (PO start → RECEIVE NDC stop) is ≤ 13 days, the Lead Time target used in the Tactical KPI table. Constant `LEAD_TIME_TARGET_DAYS` in `app/api/lead-time/stages/route.ts`; query `getLeadTimeByPlant()` in `lib/queries.ts`. Provisional: `CT_MANUF_LEADTIME` has no due-date column, so this is not a delivery on-time rate.
+Share of POs whose gross lead time (PO start → RECEIVE NDC stop) is ≤ 13 days, the Lead Time target used in the Tactical plant table. The start follows the Header basis toggle, which shows only in Tactical: PO Created (default) or PO Released (`basis` param on `/api/lead-time/stages`). The Overview Lead Time card is fixed to PO Created. Constant `LEAD_TIME_TARGET_DAYS` in `app/api/lead-time/stages/route.ts`; query `getLeadTimeByPlant()` in `lib/queries.ts`. Provisional: `CT_MANUF_LEADTIME` has no due-date column, so this is not a delivery on-time rate.

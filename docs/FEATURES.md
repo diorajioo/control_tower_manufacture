@@ -11,14 +11,14 @@
 ### Layout (top to bottom)
 1. **AI Summary strip** — white card with AILabel gradient chip, 3-sentence executive summary, auto-generated from current KPI state.
 2. **Alert Panel** — shown only when there are active, undismissed alerts. Alert rows with dismiss (undo available 5 seconds).
-3. **KPI row 1** — 3-column grid: Lead Time (`LeadTimeKPICard`) · Output (`OutputKPICard`) · E2E Productivity (`RegularKPICard`).
+3. **KPI row 1** — 3-column grid: Lead Time (`LeadTimeKPICard`) · Output (`OutputKPICard`) · Productivity (`RegularKPICard`, toggle E2E / Mixing / Filpac, all real data). Row 2 OEE card has an OEE / OEE SKU toggle (OEE SKU locked; OEE still no data).
 4. **KPI row 2** — 3-column grid: OEE · Yield Loss · Energy (`RegularKPICard`, no data yet).
    All six use the regular card style (accent bar · value + trend · status pill · sparkline · secondary metric · footer) at `compact` size (padding, gaps and sparkline ≈80%, regular font sizes) so three fit per row.
 5. **Trend + AI Risks** — 2fr / 1fr grid: TrendChart (Standard Line Chart, SPC markers) + AIRisksPanel.
 
 ### User interactions
 - Header filter row: Period picker, Plant dropdown, Data Level selector. Changes trigger immediate re-fetch.
-- Refresh button: force-reloads KPI data, flashes `#215AA8` overlay briefly.
+- Refresh button: force-reloads KPI data, flashes `#1E4076` overlay briefly.
 - Bell icon: opens alert panel / Teams alert send.
 - Monitor button: navigates to `/monitor?page=strategic&plant=...&period=...&...` (opens fullscreen mode).
 - AI Summary: clickable numbers trigger `kpi-highlight` CustomEvent to highlight the relevant KPI card.
@@ -42,7 +42,7 @@
 - 4 KPI cards: Gross LT · Nett LT · UNVA Days · UNVA %
 - 20-stage breakdown bar chart (toggle: Gross / Nett / Pareto)
 - Trend line chart by stage
-- Color classification: VA = #215AA8, NNVA = #d97706, UNVA = #b91c1c
+- Color classification: VA = #1E4076, NNVA = #d97706, UNVA = #b91c1c
 
 #### Operational View
 - Batch exceptions panel (critical/warning batches, sorted by severity)
@@ -97,7 +97,7 @@
 - Cached 5 hours server-side.
 - Refresh button force-fetches (ignores cache).
 - Text: 3 sentences, executive summary of current KPI state.
-- Clickable KPI numbers: `text-[#215AA8]` with underline — fires `kpi-highlight` CustomEvent → highlights matching KPI card.
+- Clickable KPI numbers: `text-[#1E4076]` with underline — fires `kpi-highlight` CustomEvent → highlights matching KPI card.
 - Powered by Groq (same model registry as chat, see `docs/ARCHITECTURE.md`).
 
 ---

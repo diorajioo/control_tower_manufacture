@@ -28,6 +28,8 @@ async function runTrendQuery(plant: string, startDate: string, endDate: string, 
 
   const plantsSet = new Set<string>();
   const weekMap   = new Map<string, Record<string, number>>();
+  // Lead time only: PO count + POs above target per point → Laney P′ chart on the client (KPI_VALUE stays avg days)
+  const statsMap  = new Map<string, Record<string, { n: number; late: number; avgDays: number }>>();
 
   for (const row of rows) {
     const weekRaw = row.WEEK as unknown;
@@ -38,6 +40,11 @@ async function runTrendQuery(plant: string, startDate: string, endDate: string, 
 
     if (!weekMap.has(week)) weekMap.set(week, {});
     weekMap.get(week)![rowPlant] = Number(row.KPI_VALUE ?? 0);
+    const r = row as { N?: number; LATE?: number };
+    if (r.N != null) {
+      if (!statsMap.has(week)) statsMap.set(week, {});
+      statsMap.get(week)![rowPlant] = { n: Number(r.N), late: Number(r.LATE ?? 0), avgDays: Number(row.KPI_VALUE ?? 0) };
+    }
   }
 
   return {
@@ -45,6 +52,7 @@ async function runTrendQuery(plant: string, startDate: string, endDate: string, 
       .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
       .map(([date, vals]) => ({ date, ...vals })),
     plants: Array.from(plantsSet).sort(),
+    pointStats: statsMap.size ? Object.fromEntries(statsMap) : undefined,
   };
 }
 
@@ -54,7 +62,7 @@ const fetchTrendByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runTrendQuery(plant, startDate, endDate, kpiType, period, grain);
   },
-  ["trends-by-period"],
+  ["trends-by-period-v5"],
   { revalidate: 3600, tags: ["trends"] }
 );
 
@@ -63,7 +71,7 @@ const fetchTrendByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string, kpiType: string, grain: TrendGrain) => {
     return runTrendQuery(plant, startDate, endDate, kpiType, undefined, grain);
   },
-  ["trends-by-dates"],
+  ["trends-by-dates-v5"],
   { revalidate: 3600, tags: ["trends"] }
 );
 

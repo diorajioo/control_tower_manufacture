@@ -68,7 +68,7 @@ components/
 │   ├── Header.tsx                  # Universal header — nav, filters, bell, monitor button
 │   ├── Sidebar.tsx                 # Sidebar nav + auto-logout
 │   ├── KPICard.tsx                 # KPI card with accent bar, animated value, tooltip
-│   ├── AISummary.tsx               # AI Summary strip (white card, AILabel chip)
+│   ├── AISummary.tsx               # AI Summary strip (Paragon Blue card) + publishes KPI card one-liners
 │   ├── AlertPanel.tsx              # Alert rows with dismiss/undo
 │   ├── TrendChart.tsx              # Nivo line chart with SPC limits
 │   ├── StackedBarChart.tsx         # Nivo bar chart KPI by plant
@@ -188,6 +188,8 @@ Client factory: `lib/ai-provider.ts → getClientForModel(modelId)`.
 Generates a 3-sentence executive summary of current KPI state. Cached 5 hours in the browser (`localStorage`) per filter set (plant + start/end date); changing plant or period generates a new one.
 
 Inputs: Lead Time (gross/nett), Output (bulk + FG), E2E Productivity, and their MoM trends.
+
+Output: the paragraph, then a `[[CARDS]]` line and one `leadtime: / output: / productivity:` one-liner each (≤ 12 words). `AISummary.tsx` shows only the paragraph and publishes the one-liners to the KPI cards through `components/ui/KpiOneLiner.tsx` (one call, one cache — `ai_summary_*_v5`).
 
 **AI narrative (`lib/kpiNarrative.ts`):** Summary, AI Risks and Chat get the same compact KPI context (`buildKpiContext`: lead time gross/nett + composition + top 3 stages, output FG/bulk, productivity E2E/upstream/downstream, all with trends) plus computed direction **Signals**, a KPI relationship map and narrative rules (cause → effect, only link KPIs whose directions fit, no assumed data). Summary = 3 sentences: what happened → why / link → so what + action. Chat gets the full `kpi` object from Overview and a `lead_time_by_stage` tool.
 

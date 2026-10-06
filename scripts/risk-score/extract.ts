@@ -5,7 +5,7 @@
 // Writes <out-dir>/po_steps.json. Data stays outside the repo (internal production data).
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { executeQuery } from "../../lib/snowflake";
+import { executeQuery } from "../../lib/db";
 
 const outDir = process.argv[2];
 if (!outDir) throw new Error("usage: extract.ts <out-dir>");
@@ -25,6 +25,7 @@ const SQL = `
     ANY_VALUE(t.SEDIAAN)              AS SEDIAAN,
     t.ACTIVITY_SEQUENCE               AS SEQ,
     ANY_VALUE(t.ACTIVITY)             AS ACTIVITY,
+    ANY_VALUE(t.LINE_NAME)            AS LINE,
     MIN(t.ACTIVITY_START)             AS START_AT,
     MAX(t.ACTIVITY_STOP)              AS STOP_AT
   FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME t

@@ -80,6 +80,8 @@ const DATA_LEVELS: { value: string; label: string }[] = [
 interface HeaderProps {
   plants: string[];
   onFilterChange: (f: { plant: string; startDate: string; endDate: string; dataLevel: string; period: string }) => void;
+  /** Filters the page is currently showing (e.g. restored from localStorage); defaults to YTD · All Plant */
+  initialFilters?: Partial<{ plant: string; startDate: string; endDate: string; dataLevel: string; period: string }>;
   activeView: string;
   onViewChange: (v: string) => void;
   /** `locked` views are shown with a lock icon and cannot be opened (e.g. still on mock data) */
@@ -100,7 +102,7 @@ export function Header({
   plants, onFilterChange, activeView, onViewChange, views,
   onRefresh, isLoading, lastUpdated, alertCount = 0, onBellClick,
   alerts = [], onDismiss, onMonitorMode,
-  ltBasis, onLtBasisChange,
+  ltBasis, onLtBasisChange, initialFilters,
 }: HeaderProps) {
   const { data: session } = useSession();
   const { t } = useI18n();
@@ -109,11 +111,19 @@ export function Header({
     { key: "tactical",  label: t("header_view_tactical") },
   ];
   const [countdown,      setCountdown]      = useState(REFRESH_INTERVAL_MS);
-  const [plant,          setPlant]          = useState("All Plant");
-  const [period,         setPeriod]         = useState("YTD");
-  const [startDate,      setStartDate]      = useState(`${new Date().getFullYear()}-01-01`);
-  const [endDate,        setEndDate]        = useState(today());
-  const [dataLevel,      setDataLevel]      = useState("Daily");
+  // Filter controls edit a draft; nothing reaches the page until the user clicks Apply.
+  const [applied, setApplied] = useState(() => ({
+    plant:     initialFilters?.plant     ?? "All Plant",
+    period:    initialFilters?.period    ?? "YTD",
+    startDate: initialFilters?.startDate ?? `${new Date().getFullYear()}-01-01`,
+    endDate:   initialFilters?.endDate   ?? today(),
+    dataLevel: initialFilters?.dataLevel ?? "Daily",
+  }));
+  const [plant,          setPlant]          = useState(applied.plant);
+  const [period,         setPeriod]         = useState(applied.period);
+  const [startDate,      setStartDate]      = useState(applied.startDate);
+  const [endDate,        setEndDate]        = useState(applied.endDate);
+  const [dataLevel,      setDataLevel]      = useState(applied.dataLevel);
   const [plantOpen,      setPlantOpen]      = useState(false);
   const [periodOpen,     setPeriodOpen]     = useState(false);
   const [resolutionOpen, setResolutionOpen] = useState(false);
@@ -147,10 +157,20 @@ export function Header({
     return () => clearInterval(id);
   }, [lastUpdated, onRefresh]);
 
-  const push = (o: Partial<{ plant: string; startDate: string; endDate: string; dataLevel: string; period: string }> = {}) =>
-    onFilterChange({ plant: o.plant ?? plant, startDate: o.startDate ?? startDate, endDate: o.endDate ?? endDate, dataLevel: o.dataLevel ?? dataLevel, period: o.period ?? period });
+  const draft = { plant, period, startDate, endDate, dataLevel };
+  const dirty = (Object.keys(draft) as (keyof typeof draft)[]).some((k) => draft[k] !== applied[k]);
+  const invalidRange = period === "Custom" && (!startDate || !endDate || startDate > endDate);
+  const applyFilters = () => {
+    if (!dirty || invalidRange) return;
+    setApplied(draft);
+    onFilterChange(draft);
+  };
+  const discardFilters = () => {
+    setPlant(applied.plant); setPeriod(applied.period); setStartDate(applied.startDate);
+    setEndDate(applied.endDate); setDataLevel(applied.dataLevel);
+  };
 
-  const handlePlant     = (v: string) => { setPlant(v); push({ plant: v }); };
+  const handlePlant     = (v: string) => { setPlant(v); };
   const handlePeriod    = (key: string) => {
     const p = PERIOD_PRESETS.find((x) => x.key === key); if (!p) return;
     if (key === "Custom") { setPeriod("Custom"); setPeriodOpen(false); return; }
@@ -158,12 +178,11 @@ export function Header({
     const allowed = PERIOD_RESOLUTIONS[key] ?? ["Daily", "Weekly", "Monthly"];
     const newLevel = allowed.includes(dataLevel) ? dataLevel : allowed[0];
     setStartDate(start); setEndDate(end); setPeriod(key); setDataLevel(newLevel);
-    push({ startDate: start, endDate: end, period: key, dataLevel: newLevel });
     setPeriodOpen(false);
   };
-  const handleDataLevel = (v: string) => { setDataLevel(v); setResolutionOpen(false); push({ dataLevel: v }); };
-  const handleStart     = (v: string) => { setStartDate(v); push({ startDate: v, period: "Custom" }); };
-  const handleEnd       = (v: string) => { setEndDate(v);   push({ endDate:   v, period: "Custom" }); };
+  const handleDataLevel = (v: string) => { setDataLevel(v); setResolutionOpen(false); };
+  const handleStart     = (v: string) => { setStartDate(v); };
+  const handleEnd       = (v: string) => { setEndDate(v); };
 
   const handleTeamsSend = async () => {
     setTeamsState("sending");
@@ -188,8 +207,8 @@ export function Header({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           alerts,
-          plant,
-          period,
+          plant:  applied.plant,
+          period: applied.period,
           withRecommendation: false,
           force: true, // manual send — skip dedup
           ...(teamsRecipients ? { recipients: teamsRecipients } : {}),
@@ -217,14 +236,14 @@ export function Header({
     <header className="shrink-0">
 
       {/* ── Row 1: Paragon Blue topbar (joins the Sidebar logo block) ─────── */}
-      <div className="flex items-center gap-3 px-4 h-[52px] bg-[#215AA8]">
+      <div className="flex items-center gap-3 px-4 h-[52px] bg-[#1E4076]">
 
         {/* Brand */}
         <span className="text-[13px] font-medium text-white/70 tracking-[0.07em] uppercase shrink-0">Manufacturing Control Tower</span>
 
-        {period && (
+        {applied.period && (
           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/15 text-white shrink-0">
-            {period}
+            {applied.period}
           </span>
         )}
 
@@ -266,7 +285,7 @@ export function Header({
           >
             <Bell size={14} />
             {alertCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 border-[1.5px] border-[#215AA8] flex items-center justify-center text-[8px] font-bold text-white">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 border-[1.5px] border-[#1E4076] flex items-center justify-center text-[8px] font-bold text-white">
                 {alertCount}
               </span>
             )}
@@ -290,7 +309,7 @@ export function Header({
                   alerts.map((a) => (
                     <div key={a.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                       <span className="shrink-0 mt-0.5">
-                        <span className={cn("block w-2 h-2 mt-1 rounded-full", a.severity === "critical" ? "bg-red-500" : a.severity === "warning" ? "bg-amber-400" : "bg-[#215AA8]")} />
+                        <span className={cn("block w-2 h-2 mt-1 rounded-full", a.severity === "critical" ? "bg-red-500" : a.severity === "warning" ? "bg-amber-400" : "bg-[#1E4076]")} />
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-semibold text-gray-800">{a.kpi}</p>
@@ -321,7 +340,7 @@ export function Header({
                       teamsState === "ok"      ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                       teamsState === "err"     ? "bg-red-50 text-red-600 border-red-200" :
                       teamsState === "sending" ? "bg-gray-50 text-gray-400 border-gray-200 cursor-wait" :
-                                                 "bg-[#D3DEEE] text-[#143665] border-[#A6BDDC] hover:bg-[#A6BDDC]"
+                                                 "bg-[#EEF4FB] text-[#16305C] border-[#C3CEE3] hover:bg-[#C3CEE3]"
                     )}
                   >
                     {teamsState === "sending" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
@@ -355,10 +374,10 @@ export function Header({
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-all",
               period
-                ? "border-[#A6BDDC] bg-[#D3DEEE] text-[#143665]"
+                ? "border-[#C3CEE3] bg-[#EEF4FB] text-[#16305C]"
                 : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
             )}>
-            <Calendar size={10} className={period ? "text-[#215AA8]" : "text-gray-400"} />
+            <Calendar size={10} className={period ? "text-[#1E4076]" : "text-gray-400"} />
             {PERIOD_PRESETS.find((p) => p.key === period)?.label ?? "Select Period"}
             <ChevronDown size={9} className={cn("text-gray-400 transition-transform duration-150", periodOpen && "rotate-180")} />
           </button>
@@ -368,10 +387,10 @@ export function Header({
                 <button key={p.key} onClick={() => handlePeriod(p.key)}
                   className={cn(
                     "w-full flex items-center justify-between gap-2 px-3.5 py-2 text-[11px] text-left transition-colors",
-                    period === p.key ? "bg-[#D3DEEE]/60 text-[#143665]" : "text-gray-600 hover:bg-gray-50"
+                    period === p.key ? "bg-[#EEF4FB]/60 text-[#16305C]" : "text-gray-600 hover:bg-gray-50"
                   )}>
                   <span className="font-medium">{p.label}</span>
-                  {period === p.key && <Check size={10} className="text-[#215AA8] shrink-0" />}
+                  {period === p.key && <Check size={10} className="text-[#1E4076] shrink-0" />}
                 </button>
               ))}
             </div>
@@ -384,10 +403,10 @@ export function Header({
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-all",
               plant !== "All Plant"
-                ? "border-[#A6BDDC] bg-[#D3DEEE] text-[#143665]"
+                ? "border-[#C3CEE3] bg-[#EEF4FB] text-[#16305C]"
                 : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
             )}>
-            <LayoutGrid size={10} className={plant !== "All Plant" ? "text-[#215AA8]" : "text-gray-400"} />
+            <LayoutGrid size={10} className={plant !== "All Plant" ? "text-[#1E4076]" : "text-gray-400"} />
             {plant}
             <ChevronDown size={9} className={cn("text-gray-400 transition-transform duration-150", plantOpen && "rotate-180")} />
           </button>
@@ -397,12 +416,12 @@ export function Header({
                 <button key={p} onClick={() => { handlePlant(p); setPlantOpen(false); }}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-1.5 text-[11px] text-left transition-colors",
-                    plant === p ? "bg-[#D3DEEE]/60 text-[#143665]" : "text-gray-600 hover:bg-gray-50"
+                    plant === p ? "bg-[#EEF4FB]/60 text-[#16305C]" : "text-gray-600 hover:bg-gray-50"
                   )}>
                   <span className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: PLANT_COLORS[i % PLANT_COLORS.length] }} />
                   <span className="font-medium flex-1">{p}</span>
-                  {plant === p && <Check size={10} className="text-[#215AA8] shrink-0" />}
+                  {plant === p && <Check size={10} className="text-[#1E4076] shrink-0" />}
                 </button>
               ))}
             </div>
@@ -411,13 +430,13 @@ export function Header({
 
         {/* Date inputs — only shown for Custom Range */}
         {period === "Custom" && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#A6BDDC] bg-[#D3DEEE] shrink-0">
-            <Calendar size={10} className="text-[#215AA8] shrink-0" />
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#C3CEE3] bg-[#EEF4FB] shrink-0">
+            <Calendar size={10} className="text-[#1E4076] shrink-0" />
             <input type="date" value={startDate} onChange={(e) => handleStart(e.target.value)}
-              className="text-[11px] font-medium text-[#143665] bg-transparent focus:outline-none w-[86px]" />
-            <span className="text-[#A6BDDC] text-xs">–</span>
+              className="text-[11px] font-medium text-[#16305C] bg-transparent focus:outline-none w-[86px]" />
+            <span className="text-[#C3CEE3] text-xs">–</span>
             <input type="date" value={endDate} onChange={(e) => handleEnd(e.target.value)}
-              className="text-[11px] font-medium text-[#143665] bg-transparent focus:outline-none w-[86px]" />
+              className="text-[11px] font-medium text-[#16305C] bg-transparent focus:outline-none w-[86px]" />
           </div>
         )}
 
@@ -446,10 +465,10 @@ export function Header({
                     <button key={value} onClick={() => handleDataLevel(value)}
                       className={cn(
                         "w-full flex items-center justify-between gap-2 px-3.5 py-2 text-[11px] text-left transition-colors",
-                        dataLevel === value ? "bg-[#D3DEEE]/60 text-[#143665]" : "text-gray-600 hover:bg-gray-50"
+                        dataLevel === value ? "bg-[#EEF4FB]/60 text-[#16305C]" : "text-gray-600 hover:bg-gray-50"
                       )}>
                       <span className="font-medium">{label}</span>
-                      {dataLevel === value && <Check size={10} className="text-[#215AA8] shrink-0" />}
+                      {dataLevel === value && <Check size={10} className="text-[#1E4076] shrink-0" />}
                     </button>
                   ))}
                 </div>
@@ -457,6 +476,30 @@ export function Header({
             </div>
           );
         })()}
+
+        {/* Apply — filters only run after confirmation */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={applyFilters}
+            disabled={!dirty || invalidRange}
+            title={invalidRange ? "Start date must be on or before end date" : dirty ? undefined : "No filter changes to apply"}
+            className={cn(
+              "px-3.5 py-1.5 rounded-full text-[11px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40",
+              dirty && !invalidRange
+                ? "bg-[#1E4076] text-white hover:bg-[#16305C]"
+                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+            )}
+          >
+            Apply
+          </button>
+          {dirty && (
+            <button onClick={discardFilters}
+              className="px-2 py-1.5 rounded-full text-[11px] font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40">
+              Discard
+            </button>
+          )}
+          {invalidRange && <span className="text-[10.5px] text-red-600">Start date is after end date</span>}
+        </div>
 
         {resolvedViews.length >= 2 && (
           <>
@@ -469,13 +512,13 @@ export function Header({
                   className={cn(
                     "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10 inline-flex items-center gap-1",
                     locked ? "text-gray-300 cursor-not-allowed"
-                      : activeView === key ? "text-[#143665]" : "text-gray-500 hover:text-gray-700"
+                      : activeView === key ? "text-[#16305C]" : "text-gray-500 hover:text-gray-700"
                   )}>
                   {locked && <Lock size={9} strokeWidth={2} />}
                   {activeView === key && (
                     <motion.span
                       layoutId="view-pill"
-                      className="absolute inset-0 bg-[#D3DEEE] rounded-full"
+                      className="absolute inset-0 bg-[#EEF4FB] rounded-full"
                       style={{ zIndex: -1 }}
                       transition={{ type: "spring", stiffness: 380, damping: 32 }}
                     />
@@ -495,12 +538,12 @@ export function Header({
                 <button key={b} onClick={() => onLtBasisChange(b)}
                   className={cn(
                     "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10",
-                    ltBasis === b ? "text-[#143665]" : "text-gray-500 hover:text-gray-700"
+                    ltBasis === b ? "text-[#16305C]" : "text-gray-500 hover:text-gray-700"
                   )}>
                   {ltBasis === b && (
                     <motion.span
                       layoutId="lt-basis-pill"
-                      className="absolute inset-0 bg-[#D3DEEE] rounded-full"
+                      className="absolute inset-0 bg-[#EEF4FB] rounded-full"
                       style={{ zIndex: -1 }}
                       transition={{ type: "spring", stiffness: 380, damping: 32 }}
                     />

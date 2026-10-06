@@ -11,9 +11,9 @@ import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 export const maxDuration = 60;
 
 // Lead time per stage, actual vs standard + breakdown per plant (Overview → Tactical view).
-async function runStageQuery(plant: string, startDate: string, endDate: string, period?: string) {
+async function runStageQuery(plant: string, startDate: string, endDate: string, period?: string, basis: "created" | "released" = "created") {
   const filters = { plant, startDate, endDate, period };
-  const [rows, byPlant] = await Promise.all([getLeadTimeStageVsStd(filters), getLeadTimeByPlant(filters, LEAD_TIME_TARGET_DAYS)]);
+  const [rows, byPlant] = await Promise.all([getLeadTimeStageVsStd(filters), getLeadTimeByPlant(filters, LEAD_TIME_TARGET_DAYS, basis)]);
   const d2 = (n: number | null) => (n == null ? null : Number(n.toFixed(2)));
 
   // Stage days per PO per plant; the network row sums all plants over the network PO count.
@@ -49,7 +49,7 @@ async function runStageQuery(plant: string, startDate: string, endDate: string, 
   };
 }
 
-const cached = unstable_cache(runStageQuery, ["lead-time-stages-v2"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runStageQuery, ["lead-time-stages-v3"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -60,9 +60,10 @@ export async function GET(req: NextRequest) {
   const startDate = searchParams.get("startDate") ?? `${new Date().getFullYear()}-01-01`;
   const endDate   = searchParams.get("endDate")   ?? new Date().toISOString().split("T")[0];
   const period    = searchParams.get("period")    ?? undefined;
+  const basis     = searchParams.get("basis") === "released" ? "released" : "created";
 
   try {
-    return NextResponse.json(await cached(plant, startDate, endDate, period));
+    return NextResponse.json(await cached(plant, startDate, endDate, period, basis));
   } catch (e) {
     console.error("Lead time stages failed:", (e as Error).message);
     return NextResponse.json({ stages: [], plants: [], error: "query_failed" }, { status: 500 });

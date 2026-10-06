@@ -204,7 +204,7 @@ export function LiteKPICard({
                   margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
                   curve="linear"
                   enableArea={false}
-                  colors={["#215AA8"]}
+                  colors={["#1E4076"]}
                   lineWidth={1.4}
                   enablePoints={false}
                   enableGridX={false}

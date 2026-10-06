@@ -4,6 +4,27 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-10-06
+
+### Changed
+- **Overview trend tabs follow the KPI cards**: Lead Time · Output · Productivity (new E2E trend query, XmR) · OEE · Yield Loss · Energy (locked). OPE and RFT tabs removed (code kept). `TREND_KPI_OPTIONS`; trend cache `v5`. Stale trend responses are ignored when the tab changes.
+- **Control charts: out-of-limit points are red only on hover** (no resting red dots); Lead Time card stage bars and dashboard loading spinner moved to navy `#1E4076`.
+- **Overview trend: every metric is a control chart with Overall / By plant** — Laney P′ for Lead Time and RFT, XmR for Output, OEE, OPE, Yield Loss; same red out-of-limit dots / labeled limits as Lead Time; other points only on hover. Trend cache `trends-by-*-v4`. Trend SQL returns an exact "All plants" row (GROUPING SETS); RFT also returns N + count. Yield Loss By plant locked. Output Y axis compact (8.29M).
+- **Fixed: Yield Loss trend + sparkline queries** used a non-existent column `BULK_LOSS_QUANTITY` (Snowflake error); now the documented formula `ABS(Σ theoretical − Σ realization) / Σ theoretical × 100`.
+- **KPI Card standard rewritten** in `docs/UI_UX.md` to match the current cards (anatomy diagram + rules); `KPICard.tsx` marked legacy.
+- **Brand blue → navy `#1E4076`** (ParagonCorp design reference) — every use of `#215AA8` and its tints across app, charts, Tailwind `brand-*` scale and docs: `#215AA8`→`#1E4076`, hovers `#1A4886`/`#1B4B8C` and dark text `#143665`→`#16305C`, tints `#D3DEEE`/`#E9EFF6`/`#EAF0F8`/`#EEF3FA`→`#EEF4FB`, tint borders `#A6BDDC`/`#D5E0EF`→`#C3CEE3`, highlight outline rgba(33,90,168)→rgba(30,64,118). Only the blue changed; status colors unchanged.
+- **AI Summary on Paragon Blue** — `#215AA8` background, white text and white underlined KPI numbers (Overview + Strategic Monitor).
+- **Overview: PO Created / PO Released toggle moved to Tactical** — the Header basis toggle now shows only in the Tactical view and drives Gross LT + On-time in "Lead time breakdown per plant" (`getLeadTimeByPlant(…, basis)`, `basis` param on `/api/lead-time/stages`, cache `lead-time-stages-v3`). The Strategic Lead Time card is fixed to PO Created.
+- **Overview TrendChart, Lead Time: Laney P′ chart of % PO > 13 days** — point on every period, UCL/LCL per point from its PO count (Laney σz), view toggle Overall (default, one line, limits always shown) / By plant (one All plants band; legend hover shows that plant's own limits), red dot outside limits. Trend query returns `N` + `LATE`; cache `trends-by-*-v3`. Legend hover now isolates on the Overview too.
+
+### Added
+- **AI one-liner on KPI cards** — Lead Time, Output and Productivity (E2E view) cards show a one-line AI insight as their own bar below the status row (`KpiOneLiner`). Generated in the same AI Summary call (`[[CARDS]]` block after the paragraph, ≤ 12 words each), cache `ai_summary_*_v5`; also on the Strategic Monitor.
+- **Apply button for filters (all pages with the Header filter bar: Overview, Lead Time)** — period / plant / date range / data level are a draft until Apply; Discard reverts; invalid custom range blocks Apply. Header takes `initialFilters`, fixing the Overview header showing YTD · All Plant while restored filters were active.
+- **Productivity card toggle E2E / Mixing / Filpac (real data)** — `getStageProductivity()`: Mixing kg/mh from `CT_MANUF_OLAH` (RELEASE_BULK once per SFG / Σ MANHOUR), Filpac pcs/mh from `CT_MANUF_KEMAS` deduplicated per `ACTIVITY_ID` (KEMAS has one row per operator). Value, prior-period trend and weekly sparkline per view; KPI cache `kpi-by-*-v9`.
+- **OEE card toggle OEE / OEE SKU** — OEE SKU is locked (`locked` option on `SegmentedToggle`); OEE still has no data.
+
+---
+
 ## 2026-09-27
 
 ### Added

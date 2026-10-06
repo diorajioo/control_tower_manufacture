@@ -30,7 +30,16 @@ ${KPI_RELATIONSHIPS}
 
 ${NARRATIVE_RULES}
 
-Analyze only Lead Time, Output and Productivity. Do not mention OEE, OPE, yield/bulk/pack loss, RFT or energy.`;
+Analyze only Lead Time, Output and Productivity. Do not mention OEE, OPE, yield/bulk/pack loss, RFT or energy.
+
+After the paragraph, write a new line with exactly [[CARDS]] and then one line per KPI card, in this format:
+leadtime: <one-liner>
+output: <one-liner>
+productivity: <one-liner>
+One-liner rules: max 12 words, one clause, plain English, no [kpi:] tags, no ending period.
+Say what moves that KPI and the direction, using the same facts as the paragraph; at most one number,
+copied exactly from the data with its unit. Productivity = E2E productivity.
+Example: "leadtime: Above target, driven by waiting before Weighing in J2"`;
 
 type AnyMessage = Groq.Chat.ChatCompletionMessageParam | OpenAI.Chat.ChatCompletionMessageParam;
 
@@ -43,7 +52,7 @@ async function createStreamWithFallback(messages: AnyMessage[]) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return await (client as any).chat.completions.create({
         model: modelId,
-        max_tokens: 600,
+        max_tokens: 750,
         stream: true,
         messages,
       });

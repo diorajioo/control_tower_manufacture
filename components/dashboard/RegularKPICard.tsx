@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { ResponsiveLine } from "@nivo/line";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Regular KPI card — generic version of the OutputKPICard / LeadTimeKPICard style
@@ -58,6 +59,10 @@ export interface RegularKPICardProps {
   footerRight?: string;
   noData?: boolean;
   compact?: boolean;
+  /** Optional control above the sparkline (e.g. a SegmentedToggle), same spot as the Lead Time card toggles */
+  toggle?: ReactNode;
+  /** KPI id whose AI one-liner (KpiOneLiner) shows as a bar below the status row */
+  insightId?: string;
 }
 
 export function RegularKPICard({
@@ -75,6 +80,8 @@ export function RegularKPICard({
   footerRight,
   noData = false,
   compact = false,
+  toggle,
+  insightId,
 }: RegularKPICardProps) {
   // Size scale for spacing/sparkline: 1 = regular, 0.8 = compact. Font sizes are always regular.
   const z = (n: number) => (compact ? Math.round(n * 0.8 * 2) / 2 : n);
@@ -134,6 +141,7 @@ export function RegularKPICard({
 
             {/* RIGHT column — sparkline */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: z(8) }}>
+              {toggle}
               {hasSparkline ? (
                 <div style={{ width: z(150), height: z(42) }}>
                   <ResponsiveLine
@@ -142,7 +150,7 @@ export function RegularKPICard({
                     xScale={{ type: "point" }}
                     yScale={{ type: "linear", min: "auto", max: "auto" }}
                     enableArea={false}
-                    colors={["#215AA8"]}
+                    colors={["#1E4076"]}
                     lineWidth={1.6}
                     enablePoints={false}
                     enableGridX={false}
@@ -163,6 +171,8 @@ export function RegularKPICard({
               </div>
             </div>
           </div>
+
+          <KpiOneLiner id={insightId} z={z} />
 
           {/* ── Secondary metric row ── */}
           {secondary && (

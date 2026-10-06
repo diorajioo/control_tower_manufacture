@@ -22,7 +22,7 @@ export interface StageStdPoint { stage: string; actual: number; std: number }
 const STD_STAGES = new Set(["TIMBANG", "OLAH", "CUCI OLAH"]);
 
 const ACTUAL_COLOR = SERIES_COLORS[0];
-const STD_COLOR = "#143665";
+const STD_COLOR = "#16305C";
 const CHART_MARGIN = { top: 4, right: 16, bottom: 24, left: 128 };
 const ROW_HEIGHT = 26;
 

@@ -129,7 +129,7 @@ const badgeColors = {
   green:  "bg-emerald-50 text-emerald-600",
   red:    "bg-[#FFEDEF] text-[#8A0011]",
   amber:  "bg-[#FFFBE4] text-[#342900]",
-  blue:   "bg-[#D3DEEE] text-[#143665]",
+  blue:   "bg-[#EEF4FB] text-[#16305C]",
   purple: "bg-violet-50 text-violet-600",
 };
 
@@ -152,7 +152,7 @@ export function TrendBadge({ trend }: { trend: number }) {
 export function KPICard({
   title,
   icon,
-  iconColor = "#215AA8",
+  iconColor = "#1E4076",
   value,
   unit,
   trend,
@@ -196,8 +196,8 @@ export function KPICard({
         <motion.div
           key={flashKey}
           className="pointer-events-none absolute inset-0 rounded-lg"
-          initial={{ opacity: 0.22, backgroundColor: "#215AA8" }}
-          animate={{ opacity: 0, backgroundColor: "#215AA8" }}
+          initial={{ opacity: 0.22, backgroundColor: "#1E4076" }}
+          animate={{ opacity: 0, backgroundColor: "#1E4076" }}
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
         />
       )}
@@ -323,7 +323,7 @@ interface SparklineProps {
   height?: number;
 }
 
-export function Sparkline({ data, color = "#215AA8", width = 80, height = 32 }: SparklineProps) {
+export function Sparkline({ data, color = "#1E4076", width = 80, height = 32 }: SparklineProps) {
   if (data.length < 2) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);

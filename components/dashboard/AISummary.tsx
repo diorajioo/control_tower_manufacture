@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { highlightKpi, isKpiHighlightId, KPI_TRIGGER_ATTR } from "@/components/ui/KpiHighlight";
+import { setKpiOneLiners } from "@/components/ui/KpiOneLiner";
 
 // KPI keyword → look for the next number within 50 chars and make it clickable.
 // Only IDs that have a highlight target (KPI_HIGHLIGHT_IDS) become clickable.
@@ -92,7 +93,7 @@ function SummaryText({ text }: { text: string }) {
             {...KPI_TRIGGER_ATTR}
             onClick={() => highlightKpi(seg.kpi!)}
             title={`Highlight on dashboard`}
-            className="font-bold text-[#215AA8] underline decoration-[#A6BDDC] underline-offset-2 hover:decoration-[#215AA8] transition-colors cursor-pointer"
+            className="font-bold text-white underline decoration-white/50 underline-offset-2 hover:decoration-white transition-colors cursor-pointer rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
           >
             {seg.text}
           </button>
@@ -102,6 +103,24 @@ function SummaryText({ text }: { text: string }) {
       )}
     </>
   );
+}
+
+// The model writes the paragraph, then "[[CARDS]]" and one "id: line" per KPI card (see /api/dashboard/summary).
+const CARDS_MARK = "[[CARDS]]";
+/** Paragraph only — drops the cards block, and a marker that is still streaming in ("… [[CAR"). */
+function paragraphOf(text: string): string {
+  const i = text.indexOf(CARDS_MARK);
+  return (i >= 0 ? text.slice(0, i) : text.replace(/\s*\[\[[A-Z]*\]?$/, "")).trim();
+}
+function cardLinesOf(text: string): Record<string, string> | null {
+  const i = text.indexOf(CARDS_MARK);
+  if (i < 0) return null;
+  const out: Record<string, string> = {};
+  for (const line of text.slice(i + CARDS_MARK.length).split("\n")) {
+    const m = /^\s*(leadtime|output|productivity)\s*:\s*(.+?)\s*$/i.exec(line);
+    if (m) out[m[1].toLowerCase()] = m[2].replace(/\[kpi:[a-z]+\]/g, "").replace(/^["']|["'.]$/g, "").trim();
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 interface AISummaryProps {
@@ -115,11 +134,11 @@ interface AISummaryProps {
   ready: boolean;
 }
 
-// "_v4": invalidates summaries cached before the narrative (cause → effect) prompt.
-const CACHE_TEXT = "ai_summary_text_v4";
-const CACHE_TIME = "ai_summary_time_v4";
+// "_v5": cached text now includes the [[CARDS]] one-liner block.
+const CACHE_TEXT = "ai_summary_text_v5";
+const CACHE_TIME = "ai_summary_time_v5";
 // Filters the cached summary was generated for — a different plant/period regenerates it.
-const CACHE_KEY  = "ai_summary_key_v4";
+const CACHE_KEY  = "ai_summary_key_v5";
 const TTL_MS    = 5 * 60 * 60 * 1000; // 5 hours
 
 export function AISummary({ kpi, filters, ready }: AISummaryProps) {
@@ -134,6 +153,12 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
   const [truncated, setTruncated] = useState(false);
   const abortRef    = useRef<AbortController | null>(null);
   const accumRef    = useRef("");
+
+  // Card one-liners follow the summary text (cache or finished stream); cleared while a new one streams
+  useEffect(() => {
+    setKpiOneLiners(loading ? null : cardLinesOf(summary));
+  }, [summary, loading]);
+  useEffect(() => () => setKpiOneLiners(null), []);
 
   const fetchSummary = async (force = false) => {
     if (!kpi || !ready) return;
@@ -225,30 +250,30 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
     : null;
 
   return (
-    <div className="bg-white rounded-lg border border-[#EBEBEB] border-l-[3px] border-l-[#215AA8] px-4 py-3">
+    <div className="bg-[#1E4076] rounded-lg border border-[#1E4076] px-4 py-3">
       <div className="flex items-center gap-2">
-        <span className="shrink-0 text-[10.5px] font-bold uppercase tracking-[0.08em] text-[#215AA8]">
+        <span className="shrink-0 text-[10.5px] font-bold uppercase tracking-[0.08em] text-white/70">
           AI Summary
         </span>
 
         <div className="flex-1 min-w-0">
           {(loading && !summary) && (
             <div className="flex gap-1.5 items-center">
-              <div className="h-2 bg-[#EBEBEB] rounded-full w-48 animate-pulse" />
-              <div className="h-2 bg-[#EBEBEB] rounded-full w-32 animate-pulse" />
+              <div className="h-2 bg-white/20 rounded-full w-48 animate-pulse" />
+              <div className="h-2 bg-white/20 rounded-full w-32 animate-pulse" />
             </div>
           )}
           {(summary || loading) && (
-            <p className="text-[13px] text-[#2A3D4A] leading-relaxed">
-              <SummaryText text={summary} />
-              {loading && <span className="inline-block w-0.5 h-3 bg-[#215AA8] ml-0.5 animate-pulse align-middle" />}
+            <p className="text-[13px] text-white leading-relaxed">
+              <SummaryText text={paragraphOf(summary)} />
+              {loading && <span className="inline-block w-0.5 h-3 bg-white ml-0.5 animate-pulse align-middle" />}
               {truncated && !loading && (
-                <span className="ml-1.5 text-[#D1A400] text-[10px]">— truncated, click Refresh</span>
+                <span className="ml-1.5 text-[#FFE38A] text-[10px]">— truncated, click Refresh</span>
               )}
             </p>
           )}
           {error && (
-            <div className="flex items-center gap-1.5 text-[11px] text-[#E6001C]">
+            <div className="flex items-center gap-1.5 text-[11px] text-white">
               <AlertCircle size={11} />
               <span>{errorMsg || "Failed to load AI summary"}</span>
             </div>
@@ -257,12 +282,12 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
 
         <div className="flex items-center gap-2 shrink-0">
           {ageLabel && !loading && !error && (
-            <span className="text-[10px] text-[#7A7A7A] shrink-0">{ageLabel}</span>
+            <span className="text-[10px] text-white/60 shrink-0">{ageLabel}</span>
           )}
           <button
             onClick={() => fetchSummary(true)}
             disabled={loading}
-            className="flex items-center gap-1 text-[10px] text-[#215AA8] hover:text-[#1A4886] transition-colors px-1.5 py-0.5 rounded hover:bg-[#D3DEEE] disabled:opacity-50"
+            className="flex items-center gap-1 text-[10px] text-white/85 hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-white/15 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
           >
             <RefreshCw size={10} className={loading ? "animate-spin" : ""} />
             {loading ? "..." : "Refresh"}

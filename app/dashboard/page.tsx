@@ -23,6 +23,7 @@ import { FitToScreen } from "@/components/ui/FitToScreen";
 import { formatThousands } from "@/lib/utils";
 import { computeAlerts, type KPIAlert } from "@/lib/alerts";
 import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
+import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 
 interface KPIResponse {
   leadTime: {
@@ -63,8 +64,17 @@ interface KPIResponse {
     manhours: number;
     avgOperators: number;
     sparkline: number[];
+    stages?: Record<"mixing" | "filpac", { value: number; prev: number; trend: number | null; sparkline: number[] }>;
   };
 }
+
+// Productivity card toggle: E2E (CT_MANUF_E2E) · Mixing (CT_MANUF_OLAH) · Filpac (CT_MANUF_KEMAS) — getStageProductivity()
+type ProdView = "e2e" | "mixing" | "filpac";
+const PROD_VIEWS: Record<ProdView, { label: string; unit: string; sparkUnit: string; footer: string }> = {
+  e2e:    { label: "E2E Productivity",    unit: "pcs/manhour", sparkUnit: "pcs/mh", footer: "Output per operator manhour, end to end" },
+  mixing: { label: "Mixing Productivity", unit: "kg/manhour",  sparkUnit: "kg/mh",  footer: "Released bulk per operator manhour in Mixing" },
+  filpac: { label: "Filpac Productivity", unit: "pcs/manhour", sparkUnit: "pcs/mh", footer: "Good pcs per operator manhour in Filpac" },
+};
 
 interface Filters {
   plant: string;
@@ -91,6 +101,7 @@ export default function DashboardPage() {
   const [activeView,    setActiveView]    = useState<"strategic" | "tactical">("strategic");
   const [ltBasis,       setLtBasis]       = useState<"created" | "released">("created");
   const [kpiType,       setKpiType]       = useState("leadtime");
+  const [prodView,      setProdView]      = useState<ProdView>("e2e");
   const [fetchError,    setFetchError]    = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(() => {
     const defaults: Filters = {
@@ -123,14 +134,14 @@ export default function DashboardPage() {
     if (activeView !== "tactical") return;
     let cancelled = false;
     setStageLoading(true);
-    const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, period: filters.period });
+    const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, period: filters.period, basis: ltBasis });
     fetch(`/api/lead-time/stages?${params}`)
       .then((r) => r.json())
       .then((d) => { if (!cancelled) { setStageStd(d.stages ?? []); setPlantLT({ plants: d.plants ?? [], targetDays: d.targetDays ?? 13 }); } })
       .catch(() => { if (!cancelled) { setStageStd([]); setPlantLT({ plants: [], targetDays: 13 }); } })
       .finally(() => { if (!cancelled) setStageLoading(false); });
     return () => { cancelled = true; };
-  }, [activeView, filters.plant, filters.startDate, filters.endDate, filters.period, refreshCount]);
+  }, [activeView, filters.plant, filters.startDate, filters.endDate, filters.period, ltBasis, refreshCount]);
 
   useEffect(() => {
     fetch("/api/dashboard/plants")
@@ -260,7 +271,7 @@ export default function DashboardPage() {
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f0eff8]">
-        <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-7 h-7 border-2 border-[#1E4076] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -275,11 +286,12 @@ export default function DashboardPage() {
         <Header
           plants={plants}
           onFilterChange={handleFilterChange}
+          initialFilters={filters}
           views={[{ key: "strategic", label: "Strategic" }, { key: "tactical", label: "Tactical" }]}
           activeView={activeView}
           onViewChange={(v) => setActiveView(v as "strategic" | "tactical")}
-          ltBasis={ltBasis}
-          onLtBasisChange={setLtBasis}
+          ltBasis={activeView === "tactical" ? ltBasis : undefined}
+          onLtBasisChange={activeView === "tactical" ? setLtBasis : undefined}
           onRefresh={handleRefresh}
           isLoading={loading}
           lastUpdated={lastUpdated}
@@ -316,13 +328,10 @@ export default function DashboardPage() {
             <KpiHighlightTarget id="leadtime">
               <LeadTimeKPICard
                 compact
+                insightId="leadtime"
                 showBreakdown={false}
-                basisOverride={ltBasis}
-                grossDays={
-                  ltBasis === "released" && kpi?.leadTime?.grossReleasedDays != null
-                    ? kpi.leadTime.grossReleasedDays
-                    : kpi?.leadTime?.grossDays ?? 0
-                }
+                basisOverride="created"
+                grossDays={kpi?.leadTime?.grossDays ?? 0}
                 nettDays={kpi?.leadTime?.nettDays ?? 0}
                 grossTrend={kpi?.leadTime?.grossTrend ?? null}
                 nettTrend={kpi?.leadTime?.nettTrend ?? null}
@@ -334,6 +343,7 @@ export default function DashboardPage() {
             <KpiHighlightTarget id="output">
               <OutputKPICard
                 compact
+                insightId="output"
                 fgQty={kpi?.output?.fgQty ?? 0}
                 bulkQty={kpi?.output?.bulkQty ?? 0}
                 fgTrend={kpi?.output?.fgTrend ?? null}
@@ -343,24 +353,41 @@ export default function DashboardPage() {
               />
             </KpiHighlightTarget>
             <KpiHighlightTarget id="productivity">
-              <RegularKPICard
-                compact
-                label="E2E Productivity"
-                icon={<Users size={13} color="#8b5cf6" strokeWidth={1.75} />}
-                value={kpi ? (kpi.productivity?.e2e ?? 0).toFixed(1) : "—"}
-                unit="pcs/manhour"
-                sparkUnit="pcs/mh"
-                trend={kpi?.productivity?.e2eTrend ?? null}
-                subLabel={kpi?.productivity?.e2ePrev ? `vs prior period ${kpi.productivity.e2ePrev.toFixed(1)}` : "vs prior period"}
-                sparkline={kpi?.productivity?.sparkline ?? []}
-                secondary={{
-                  value: `${(kpi?.productivity?.upstream ?? 0).toFixed(1)} · ${(kpi?.productivity?.downstream ?? 0).toFixed(1)}`,
-                  unit: "pcs/mh",
-                  label: "Upstream · Downstream",
-                }}
-                footerLeft="Output per operator manhour, end to end"
-                footerRight={kpi?.productivity?.manhours ? `${formatThousands(Math.round(kpi.productivity.manhours))} mh` : undefined}
-              />
+              {(() => {
+                const v = PROD_VIEWS[prodView];
+                const stage = prodView === "e2e" ? null : kpi?.productivity?.stages?.[prodView];
+                const value = prodView === "e2e" ? kpi?.productivity?.e2e : stage?.value;
+                const prev  = prodView === "e2e" ? kpi?.productivity?.e2ePrev : stage?.prev;
+                return (
+                  <RegularKPICard
+                    compact
+                    label={v.label}
+                    icon={<Users size={13} color="#8b5cf6" strokeWidth={1.75} />}
+                    value={kpi ? (value ?? 0).toFixed(1) : "—"}
+                    unit={v.unit}
+                    sparkUnit={v.sparkUnit}
+                    trend={(prodView === "e2e" ? kpi?.productivity?.e2eTrend : stage?.trend) ?? null}
+                    insightId={prodView === "e2e" ? "productivity" : undefined}
+                    subLabel={prev ? `vs prior period ${prev.toFixed(1)}` : "vs prior period"}
+                    sparkline={(prodView === "e2e" ? kpi?.productivity?.sparkline : stage?.sparkline) ?? []}
+                    toggle={
+                      <SegmentedToggle
+                        ariaLabel="Productivity view"
+                        options={[{ key: "e2e", label: "E2E" }, { key: "mixing", label: "Mixing" }, { key: "filpac", label: "Filpac" }]}
+                        value={prodView}
+                        onChange={setProdView}
+                      />
+                    }
+                    secondary={{
+                      value: `${(kpi?.productivity?.upstream ?? 0).toFixed(1)} · ${(kpi?.productivity?.downstream ?? 0).toFixed(1)}`,
+                      unit: "pcs/mh",
+                      label: "Upstream · Downstream",
+                    }}
+                    footerLeft={v.footer}
+                    footerRight={prodView === "e2e" && kpi?.productivity?.manhours ? `${formatThousands(Math.round(kpi.productivity.manhours))} mh` : undefined}
+                  />
+                );
+              })()}
             </KpiHighlightTarget>
           </>)}
           </div>
@@ -378,6 +405,14 @@ export default function DashboardPage() {
                     noData
                     label="OEE"
                     icon={<Gauge size={13} color="#8b5cf6" strokeWidth={1.75} />}
+                    toggle={
+                      <SegmentedToggle
+                        ariaLabel="OEE view"
+                        options={[{ key: "oee", label: "OEE" }, { key: "sku", label: "OEE SKU", locked: true }]}
+                        value="oee"
+                        onChange={() => {}}
+                      />
+                    }
                     value="—"
                     unit="%"
                     subLabel="target ≥ 65%"
@@ -453,7 +488,7 @@ export default function DashboardPage() {
           )}
           {activeView === "tactical" && (
             <div className="shrink-0">
-              <LeadTimePlantTable data={plantLT?.plants ?? null} targetDays={plantLT?.targetDays ?? 13} loading={stageLoading} />
+              <LeadTimePlantTable data={plantLT?.plants ?? null} targetDays={plantLT?.targetDays ?? 13} loading={stageLoading} basis={ltBasis} />
             </div>
           )}
         </main>

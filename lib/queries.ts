@@ -273,7 +273,9 @@ export async function getLeadTimeStageVsStd(filters: QueryFilters) {
 // Per PO: gross (PO start → RECEIVE NDC stop) and nett (ACTUAL, LINE_CATEGORY NOT NULL) as in getLeadTimeKPI.
 // ONTIME_PCT = share of POs with gross ≤ targetDays. Stage minutes are summed per plant × POSITION;
 // divide by PO_COUNT for days per PO (same basis as getLeadTimeStageVsStd).
-export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: number) {
+// basis = where gross starts (Overview Tactical toggle); stage minutes do not depend on it.
+export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: number, basis: "created" | "released" = "created") {
+  const startSql = basis === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const binds = [...dateBinds, ...plantBinds(filters.plant)];
   const base = `
@@ -290,7 +292,7 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
           PLANT,
           PROCESS_ORDER_FG,
           DATEDIFF('minute',
-            ${LEAD_TIME_START_SQL},
+            ${startSql},
             ${NDC_RECEIVED_AT_SQL}
           ) AS gross_minutes,
           SUM(CASE WHEN ACTIVITY_TYPE = 'ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END) AS nett_minutes
@@ -613,6 +615,36 @@ export async function getDownstreamProductivity(filters: QueryFilters) {
   return { avgDownstreamProd: Number((rows[0]?.AVG_DOWNSTREAM_PROD ?? 0).toFixed(1)) };
 }
 
+// Stage productivity → Overview Productivity card toggle (E2E · Mixing · Filpac).
+// Mixing: CT_MANUF_OLAH, ACTIVITY = 'MIXING'. kg per manhour = Σ RELEASE_BULK / Σ MANHOUR.
+//   RELEASE_BULK repeats on every row of an SFG → taken once per PROCESS_ORDER_SFG; MANHOUR is per operator row → summed.
+// Filpac: CT_MANUF_KEMAS, ACTIVITY = 'FILPAC'. pcs per manhour = Σ QTY_FG_GOOD / Σ (LEADTIME_IN_MINUTE/60 × OPERATOR_COUNT).
+//   KEMAS has one row per operator (same qty on each) → taken once per ACTIVITY_ID.
+// grain = 'week' adds a WEEK column for the sparkline; otherwise one row for the period.
+export type StageProductivity = "mixing" | "filpac";
+export async function getStageProductivity(filters: QueryFilters, stage: StageProductivity, grain?: "week") {
+  const dateCol = stage === "mixing" ? "OLAH_COMPLETED_AT" : "KEMAS_COMPLETED_AT";
+  const { sql: datePred, binds: dateBinds } = periodDateWhere(dateCol, filters.period, filters.startDate, filters.endDate);
+  const binds = [...dateBinds, ...plantBinds(filters.plant)];
+  const week = grain === "week" ? "DATE_TRUNC('week', DONE_AT::DATE)" : "NULL";
+  const unitSql = stage === "mixing"
+    ? `SELECT PROCESS_ORDER_SFG, MAX(RELEASE_BULK) AS QTY, SUM(MANHOUR) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
+       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
+       WHERE ACTIVITY = 'MIXING' AND ${datePred} ${plantWhere(filters.plant)}
+       GROUP BY PROCESS_ORDER_SFG`
+    : `SELECT ACTIVITY_ID, MAX(QTY_FG_GOOD) AS QTY, MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT) AS MH, MAX(KEMAS_COMPLETED_AT) AS DONE_AT
+       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
+       WHERE ACTIVITY = 'FILPAC' AND ${datePred} ${plantWhere(filters.plant)}
+       GROUP BY ACTIVITY_ID`;
+  return executeQuery<{ WEEK: string | null; PROD: number | null }>(`
+    SELECT ${week} AS WEEK, SUM(QTY) / NULLIF(SUM(MH), 0) AS PROD
+    FROM (${unitSql}) u
+    WHERE QTY > 0 AND MH > 0
+    GROUP BY 1
+    ORDER BY 1
+  `, binds);
+}
+
 // OEE → CT_MANUF_KEMAS: Quality × Performance per plant + component breakdown
 export async function getOEEByPlant(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
@@ -748,7 +780,7 @@ export async function getYieldWeekly(filters: QueryFilters) {
   return executeQuery<{ WEEK: string; BULK_LOSS_PCT: number }>(`
     SELECT
       DATE_TRUNC('week', CORRECTION_DATE::DATE) AS WEEK,
-      SUM(BULK_LOSS_QUANTITY) / NULLIF(SUM(THEORETICAL_QUANTITY), 0) * 100 AS BULK_LOSS_PCT
+      ABS(SUM(THEORETICAL_QUANTITY) - SUM(REALIZATION_QUANTITY)) / NULLIF(SUM(THEORETICAL_QUANTITY), 0) * 100 AS BULK_LOSS_PCT
     FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
     WHERE ${datePred}
     GROUP BY 1
@@ -802,6 +834,8 @@ export async function getTrendsData(filters: QueryFilters) {
 //   E2E:         AVG({FIXED [Process Order Fg]: avg([E2E Productivity])})
 //   Output:      SUM({FIXED [Process Order Fg]: sum([Release Fg])})
 //   Batch:       SUM({FIXED [Process Order Fg]: MAX([Release Bulk])})
+// Every trend KPI also returns an "All plants" row per period (GROUPING SETS), computed from the raw rows —
+// the Overview TrendChart Overall view uses it, so sums / ratios are exact, not averages of plant values.
 export async function getTrendKPIByPlant(
   filters: QueryFilters & { kpiType?: string; grain?: TrendGrain }
 ) {
@@ -814,8 +848,9 @@ export async function getTrendKPIByPlant(
     case "leadtime":
       // {FIXED [Process Order Fg]: AVG([Leadtime In Day])} — gross lead time
       // Same DATEDIFF logic as getLeadTimeKPI: ACTIVITY='PO' start → ACTIVITY='RECEIVE NDC' stop
-      return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT WEEK, PLANT, AVG(po_days) AS KPI_VALUE
+      // N + LATE (POs above the Lead Time target) feed the Laney P′ chart on the Overview (% PO > target).
+      return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number; N: number; LATE: number }>(`
+        SELECT WEEK, IFF(GROUPING(PLANT) = 1, 'All plants', PLANT) AS PLANT, AVG(po_days) AS KPI_VALUE, COUNT(*) AS N, COUNT_IF(po_days > ?) AS LATE
         FROM (
           SELECT
             PROCESS_ORDER_FG,
@@ -832,9 +867,9 @@ export async function getTrendKPIByPlant(
           HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
             AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
         ) sub
-        GROUP BY WEEK, PLANT
+        GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
         ORDER BY WEEK
-      `, [startDate, endDate, ...plantBinds(plant)]);
+      `, [LEAD_TIME_TARGET_DAYS, startDate, endDate, ...plantBinds(plant)]);
 
     case "upstream":
       // Tableau LOD: {FIXED [Process Order Sfg]: MAX(Release_Bulk)/((SUM(Leadtime)/60)/SUM(Operators))} → AVG per week per plant
@@ -931,7 +966,7 @@ export async function getTrendKPIByPlant(
     case "output":
       // SUM({FIXED [Process Order Fg]: SUM([Release Fg])}) → SUM per week per plant
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT WEEK, PLANT, SUM(po_fg) AS KPI_VALUE
+        SELECT WEEK, IFF(GROUPING(PLANT) = 1, 'All plants', PLANT) AS PLANT, SUM(po_fg) AS KPI_VALUE
         FROM (
           SELECT
             PROCESS_ORDER_FG,
@@ -943,13 +978,13 @@ export async function getTrendKPIByPlant(
             ${pf}
           GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
         ) sub
-        GROUP BY WEEK, PLANT
+        GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
         ORDER BY WEEK
       `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "oee":
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT DATE_TRUNC('${unit}', KEMAS_COMPLETED_AT::DATE) AS WEEK, PLANT,
+        SELECT DATE_TRUNC('${unit}', KEMAS_COMPLETED_AT::DATE) AS WEEK, IFF(GROUPING(PLANT) = 1, 'All plants', PLANT) AS PLANT,
           AVG(
             (CASE WHEN QTY_TOTAL > 0 THEN QTY_FG_GOOD::FLOAT / QTY_TOTAL ELSE 0 END) *
             (CASE WHEN ACTIVITY_PRODUCTIVITY_STD > 0
@@ -958,28 +993,43 @@ export async function getTrendKPIByPlant(
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
         WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ${dateRange}
           ${pf}
-        GROUP BY WEEK, PLANT
+        GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
         ORDER BY WEEK
       `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "rft":
-      return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
+      // N + LATE (here: activities without ADJUST) feed the Laney P′ chart, same as lead time
+      return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number; N: number; LATE: number }>(`
+        SELECT DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK, IFF(GROUPING(PLANT) = 1, 'All plants', PLANT) AS PLANT,
           COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) * 100.0
-            / NULLIF(COUNT(*), 0) AS KPI_VALUE
+            / NULLIF(COUNT(*), 0) AS KPI_VALUE,
+          COUNT(*) AS N,
+          COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) AS LATE
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
         WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
           ${pf}
-        GROUP BY WEEK, PLANT
+        GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
+        ORDER BY WEEK
+      `, [startDate, endDate, ...plantBinds(plant)]);
+
+    case "productivity":
+      // E2E productivity — same source and rule as the Overview card (getE2EProductivity): AVG(E2E_PRODUCTIVITY)
+      return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
+        SELECT DATE_TRUNC('${unit}', KEMAS_COMPLETED_AT::DATE) AS WEEK, IFF(GROUPING(PLANT) = 1, 'All plants', PLANT) AS PLANT,
+          AVG(E2E_PRODUCTIVITY) AS KPI_VALUE
+        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+        WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ${dateRange}
+          ${pf}
+        GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
         ORDER BY WEEK
       `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "bulkloss":
-      // No PLANT column in this table — always returns "All Plant"
+      // No PLANT column in this table — only the "All plants" series (By plant view is locked)
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
         SELECT DATE_TRUNC('${unit}', CORRECTION_DATE::DATE) AS WEEK,
-          'All Plant' AS PLANT,
-          SUM(BULK_LOSS_QUANTITY) / NULLIF(SUM(THEORETICAL_QUANTITY), 0) * 100 AS KPI_VALUE
+          'All plants' AS PLANT,
+          ABS(SUM(THEORETICAL_QUANTITY) - SUM(REALIZATION_QUANTITY)) / NULLIF(SUM(THEORETICAL_QUANTITY), 0) * 100 AS KPI_VALUE
         FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
         WHERE CORRECTION_DATE::DATE BETWEEN ${dateRange}
         GROUP BY WEEK

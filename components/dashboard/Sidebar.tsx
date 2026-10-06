@@ -128,7 +128,7 @@ function NavRow({ item, pathname, alertCount }: { item: NavItem; pathname: strin
       aria-current={active ? "page" : undefined}
       className={cn(
         base, "transition-colors duration-150",
-        active ? "bg-[#E9EFF8] text-[#143665]" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+        active ? "bg-[#E9EFF8] text-[#16305C]" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
       )}
     >
       {content}
@@ -160,7 +160,7 @@ export function Sidebar() {
       {/* Logo */}
       {/* Same height and color as the Header top bar, so logo + top bar read as one Paragon Blue strip.
           The sidebar's right border starts below it (on nav + footer) so no line cuts through the strip. */}
-      <div className="shrink-0 px-4 h-[52px] flex items-center justify-center bg-[#215AA8]">
+      <div className="shrink-0 px-4 h-[52px] flex items-center justify-center bg-[#1E4076]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/paragon-corp-white.e705509b.png" alt="Paragon Corp" className="w-36 h-auto" />
       </div>

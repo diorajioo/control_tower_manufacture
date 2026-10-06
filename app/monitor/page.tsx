@@ -94,7 +94,7 @@ function MonitorShell() {
             <button key={key} onClick={() => setActivePage(key)}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all",
-                activePage === key ? "bg-[#215AA8] text-white" : "text-white/50 hover:text-white/90 hover:bg-white/10"
+                activePage === key ? "bg-[#1E4076] text-white" : "text-white/50 hover:text-white/90 hover:bg-white/10"
               )}>
               <Icon size={11} />
               {label}

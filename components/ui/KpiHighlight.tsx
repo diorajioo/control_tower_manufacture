@@ -101,7 +101,7 @@ export function KpiHighlightTarget({ id, children }: { id: string; children: Rea
         opacity: dimmed ? 0.35 : 1,
         // Subtle: the dimming of the other cards does most of the work; the focused card only
         // gets a thin translucent Paragon Blue outline and a soft lift.
-        boxShadow: active ? "0 0 0 1px rgba(33,90,168,0.35), 0 6px 16px -8px rgba(33,90,168,0.25)" : "none",
+        boxShadow: active ? "0 0 0 1px rgba(30,64,118,0.35), 0 6px 16px -8px rgba(30,64,118,0.25)" : "none",
       }}
     >
       {children}

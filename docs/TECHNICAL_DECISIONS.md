@@ -125,14 +125,14 @@
 
 **Context:** Early UI used Inter font and a navy-blue shell color `#1E4076`. A design system update was applied.
 
-**Decision:** Adopt Paradise Design System v2. Font: Lato (not Inter). Shell color: Paragon Blue `#215AA8` (not navy `#1E4076`). Full token spec in `DESIGN.md`.
+**Decision:** Adopt Paradise Design System v2. Font: Lato (not Inter). Shell color: Paragon Blue `#1E4076` (not navy `#1E4076`). Full token spec in `DESIGN.md`.
 
 **Reason:** Company-wide design system alignment. Paradise v2 is the CX Team's internal standard for analytics dashboards.
 
 **Impact:**
 - `globals.css` now imports Lato from Google Fonts.
 - `tailwind.config.ts` sets `fontFamily.sans` to Lato.
-- All shell references to `#1E4076` replaced with `#215AA8`.
+- All shell references to `#1E4076` replaced with `#1E4076`.
 - Card radius: `rounded-xl` → `rounded-lg` on dashboard cards.
 - Border: `border-slate-200` → `border-[#EBEBEB]` on dashboard cards.
 - Warning color: `#f59e0b` (amber) → `#D1A400` (Paradise accent-warning).
@@ -171,6 +171,6 @@ Early implementation: Monitor Mode was triggered by a button on `/dashboard`, re
 
 ## Superseded: Navy Shell Color (#1E4076)
 
-**Status: Superseded** (replaced by Paragon Blue `#215AA8`)
+**Status: Superseded** (replaced by Paragon Blue `#1E4076`)
 
-The original shell color was `#1E4076`. It was replaced with `#215AA8` when Paradise Design System v2 was applied. Any occurrence of `#1E4076` or `#16305C` in the codebase is a remnant that should be updated to `#215AA8` / `#1A4886`.
+The original shell color was `#1E4076`. It was replaced with `#1E4076` when Paradise Design System v2 was applied. Any occurrence of `#1E4076` or `#16305C` in the codebase is a remnant that should be updated to `#1E4076` / `#16305C`.

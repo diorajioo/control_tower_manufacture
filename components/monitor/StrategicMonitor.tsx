@@ -102,6 +102,7 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
             <KpiHighlightTarget id="leadtime">
               <LeadTimeKPICard
                 compact
+                insightId="leadtime"
                 showBreakdown={false}
                 grossDays={kpi?.leadTime?.grossDays ?? 0}
                 nettDays={kpi?.leadTime?.nettDays ?? 0}
@@ -115,6 +116,7 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
             <KpiHighlightTarget id="output">
               <OutputKPICard
                 compact
+                insightId="output"
                 fgQty={kpi?.output?.fgQty ?? 0}
                 bulkQty={kpi?.output?.bulkQty ?? 0}
                 fgTrend={kpi?.output?.fgTrend ?? null}
@@ -127,6 +129,7 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
               <RegularKPICard
                 compact
                 label="E2E Productivity"
+                insightId="productivity"
                 icon={<Users size={13} color="#8b5cf6" strokeWidth={1.75} />}
                 value={kpi ? (kpi.productivity?.e2e ?? 0).toFixed(1) : "—"}
                 unit="pcs/manhour"

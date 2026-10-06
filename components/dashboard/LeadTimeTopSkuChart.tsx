@@ -21,7 +21,7 @@ type ViewMode = "composition" | "range";
 const CATEGORY_COLORS: Record<Category, string> = { VA: "#067647", NNVA: "#d97706", UNVA: "#d92d20" };
 const CATEGORY_LABELS: Record<Category, string> = { VA: "Value-added", NNVA: "Necessary non-VA", UNVA: "Waste" };
 const RANGE_COLOR = "#b9c0cc";
-const MEAN_COLOR = "#143665";
+const MEAN_COLOR = "#16305C";
 const KEYS: Category[] = ["VA", "NNVA", "UNVA"];
 
 interface SkuRow extends BarDatum {

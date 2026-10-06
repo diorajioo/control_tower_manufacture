@@ -27,6 +27,7 @@ import {
   getLeadTimeComposition,
   getLeadTimeCompositionMonthly,
   getLeadTimeReleasedGross,
+  getStageProductivity,
 } from "@/lib/queries";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -34,6 +35,18 @@ import {
 function delta(current: number, prev: number) {
   if (!prev || prev === 0) return null;
   return Number((((current - prev) / Math.abs(prev)) * 100).toFixed(1));
+}
+
+type StageRows = { WEEK: string | null; PROD: number | null }[];
+function stageProd(cur: PromiseSettledResult<StageRows>, prev: PromiseSettledResult<StageRows>, weekly: PromiseSettledResult<StageRows>) {
+  const one = (r: PromiseSettledResult<StageRows>) => (r.status === "fulfilled" ? Number(r.value[0]?.PROD ?? 0) : 0);
+  const value = Number(one(cur).toFixed(1)), prevValue = Number(one(prev).toFixed(1));
+  return {
+    value,
+    prev: prevValue,
+    trend: delta(value, prevValue),
+    sparkline: weekly.status === "fulfilled" ? weekly.value.map((r) => Number(Number(r.PROD ?? 0).toFixed(1))) : [],
+  };
 }
 
 function prevPeriod(startDate: string, endDate: string) {
@@ -91,6 +104,7 @@ async function runKPIQueries(
     prevOutputRes, productivityDetailsRes, etlTimestampRes,
     leadTimeWeeklyRes, outputWeeklyRes, bulkOutputWeeklyRes, yieldWeeklyRes, rftWeeklyRes,
     ltCompRes, prevLtCompRes, ltCompMonthlyRes, ltReleasedGrossRes,
+    mixingRes, prevMixingRes, mixingWeeklyRes, filpacRes, prevFilpacRes, filpacWeeklyRes,
   ] = await Promise.allSettled([
     getLeadTimeKPI(filters),
     getYieldKPI(filters),
@@ -120,6 +134,12 @@ async function runKPIQueries(
     getLeadTimeComposition(prev),
     getLeadTimeCompositionMonthly(filters),
     getLeadTimeReleasedGross(filters),
+    getStageProductivity(filters, "mixing"),
+    getStageProductivity(prev, "mixing"),
+    getStageProductivity(filters, "mixing", "week"),
+    getStageProductivity(filters, "filpac"),
+    getStageProductivity(prev, "filpac"),
+    getStageProductivity(filters, "filpac", "week"),
   ]);
 
   const failures = [
@@ -239,6 +259,11 @@ async function runKPIQueries(
       avgOperators: productivityDets.avgOperators,
       byPlant:      oeeByPlant.map((p) => ({ PLANT: p.PLANT })),
       sparkline:    e2eWeekly.map((r) => Number(r.AVG_PROD.toFixed(1))),
+      // Toggle on the Overview card: Mixing (kg/mh) and Filpac (pcs/mh) — see getStageProductivity()
+      stages: {
+        mixing: stageProd(mixingRes, prevMixingRes, mixingWeeklyRes),
+        filpac: stageProd(filpacRes, prevFilpacRes, filpacWeeklyRes),
+      },
     },
     etlTimestamp,
     _errors: failures.length > 0 ? failures.map(([name]) => name) : undefined,
@@ -266,7 +291,7 @@ const fetchByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runKPIQueries(plant, startDate, endDate, period);
   },
-  ["kpi-by-period-v8"],
+  ["kpi-by-period-v9"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 
@@ -274,7 +299,7 @@ const fetchByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string) => {
     return runKPIQueries(plant, startDate, endDate, undefined);
   },
-  ["kpi-by-dates-v8"],
+  ["kpi-by-dates-v9"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 

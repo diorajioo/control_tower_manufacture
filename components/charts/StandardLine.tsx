@@ -80,7 +80,11 @@ export function isolatedColor(color: string, id: string, hovered: string | null)
 // ── Layers ───────────────────────────────────────────────────────────────────
 
 /** Solid points with a white ring on every series at the active x (set from onMouseMove). */
-export function makeActivePointsLayer(series: StandardSeries[], getActiveX: () => string | null) {
+export function makeActivePointsLayer(
+  series: StandardSeries[],
+  getActiveX: () => string | null,
+  pointColor?: (id: string, x: string, y: number) => string | null,
+) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return function ActivePointsLayer(props: any) {
     const x = getActiveX();
@@ -96,7 +100,7 @@ export function makeActivePointsLayer(series: StandardSeries[], getActiveX: () =
               cx={props.xScale(x)}
               cy={props.yScale(pt.y)}
               r={4}
-              fill={serie.color}
+              fill={pointColor?.(serie.id, x, pt.y) ?? serie.color}
               stroke="#ffffff"
               strokeWidth={2}
             />
@@ -301,13 +305,13 @@ export function LineChartCard({
         <div className="flex items-center gap-2">
           <span className="text-[11.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">{label}</span>
           {loading && (
-            <span className="w-3 h-3 border border-[#215AA8] border-t-transparent rounded-full animate-spin inline-block" />
+            <span className="w-3 h-3 border border-[#1E4076] border-t-transparent rounded-full animate-spin inline-block" />
           )}
         </div>
         <div className="flex items-center gap-2">
           {actions}
           {unitBadge && (
-            <span className="text-[11px] bg-[#D3DEEE] text-[#143665] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
+            <span className="text-[11px] bg-[#EEF4FB] text-[#16305C] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
               {unitBadge}
             </span>
           )}
@@ -364,6 +368,112 @@ export function limitsOf(values: number[]): Limits {
     stdev: Number(stdev.toFixed(2)),
     ucl:   Number((mean + 3 * stdev).toFixed(2)),
     lcl:   Number(Math.max(0, mean - 3 * stdev).toFixed(2)),
+  };
+}
+
+// ── Laney P′ chart (Overview TrendChart → Lead Time, % PO above target) ──────
+// Each point = share of n POs above the target. Classic p limits are p̄ ± 3·√(p̄(1−p̄)/n), which get very
+// narrow with 20–300 POs; Laney widens them by σz = average moving range of the z-scores / 1.128, so only
+// weeks that are unusual compared with normal week-to-week variation fall outside. Limits still step with n.
+export type PointStats = Record<string, Record<string, { n: number; late: number; avgDays?: number }>>; // date → series → stats
+
+/** Laney P′ limits in % per series and point. `mean` = p̄ (%), `stdev` = σz. */
+export function laneyPLimits(series: StandardSeries[], stats: PointStats): Record<string, Record<string, Limits>> {
+  const out: Record<string, Record<string, Limits>> = {};
+  for (const s of series) {
+    const pts = s.data.map((p) => ({ x: p.x, ...stats[p.x]?.[s.id] })).filter((p): p is { x: string; n: number; late: number } => !!p.n);
+    const sumN = pts.reduce((a, p) => a + p.n, 0), sumLate = pts.reduce((a, p) => a + p.late, 0);
+    const pBar = sumN ? sumLate / sumN : 0;
+    if (pBar <= 0 || pBar >= 1 || pts.length < 2) continue;
+    const z = pts.map((p) => (p.late / p.n - pBar) / Math.sqrt((pBar * (1 - pBar)) / p.n));
+    const mr = z.slice(1).map((v, i) => Math.abs(v - z[i]));
+    const sigmaZ = mr.reduce((a, v) => a + v, 0) / mr.length / 1.128;
+    out[s.id] = {};
+    for (const p of pts) {
+      const half = 3 * Math.sqrt((pBar * (1 - pBar)) / p.n) * sigmaZ;
+      out[s.id][p.x] = {
+        mean:  Number((pBar * 100).toFixed(1)),
+        stdev: Number(sigmaZ.toFixed(2)),
+        ucl:   Number((Math.min(1, pBar + half) * 100).toFixed(1)),
+        lcl:   Number((Math.max(0, pBar - half) * 100).toFixed(1)),
+      };
+    }
+  }
+  return out;
+}
+
+// ── XmR (individuals) chart — metrics without a subgroup count (Output, OEE, OPE, Yield Loss) ──
+// One value per period: center = mean, limits = mean ± 2.66 × average moving range (|xᵢ − xᵢ₋₁|).
+// Limits are the same for every point (no n), clamped to [min, max] (e.g. 0–100 for %).
+export function xmrLimits(series: StandardSeries[], { min = 0, max }: { min?: number; max?: number } = {}): Record<string, Record<string, Limits>> {
+  const out: Record<string, Record<string, Limits>> = {};
+  for (const s of series) {
+    const pts = s.data.filter((p): p is { x: string; y: number } => p.y != null && !isNaN(p.y));
+    if (pts.length < 2) continue;
+    const mean = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+    const mrBar = pts.slice(1).reduce((a, p, i) => a + Math.abs(p.y - pts[i].y), 0) / (pts.length - 1);
+    const clamp = (v: number) => Math.max(min, max != null ? Math.min(max, v) : v);
+    const lim: Limits = {
+      mean:  Number(mean.toFixed(2)),
+      stdev: Number((mrBar / 1.128).toFixed(2)),
+      ucl:   Number(clamp(mean + 2.66 * mrBar).toFixed(2)),
+      lcl:   Number(clamp(mean - 2.66 * mrBar).toFixed(2)),
+    };
+    out[s.id] = Object.fromEntries(pts.map((p) => [p.x, lim]));
+  }
+  return out;
+}
+
+/**
+ * Control chart layer (P′ and XmR): one set of step lines UCL · center · LCL with labels at the right end — the `band`
+ * passed in (Overall limits, or the hovered plant's limits in the By plant view, label prefixed with the plant).
+ * `center` = center-line name ("p̄" for P′, "Mean" for XmR); `fmt` formats label values (unit included).
+ */
+export type PBand = { lim: Record<string, Limits>; prefix?: string };
+export function makePChartLayer(
+  series: StandardSeries[],
+  limits: Record<string, Record<string, Limits>>,
+  band: PBand | null,
+  hovered: string | null,
+  { center = "p̄", fmt = (v: number) => `${v.toFixed(1)}%` }: { center?: string; fmt?: (v: number) => string } = {},
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function PChartLayer(props: any) {
+    if (!props.xScale || !props.yScale) return null;
+    const xs = band ? Object.keys(band.lim).filter((x) => series.some((s) => s.data.some((p) => p.x === x))).sort() : [];
+    const half = xs.length > 1 ? (props.xScale(xs[1]) - props.xScale(xs[0])) / 2 : 6;
+    const step = (key: "ucl" | "mean" | "lcl") =>
+      xs.map((x, i) => `${i === 0 ? "M" : "L"}${props.xScale(x) - half},${props.yScale(band!.lim[x][key])}H${props.xScale(x) + half}`).join("");
+    const last = xs.length ? band!.lim[xs[xs.length - 1]] : null;
+    const end = xs.length ? props.xScale(xs[xs.length - 1]) + half : 0;
+    const pre = band?.prefix ? `${band.prefix} ` : "";
+    const labels = last ? [
+      { key: "ucl", y: props.yScale(last.ucl), text: `${pre}UCL ${fmt(last.ucl)}`, color: "#e07a70" },
+      { key: "mean", y: props.yScale(last.mean), text: `${pre}${center} ${fmt(last.mean)}`, color: "#98a2b3" },
+      { key: "lcl", y: props.yScale(last.lcl), text: `${pre}LCL ${fmt(last.lcl)}`, color: "#e07a70" },
+    ].sort((a, b) => a.y - b.y) : [];
+    for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 11) labels[i].y = labels[i - 1].y + 11;
+    return (
+      <g style={{ pointerEvents: "none" }}>
+        {last && <>
+          <path d={step("ucl")} fill="none" stroke="#e07a70" strokeWidth={1.5} strokeDasharray="5 3" />
+          <path d={step("mean")} fill="none" stroke="#98a2b3" strokeOpacity={0.8} strokeWidth={1} strokeDasharray="2 3" />
+          <path d={step("lcl")} fill="none" stroke="#e07a70" strokeWidth={1.5} strokeDasharray="5 3" />
+          {labels.map((l) => (
+            <text key={l.key} x={end} y={l.y - 3} fill={l.color} fontSize={9.5} fontWeight={700} textAnchor="end"
+              stroke="#ffffff" strokeWidth={3} paintOrder="stroke">{l.text}</text>
+          ))}
+        </>}
+      </g>
+    );
+  };
+}
+
+/** Hover point color for control charts: red when the point is outside that series' own limits. */
+export function outOfLimitColor(limits: Record<string, Record<string, Limits>>) {
+  return (id: string, x: string, y: number) => {
+    const l = limits[id]?.[x];
+    return l && (y > l.ucl || y < l.lcl) ? "#d92d20" : null;
   };
 }
 

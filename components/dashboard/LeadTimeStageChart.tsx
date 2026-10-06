@@ -24,7 +24,7 @@ const CATEGORY_COLORS: Record<Category, string> = {
   UNVA: "#d92d20",
 };
 const CATEGORY_LABELS: Record<Category, string> = { VA: "VA", NNVA: "NNVA", UNVA: "UNVA" };
-const CUMULATIVE_COLOR = "#143665";
+const CUMULATIVE_COLOR = "#16305C";
 
 interface StageRow extends BarDatum {
   stage: string;
