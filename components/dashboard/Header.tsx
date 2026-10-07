@@ -507,51 +507,51 @@ export function Header({
           <div className="flex-1" />
         )}
 
-        {resolvedViews.length >= 2 && (
+        {ltBasis && onLtBasisChange && (
           <div className="flex items-center gap-0.5 bg-white rounded-full p-0.5 border border-gray-200 shrink-0">
-            {resolvedViews.map(({ key, label, locked }) => (
-              <button key={key} onClick={() => { if (!locked) onViewChange(key); }}
-                disabled={locked}
-                title={locked ? "Coming soon — data not connected yet" : undefined}
+            {(["created", "released"] as const).map((b) => (
+              <button key={b} onClick={() => onLtBasisChange(b)}
                 className={cn(
-                  "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10 inline-flex items-center gap-1",
-                  locked ? "text-gray-300 cursor-not-allowed"
-                    : activeView === key ? "text-[#16305C]" : "text-gray-500 hover:text-gray-700"
+                  "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10",
+                  ltBasis === b ? "text-[#16305C]" : "text-gray-500 hover:text-gray-700"
                 )}>
-                {locked && <Lock size={9} strokeWidth={2} />}
-                {activeView === key && (
+                {ltBasis === b && (
                   <motion.span
-                    layoutId="view-pill"
+                    layoutId="lt-basis-pill"
                     className="absolute inset-0 bg-[#EEF4FB] rounded-full"
                     style={{ zIndex: -1 }}
                     transition={{ type: "spring", stiffness: 380, damping: 32 }}
                   />
                 )}
-                {label}
+                {b === "created" ? "PO Created" : "PO Released"}
               </button>
             ))}
           </div>
         )}
 
-        {ltBasis && onLtBasisChange && (
+        {resolvedViews.length >= 2 && (
           <>
-            {resolvedViews.length >= 2 && <div className="w-px h-4 bg-gray-200 shrink-0 mx-0.5" />}
+            {!!(ltBasis && onLtBasisChange) && <div className="w-px h-4 bg-gray-200 shrink-0 mx-0.5" />}
             <div className="flex items-center gap-0.5 bg-white rounded-full p-0.5 border border-gray-200 shrink-0">
-              {(["created", "released"] as const).map((b) => (
-                <button key={b} onClick={() => onLtBasisChange(b)}
+              {resolvedViews.map(({ key, label, locked }) => (
+                <button key={key} onClick={() => { if (!locked) onViewChange(key); }}
+                  disabled={locked}
+                  title={locked ? "Coming soon — data not connected yet" : undefined}
                   className={cn(
-                    "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10",
-                    ltBasis === b ? "text-[#16305C]" : "text-gray-500 hover:text-gray-700"
+                    "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10 inline-flex items-center gap-1",
+                    locked ? "text-gray-300 cursor-not-allowed"
+                      : activeView === key ? "text-[#16305C]" : "text-gray-500 hover:text-gray-700"
                   )}>
-                  {ltBasis === b && (
+                  {locked && <Lock size={9} strokeWidth={2} />}
+                  {activeView === key && (
                     <motion.span
-                      layoutId="lt-basis-pill"
+                      layoutId="view-pill"
                       className="absolute inset-0 bg-[#EEF4FB] rounded-full"
                       style={{ zIndex: -1 }}
                       transition={{ type: "spring", stiffness: 380, damping: 32 }}
                     />
                   )}
-                  {b === "created" ? "PO Created" : "PO Released"}
+                  {label}
                 </button>
               ))}
             </div>
