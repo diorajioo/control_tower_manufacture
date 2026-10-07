@@ -264,6 +264,8 @@ async function runKPIQueries(
     output: {
       bulkQty:   output.acceptedBulkKg,
       fgQty:     output.releasedFgPcs,
+      fgPrev:    prevOutput.releasedFgPcs,
+      bulkPrev:  prevOutput.acceptedBulkKg,
       fgTrend:   delta(output.releasedFgPcs,  prevOutput.releasedFgPcs),
       bulkTrend: delta(output.acceptedBulkKg, prevOutput.acceptedBulkKg),
       sparkline:     outputWeekly.map((r) => Number((r.TOTAL_FG   ?? 0).toFixed(0))),

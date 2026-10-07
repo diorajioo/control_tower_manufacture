@@ -38,22 +38,14 @@ interface KPIResponse {
     byPositionGross: { position: string; avgHours: number }[];
     sparkline: number[];
     composition?: {
-      vaDays: number;
-      nnvaDays: number;
-      unvaDays: number;
-      wipDays: number;
-      vaTrend: number | null;
-      nnvaTrend: number | null;
-      unvaTrend: number | null;
-      wipTrend: number | null;
-      vaMonthly: number[];
-      nnvaMonthly: number[];
-      unvaMonthly: number[];
-      wipMonthly: number[];
-      vaWeekly: number[];
-      nnvaWeekly: number[];
-      unvaWeekly: number[];
-      wipWeekly: number[];
+      vaDays: number; nnvaDays: number; unvaDays: number; wipDays: number;
+      vaPrev: number; nnvaPrev: number; unvaPrev: number; wipPrev: number;
+      vaTrend: number | null; nnvaTrend: number | null;
+      unvaTrend: number | null; wipTrend: number | null;
+      vaMonthly: number[]; nnvaMonthly: number[];
+      unvaMonthly: number[]; wipMonthly: number[];
+      vaWeekly: number[]; nnvaWeekly: number[];
+      unvaWeekly: number[]; wipWeekly: number[];
     };
   };
   yield: {
@@ -66,12 +58,10 @@ interface KPIResponse {
   };
   rightFirstTime: { value: number; trend: number | null; sparkline: number[] };
   output: {
-    bulkQty: number;
-    fgQty: number;
-    fgTrend: number | null;
-    bulkTrend: number | null;
-    sparkline: number[];
-    bulkSparkline: number[];
+    bulkQty: number; fgQty: number;
+    fgPrev?: number; bulkPrev?: number;
+    fgTrend: number | null; bulkTrend: number | null;
+    sparkline: number[]; bulkSparkline: number[];
   };
   oee: { value: number; quality: number; performance: number; byPlant: { PLANT: string; OEE: number }[]; trend: number | null; sparkline: number[] };
   productivity: {

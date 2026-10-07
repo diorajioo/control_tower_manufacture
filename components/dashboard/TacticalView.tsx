@@ -17,6 +17,7 @@ interface KPI {
     sparkline: number[];
     composition?: {
       vaDays: number; nnvaDays: number; unvaDays: number; wipDays: number;
+      vaPrev: number; nnvaPrev: number; unvaPrev: number; wipPrev: number;
       vaTrend: number | null; nnvaTrend: number | null;
       unvaTrend: number | null; wipTrend: number | null;
       vaMonthly: number[]; nnvaMonthly: number[];
@@ -25,10 +26,10 @@ interface KPI {
       unvaWeekly: number[]; wipWeekly: number[];
     };
   };
-  output: { fgQty: number; bulkQty: number; fgTrend: number | null; bulkTrend: number | null; sparkline: number[]; bulkSparkline: number[] };
+  output: { fgQty: number; fgPrev?: number; bulkQty: number; bulkPrev?: number; fgTrend: number | null; bulkTrend: number | null; sparkline: number[]; bulkSparkline: number[] };
   productivity: {
-    e2e: number; e2eTrend?: number | null; sparkline: number[];
-    stages?: Record<"mixing" | "filpac", { value: number; trend: number | null; sparkline: number[] }>;
+    e2e: number; e2ePrev?: number; e2eTrend?: number | null; sparkline: number[];
+    stages?: Record<"mixing" | "filpac", { value: number; prev?: number; trend: number | null; sparkline: number[] }>;
   };
   oee: { value: number; quality: number; performance: number; trend: number | null; sparkline: number[] };
   yield: { bulkLossPct: number; packLossPct: number; bulkLossTrend: number | null; packLossTrend: number | null };
@@ -117,13 +118,17 @@ interface TKpiCardProps {
   sparkUnit?: string;
   /** Pass grossDays to use lead-time target-based tone ("On Track"/"At Risk"/"Above Target") */
   ltDays?: number;
+  /** Absolute delta vs prior period — shown instead of trend % when provided */
+  deltaAbsValue?: number | null;
+  /** Unit shown alongside deltaAbsValue e.g. "days", "pcs/mh" */
+  deltaUnit?: string;
   footerLeft?: string;
   noData?: boolean;
 }
 
 function TKpiCard({
   label, value, unit, trend = null, inverse = false,
-  sparkline, sparkUnit, ltDays, footerLeft, noData = false,
+  sparkline, sparkUnit, ltDays, deltaAbsValue, deltaUnit, footerLeft, noData = false,
 }: TKpiCardProps) {
   const resolvedKey: ToneKey =
     noData || value === null ? "neutral" :
@@ -175,23 +180,22 @@ function TKpiCard({
               </span>
               {unit && <span style={{ fontSize: 12, color: "#98a2b3" }}>{unit}</span>}
               {!noData && ltDays !== undefined ? (() => {
-                const delta = ltDays - LEAD_TIME_TARGET_DAYS;
-                const over = delta > 0;
+                const d = ltDays - LEAD_TIME_TARGET_DAYS;
+                const over = d > 0;
                 return (
-                  <span style={{
-                    fontSize: 11.5, fontWeight: 700,
-                    color: over ? "#d92d20" : "#067647",
-                    fontVariantNumeric: "tabular-nums",
-                  }}>
-                    {over ? "↗ +" : "↘ −"}{Math.abs(delta).toFixed(2)} days
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: over ? "#d92d20" : "#067647", fontVariantNumeric: "tabular-nums" }}>
+                    {over ? "↗ +" : "↘ −"}{Math.abs(d).toFixed(2)} days
+                  </span>
+                );
+              })() : !noData && deltaAbsValue != null ? (() => {
+                const over = inverse ? deltaAbsValue < 0 : deltaAbsValue > 0;
+                return (
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: over ? "#067647" : "#d92d20", fontVariantNumeric: "tabular-nums" }}>
+                    {deltaAbsValue > 0 ? "↗ +" : "↘ "}{deltaAbsValue > 0 ? deltaAbsValue.toFixed(2) : Math.abs(deltaAbsValue).toFixed(2)} {deltaUnit ?? ""}
                   </span>
                 );
               })() : !noData && trend !== null && (
-                <span style={{
-                  fontSize: 11.5, fontWeight: 700,
-                  color: trendGood ? "#067647" : "#d92d20",
-                  fontVariantNumeric: "tabular-nums",
-                }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: trendGood ? "#067647" : "#d92d20", fontVariantNumeric: "tabular-nums" }}>
                   {isUp ? "↗" : "↘"} {(trend > 0 ? "+" : "") + trend.toFixed(1)}%
                 </span>
               )}
@@ -200,7 +204,7 @@ function TKpiCard({
             <div style={{ fontSize: 11, color: "#98a2b3" }}>
               {ltDays !== undefined
                 ? `vs ${LEAD_TIME_TARGET_DAYS}-day target`
-                : trend !== null ? "vs prior period" : ""}
+                : deltaAbsValue != null || trend !== null ? "vs prior period" : ""}
             </div>
 
             <StatusDot color={tone.color} label={statusLabel} />
@@ -286,6 +290,8 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               unit="days"
               trend={c?.vaTrend ?? null}
               inverse
+              deltaAbsValue={c ? c.vaDays - c.vaPrev : null}
+              deltaUnit="days"
               sparkline={c?.vaWeekly}
               sparkUnit="weeks"
               footerLeft="Value-added"
@@ -297,6 +303,8 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               unit="days"
               trend={c?.nnvaTrend ?? null}
               inverse
+              deltaAbsValue={c ? c.nnvaDays - c.nnvaPrev : null}
+              deltaUnit="days"
               sparkline={c?.nnvaWeekly}
               sparkUnit="weeks"
               footerLeft="Non-value-added"
@@ -308,6 +316,8 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               unit="days"
               trend={c?.unvaTrend ?? null}
               inverse
+              deltaAbsValue={c ? c.unvaDays - c.unvaPrev : null}
+              deltaUnit="days"
               sparkline={c?.unvaWeekly}
               sparkUnit="weeks"
               footerLeft="Unnecessary NVA"
@@ -319,6 +329,8 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               unit="days"
               trend={c?.wipTrend ?? null}
               inverse
+              deltaAbsValue={c ? c.wipDays - c.wipPrev : null}
+              deltaUnit="days"
               sparkline={c?.wipWeekly}
               sparkUnit="weeks"
               footerLeft="Work in progress"
@@ -371,6 +383,8 @@ function ProductivitySection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "
               value={mixing ? mixing.value.toFixed(2) : null}
               unit="kg/manhour"
               trend={mixing?.trend ?? null}
+              deltaAbsValue={mixing?.prev != null ? mixing.value - mixing.prev : null}
+              deltaUnit="kg/mh"
               sparkline={mixing?.sparkline}
               sparkUnit="weeks"
               footerLeft="Mixing stage"
@@ -381,6 +395,8 @@ function ProductivitySection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "
               value={filpac ? filpac.value.toFixed(2) : null}
               unit="pcs/manhour"
               trend={filpac?.trend ?? null}
+              deltaAbsValue={filpac?.prev != null ? filpac.value - filpac.prev : null}
+              deltaUnit="pcs/mh"
               sparkline={filpac?.sparkline}
               sparkUnit="weeks"
               footerLeft="Filling & packing"
@@ -391,6 +407,8 @@ function ProductivitySection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "
               value={kpi ? kpi.productivity.e2e.toFixed(2) : null}
               unit="pcs/manhour"
               trend={kpi?.productivity.e2eTrend ?? null}
+              deltaAbsValue={kpi?.productivity.e2ePrev != null ? kpi.productivity.e2e - kpi.productivity.e2ePrev : null}
+              deltaUnit="pcs/mh"
               sparkline={kpi?.productivity.sparkline}
               sparkUnit="weeks"
               footerLeft="End-to-end"
@@ -431,6 +449,8 @@ function OutputSection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "loadin
               value={kpi ? (kpi.output.fgQty / 1_000_000).toFixed(2) : null}
               unit="million pcs"
               trend={kpi?.output.fgTrend ?? null}
+              deltaAbsValue={kpi?.output.fgPrev != null ? (kpi.output.fgQty - kpi.output.fgPrev) / 1_000_000 : null}
+              deltaUnit="M pcs"
               sparkline={kpi?.output.sparkline}
               sparkUnit="weeks"
               footerLeft="Finished goods"
@@ -441,6 +461,8 @@ function OutputSection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "loadin
               value={kpi ? (kpi.output.bulkQty / 1_000).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null}
               unit="thousand kg"
               trend={kpi?.output.bulkTrend ?? null}
+              deltaAbsValue={kpi?.output.bulkPrev != null ? (kpi.output.bulkQty - kpi.output.bulkPrev) / 1_000 : null}
+              deltaUnit="K kg"
               sparkline={kpi?.output.bulkSparkline}
               sparkUnit="weeks"
               footerLeft="Bulk production"
