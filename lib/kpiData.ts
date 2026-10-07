@@ -22,6 +22,7 @@ import {
   getRFTWeekly,
   getLeadTimeComposition,
   getLeadTimeCompositionMonthly,
+  getLeadTimeCompositionWeekly,
   getLeadTimeReleasedGross,
   getStageProductivity,
   getPlantDrivers,
@@ -120,7 +121,7 @@ async function runKPIQueries(
     ltByPosRes, oeeWeeklyRes, e2eWeeklyRes,
     prevOutputRes, productivityDetailsRes, etlTimestampRes,
     leadTimeWeeklyRes, outputWeeklyRes, bulkOutputWeeklyRes, yieldWeeklyRes, rftWeeklyRes,
-    ltCompRes, prevLtCompRes, ltCompMonthlyRes, ltReleasedGrossRes,
+    ltCompRes, prevLtCompRes, ltCompMonthlyRes, ltCompWeeklyRes, ltReleasedGrossRes,
     mixingRes, prevMixingRes, mixingWeeklyRes, filpacRes, prevFilpacRes, filpacWeeklyRes,
     plantDriversRes, prevPlantDriversRes,
   ] = await Promise.allSettled([
@@ -151,6 +152,7 @@ async function runKPIQueries(
     getLeadTimeComposition(filters),
     getLeadTimeComposition(prev),
     getLeadTimeCompositionMonthly(filters),
+    getLeadTimeCompositionWeekly(filters),
     getLeadTimeReleasedGross(filters),
     getStageProductivity(filters, "mixing"),
     getStageProductivity(prev, "mixing"),
@@ -202,6 +204,7 @@ async function runKPIQueries(
   const ltComp           = val(ltCompRes,            emptyComp);
   const prevLtComp       = val(prevLtCompRes,        emptyComp);
   const ltCompMonthly    = val(ltCompMonthlyRes,     [] as { MONTH: string; VA: number; NNVA: number; UNVA: number; WIP: number }[]);
+  const ltCompWeekly     = val(ltCompWeeklyRes,      [] as { WEEK: string;  VA: number; NNVA: number; UNVA: number; WIP: number }[]);
   const ltReleasedGross  = val(ltReleasedGrossRes, null as { AVG_GROSS: number | null } | null);
 
   const avg = (arr: { OEE: number; QUALITY?: number; PERFORMANCE?: number }[], key: "OEE" | "QUALITY" | "PERFORMANCE") =>
@@ -239,6 +242,10 @@ async function runKPIQueries(
         nnvaMonthly: ltCompMonthly.map((r) => Number((r.NNVA ?? 0).toFixed(2))),
         unvaMonthly: ltCompMonthly.map((r) => Number((r.UNVA ?? 0).toFixed(2))),
         wipMonthly:  ltCompMonthly.map((r) => Number((r.WIP  ?? 0).toFixed(2))),
+        vaWeekly:    ltCompWeekly.map((r) => Number((r.VA   ?? 0).toFixed(2))),
+        nnvaWeekly:  ltCompWeekly.map((r) => Number((r.NNVA ?? 0).toFixed(2))),
+        unvaWeekly:  ltCompWeekly.map((r) => Number((r.UNVA ?? 0).toFixed(2))),
+        wipWeekly:   ltCompWeekly.map((r) => Number((r.WIP  ?? 0).toFixed(2))),
       },
     },
     yield: {

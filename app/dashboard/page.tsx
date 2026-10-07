@@ -50,6 +50,10 @@ interface KPIResponse {
       nnvaMonthly: number[];
       unvaMonthly: number[];
       wipMonthly: number[];
+      vaWeekly: number[];
+      nnvaWeekly: number[];
+      unvaWeekly: number[];
+      wipWeekly: number[];
     };
   };
   yield: {

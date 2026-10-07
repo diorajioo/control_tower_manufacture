@@ -155,6 +155,34 @@ export async function getLeadTimeComposition(filters: QueryFilters) {
 }
 
 // Lead Time composition by month → sparklines for VA / NNVA / UNVA cards
+// Same per-PO logic as getLeadTimeComposition(), grouped by week of PO_FG_DONE_DATE.
+export async function getLeadTimeCompositionWeekly(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ WEEK: string; VA: number; NNVA: number; UNVA: number; WIP: number }>(`
+    SELECT
+      WEEK,
+      AVG(va_min)   / 1440.0 AS VA,
+      AVG(nnva_min) / 1440.0 AS NNVA,
+      AVG(unva_min) / 1440.0 AS UNVA,
+      AVG(wip_min)  / 1440.0 AS WIP
+    FROM (
+      SELECT
+        DATE_TRUNC('week', MAX(PO_FG_DONE_DATE)::DATE) AS WEEK,
+        PROCESS_ORDER_FG,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'VA'   THEN NET_LEADTIME ELSE 0 END) AS va_min,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN NET_LEADTIME ELSE 0 END) AS nnva_min,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN NET_LEADTIME ELSE 0 END) AS unva_min,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' AND ACTIVITY_TYPE = 'WIP' THEN NET_LEADTIME ELSE 0 END) AS wip_min
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG
+    ) sub
+    GROUP BY WEEK
+    ORDER BY WEEK
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+}
+
 // Same per-PO logic as getLeadTimeComposition(), grouped by month of PO_FG_DONE_DATE.
 export async function getLeadTimeCompositionMonthly(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);

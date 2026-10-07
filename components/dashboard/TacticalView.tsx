@@ -21,6 +21,8 @@ interface KPI {
       unvaTrend: number | null; wipTrend: number | null;
       vaMonthly: number[]; nnvaMonthly: number[];
       unvaMonthly: number[]; wipMonthly: number[];
+      vaWeekly: number[]; nnvaWeekly: number[];
+      unvaWeekly: number[]; wipWeekly: number[];
     };
   };
   output: { fgQty: number; bulkQty: number; fgTrend: number | null; bulkTrend: number | null; sparkline: number[]; bulkSparkline: number[] };
@@ -172,7 +174,19 @@ function TKpiCard({
                 {noData || value === null ? "—" : value}
               </span>
               {unit && <span style={{ fontSize: 12, color: "#98a2b3" }}>{unit}</span>}
-              {!noData && trend !== null && (
+              {!noData && ltDays !== undefined ? (() => {
+                const delta = ltDays - LEAD_TIME_TARGET_DAYS;
+                const over = delta > 0;
+                return (
+                  <span style={{
+                    fontSize: 11.5, fontWeight: 700,
+                    color: over ? "#d92d20" : "#067647",
+                    fontVariantNumeric: "tabular-nums",
+                  }}>
+                    {over ? "↗ +" : "↘ −"}{Math.abs(delta).toFixed(2)} days
+                  </span>
+                );
+              })() : !noData && trend !== null && (
                 <span style={{
                   fontSize: 11.5, fontWeight: 700,
                   color: trendGood ? "#067647" : "#d92d20",
@@ -272,8 +286,8 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               unit="days"
               trend={c?.vaTrend ?? null}
               inverse
-              sparkline={c?.vaMonthly}
-              sparkUnit="months"
+              sparkline={c?.vaWeekly}
+              sparkUnit="weeks"
               footerLeft="Value-added"
               noData={!kpi}
             />
@@ -283,8 +297,8 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               unit="days"
               trend={c?.nnvaTrend ?? null}
               inverse
-              sparkline={c?.nnvaMonthly}
-              sparkUnit="months"
+              sparkline={c?.nnvaWeekly}
+              sparkUnit="weeks"
               footerLeft="Non-value-added"
               noData={!kpi}
             />
@@ -294,8 +308,8 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               unit="days"
               trend={c?.unvaTrend ?? null}
               inverse
-              sparkline={c?.unvaMonthly}
-              sparkUnit="months"
+              sparkline={c?.unvaWeekly}
+              sparkUnit="weeks"
               footerLeft="Unnecessary NVA"
               noData={!kpi}
             />
@@ -305,8 +319,8 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               unit="days"
               trend={c?.wipTrend ?? null}
               inverse
-              sparkline={c?.wipMonthly}
-              sparkUnit="months"
+              sparkline={c?.wipWeekly}
+              sparkUnit="weeks"
               footerLeft="Work in progress"
               noData={!kpi}
             />
