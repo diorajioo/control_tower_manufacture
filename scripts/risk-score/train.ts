@@ -400,6 +400,28 @@ console.log(`  agrees with 13-day label on ${(report.optionA as any).agreeWith13
 }
 
 report.model = { name: BEST, feats: best.feats, w: best.w, dayIntercepts: SNAP_DAYS };
+
+// Deployment model — loaded at runtime by /api/risk-score
+const deployModel = {
+  model: report.model,
+  snapDays: SNAP_DAYS,
+  features: FEATURES,
+  allSeqs: ALL_SEQS,
+  startSeq: START_SEQ,
+  endSeq: END_SEQ,
+  baseLateRate: baseRate,
+  ref: Object.fromEntries([...ref.entries()].map(([k, v]) => [k, Array.from(v)])),
+  productStats: Object.fromEntries([...prodL.entries()].map(([k, v]) => [k, { n: v.n, late: v.late }])),
+  groupStats: Object.fromEntries([...groupL.entries()].map(([k, v]) => [k, { n: v.n, late: v.late }])),
+  routeAll: { n: allP.n.get("*") ?? 0, steps: Object.fromEntries(allP.has.get("*") ?? new Map<number, number>()) },
+  routeByProduct: Object.fromEntries([...prodP.n.entries()].map(([p, n]) => [p, { n, steps: Object.fromEntries(prodP.has.get(p) ?? new Map<number, number>()) }])),
+  routeByGroup: Object.fromEntries([...groupP.n.entries()].map(([g, n]) => [g, { n, steps: Object.fromEntries(groupP.has.get(g) ?? new Map<number, number>()) }])),
+  cycleTime: Object.fromEntries(cycle),
+  asOf: new Date(asOf).toISOString(),
+};
+writeFileSync(join(outDir, "model.json"), JSON.stringify(deployModel));
+console.log(`model → ${join(outDir, "model.json")}`);
+
 writeFileSync(join(outDir, "report.json"), JSON.stringify(report, null, 2));
 console.log(`\nreport → ${join(outDir, "report.json")}`);
 console.log(JSON.stringify(report.data));

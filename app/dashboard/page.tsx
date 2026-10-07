@@ -13,6 +13,8 @@ import { SkeletonCard } from "@/components/dashboard/SkeletonCard";
 import { AIRisksPanel } from "@/components/dashboard/AIRisksPanel";
 import { AISummary } from "@/components/dashboard/AISummary";
 import { AlertPanel } from "@/components/dashboard/AlertPanel";
+import { RiskScorePanel } from "@/components/dashboard/RiskScorePanel";
+import type { RiskPoResult } from "@/lib/riskScore";
 import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { OutputKPICard } from "@/components/dashboard/OutputKPICard";
 import { LeadTimeKPICard } from "@/components/dashboard/LeadTimeKPICard";
@@ -120,6 +122,9 @@ export default function DashboardPage() {
   const [stageStd,      setStageStd]      = useState<StageStdPoint[] | null>(null);
   const [stageLoading,  setStageLoading]  = useState(false);
   const [plantLT,       setPlantLT]       = useState<{ plants: PlantBreakdown[]; targetDays: number } | null>(null);
+  const [riskScores,      setRiskScores]      = useState<RiskPoResult[]>([]);
+  const [riskLoading,     setRiskLoading]     = useState(true);
+  const [riskModelMissing, setRiskModelMissing] = useState(false);
   const [undoId, setUndoId] = useState<string | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sentAlertIds = useRef<Set<string>>(new Set());
@@ -171,6 +176,20 @@ export default function DashboardPage() {
         } catch { /* ignore */ }
       });
   }, []);
+
+  // Risk score: fetch once per plant change (15-min server cache)
+  useEffect(() => {
+    setRiskLoading(true);
+    const params = new URLSearchParams({ plant: filters.plant });
+    fetch(`/api/risk-score?${params}`)
+      .then((r) => r.json())
+      .then((d: { scores?: RiskPoResult[]; modelMissing?: boolean }) => {
+        setRiskScores(d.scores ?? []);
+        setRiskModelMissing(d.modelMissing ?? false);
+      })
+      .catch(() => setRiskScores([]))
+      .finally(() => setRiskLoading(false));
+  }, [filters.plant]);
 
   const fetchData = useCallback(async (f: Filters) => {
     setLoading(true);
@@ -315,6 +334,14 @@ export default function DashboardPage() {
             startDate={filters.startDate}
             endDate={filters.endDate}
           />
+
+          {activeView === "strategic" && (
+            <RiskScorePanel
+              scores={riskScores}
+              modelMissing={riskModelMissing}
+              loading={riskLoading}
+            />
+          )}
 
           {activeView === "strategic" && (<>
 
@@ -506,7 +533,7 @@ export default function DashboardPage() {
       {undoId && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1e293b] text-slate-100 text-[12px] px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-200">
           <span>{t("alert_dismissed")}</span>
-          <button onClick={handleUndoDismiss} className="text-indigo-300 font-semibold hover:text-indigo-200 transition-colors">
+          <button onClick={handleUndoDismiss} className="text-blue-300 font-semibold hover:text-blue-200 transition-colors">
             {t("alert_undo")}
           </button>
         </div>

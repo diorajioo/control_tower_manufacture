@@ -61,7 +61,7 @@ function formatInline(text: string, onKpiClick?: (kpi: string) => void): React.R
               {...KPI_TRIGGER_ATTR}
               onClick={() => onKpiClick?.(kpiId)}
               title={`Highlight ${label} on dashboard`}
-              className="inline-flex items-center gap-0.5 text-[10px] text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-1.5 py-0.5 rounded-md font-semibold transition-colors ml-0.5 align-middle cursor-pointer"
+              className="inline-flex items-center gap-0.5 text-[10px] text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 px-1.5 py-0.5 rounded-md font-semibold transition-colors ml-0.5 align-middle cursor-pointer"
             >
               {label} ↗
             </button>
@@ -130,7 +130,7 @@ function MarkdownContent({ text, onKpiClick }: { text: string; onKpiClick?: (kpi
 }
 
 const BADGE_CLS: Record<string, { bg: string; text: string }> = {
-  indigo:  { bg: "bg-indigo-100",  text: "text-indigo-700"  },
+  indigo:  { bg: "bg-blue-100",    text: "text-blue-800"    },
   emerald: { bg: "bg-emerald-100", text: "text-emerald-700" },
   amber:   { bg: "bg-amber-100",   text: "text-amber-700"   },
   cyan:    { bg: "bg-cyan-100",    text: "text-cyan-700"    },
@@ -393,7 +393,7 @@ export function FloatingChat({ filters, kpiSnapshot, kpi, alerts }: FloatingChat
                         <button
                           key={j}
                           onClick={() => sendMessage(q)}
-                          className="text-[12px] text-left bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 hover:border-indigo-200 text-indigo-700 px-3 py-2 rounded-xl transition-colors leading-snug"
+                          className="text-[12px] text-left bg-blue-50 hover:bg-blue-100 border border-blue-100 hover:border-blue-200 text-blue-800 px-3 py-2 rounded-xl transition-colors leading-snug"
                         >
                           {q}
                         </button>
