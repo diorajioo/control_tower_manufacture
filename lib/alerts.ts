@@ -1,4 +1,5 @@
 import { ALERT_KPIS } from "@/lib/aiScope";
+import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 export type AlertSeverity = "critical" | "warning" | "info";
 
@@ -22,9 +23,11 @@ interface KPISnapshot {
 
 const THRESHOLDS = {
   leadTime: {
-    // trend is inverted (positive = got worse = lead time increased)
-    warning: 5,   // +5% increase in lead time
-    critical: 15,
+    warning: 5,    // +5% MoM increase
+    critical: 15,  // +15% MoM increase
+    // Absolute vs target — fires even when trend is null (e.g. YTD with no prior period)
+    absWarningMult: 1.0,   // > 13d = warning
+    absCriticalMult: 1.3,  // > 16.9d = critical
   },
   bulkLoss: {
     absWarning: 3,    // > 3% bulk loss absolute
@@ -48,27 +51,29 @@ const THRESHOLDS = {
 export function computeAlerts(kpi: KPISnapshot): KPIAlert[] {
   const alerts: KPIAlert[] = [];
 
-  // Lead Time alert (positive trend = got worse because lead time went up)
-  const leadTimeTrendWorse = kpi.leadTime.trend != null ? -kpi.leadTime.trend : null;
-  if (leadTimeTrendWorse != null && leadTimeTrendWorse < -THRESHOLDS.leadTime.critical) {
+  // Lead Time alert — absolute value vs target (fires regardless of trend/period)
+  const ltAbsCritical = LEAD_TIME_TARGET_DAYS * THRESHOLDS.leadTime.absCriticalMult;
+  const ltAbsWarning  = LEAD_TIME_TARGET_DAYS * THRESHOLDS.leadTime.absWarningMult;
+  const trendSuffix = kpi.leadTime.trend != null ? `, up ${Math.abs(kpi.leadTime.trend).toFixed(1)}% vs prior` : "";
+  if (kpi.leadTime.value > ltAbsCritical) {
     alerts.push({
       id: "leadtime-critical",
       kpi: "Lead Time",
       severity: "critical",
-      message: `Lead time up ${Math.abs(leadTimeTrendWorse).toFixed(1)}% vs prior period`,
+      message: `Lead time ${kpi.leadTime.value.toFixed(1)}d — ${((kpi.leadTime.value / LEAD_TIME_TARGET_DAYS - 1) * 100).toFixed(0)}% above ${LEAD_TIME_TARGET_DAYS}-day target${trendSuffix}`,
       value: kpi.leadTime.value,
       trend: kpi.leadTime.trend,
-      threshold: `>${THRESHOLDS.leadTime.critical}% increase`,
+      threshold: `>${ltAbsCritical.toFixed(0)}d`,
     });
-  } else if (leadTimeTrendWorse != null && leadTimeTrendWorse < -THRESHOLDS.leadTime.warning) {
+  } else if (kpi.leadTime.value > ltAbsWarning) {
     alerts.push({
       id: "leadtime-warning",
       kpi: "Lead Time",
       severity: "warning",
-      message: `Lead time up ${Math.abs(leadTimeTrendWorse).toFixed(1)}% vs prior period`,
+      message: `Lead time ${kpi.leadTime.value.toFixed(1)}d — above ${LEAD_TIME_TARGET_DAYS}-day target${trendSuffix}`,
       value: kpi.leadTime.value,
       trend: kpi.leadTime.trend,
-      threshold: `>${THRESHOLDS.leadTime.warning}% increase`,
+      threshold: `>${LEAD_TIME_TARGET_DAYS}d`,
     });
   }
 

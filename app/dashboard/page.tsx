@@ -13,7 +13,6 @@ import { SkeletonCard } from "@/components/dashboard/SkeletonCard";
 import { AIRisksPanel } from "@/components/dashboard/AIRisksPanel";
 import { AISummary } from "@/components/dashboard/AISummary";
 import { AlertPanel } from "@/components/dashboard/AlertPanel";
-import { RiskScorePanel } from "@/components/dashboard/RiskScorePanel";
 import type { RiskPoResult } from "@/lib/riskScore";
 import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { OutputKPICard } from "@/components/dashboard/OutputKPICard";
@@ -333,15 +332,9 @@ export default function DashboardPage() {
             period={filters.period}
             startDate={filters.startDate}
             endDate={filters.endDate}
+            riskScores={riskScores}
+            riskLoading={riskLoading}
           />
-
-          {activeView === "strategic" && (
-            <RiskScorePanel
-              scores={riskScores}
-              modelMissing={riskModelMissing}
-              loading={riskLoading}
-            />
-          )}
 
           {activeView === "strategic" && (<>
 
