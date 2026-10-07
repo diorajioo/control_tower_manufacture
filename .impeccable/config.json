@@ -329,6 +329,12 @@
         "value": "#101828",
         "createdAt": "2026-09-24T01:19:38.353Z",
         "reason": "Primary text color — used throughout dashboard components"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#1e4076",
+        "createdAt": "2026-10-07T06:56:51.251Z",
+        "reason": "Paragon Blue — primary brand color defined in CLAUDE.md design system"
       }
     ]
   }
