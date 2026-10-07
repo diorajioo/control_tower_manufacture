@@ -18,8 +18,9 @@ import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { OutputKPICard } from "@/components/dashboard/OutputKPICard";
 import { LeadTimeKPICard } from "@/components/dashboard/LeadTimeKPICard";
 import { RegularKPICard } from "@/components/dashboard/RegularKPICard";
-import { LeadTimeStageStdChart, type StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
-import { LeadTimePlantTable, type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
+import { type StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
+import { type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
+import { TacticalView } from "@/components/dashboard/TacticalView";
 import { FitToScreen } from "@/components/ui/FitToScreen";
 import { formatThousands } from "@/lib/utils";
 import { alertsFromKpi, type KPIAlert } from "@/lib/alerts";
@@ -36,6 +37,16 @@ interface KPIResponse {
     byPositionNett: { position: string; avgHours: number }[];
     byPositionGross: { position: string; avgHours: number }[];
     sparkline: number[];
+    composition?: {
+      vaDays: number;
+      nnvaDays: number;
+      unvaDays: number;
+      wipDays: number;
+      nnvaTrend: number | null;
+      wipTrend: number | null;
+      nnvaMonthly: number[];
+      wipMonthly: number[];
+    };
   };
   yield: {
     bulkLossPct: number;
@@ -492,14 +503,14 @@ export default function DashboardPage() {
 
           {/* ── Tactical view ── */}
           {activeView === "tactical" && (
-            <div className="shrink-0">
-              <LeadTimeStageStdChart data={stageStd} loading={stageLoading} />
-            </div>
-          )}
-          {activeView === "tactical" && (
-            <div className="shrink-0">
-              <LeadTimePlantTable data={plantLT?.plants ?? null} targetDays={plantLT?.targetDays ?? 13} loading={stageLoading} basis={ltBasis} />
-            </div>
+            <TacticalView
+              kpi={kpi}
+              loading={loading}
+              plantLT={plantLT}
+              stageStd={stageStd ?? []}
+              stageLoading={stageLoading}
+              ltBasis={ltBasis}
+            />
           )}
         </main>
       </div>
