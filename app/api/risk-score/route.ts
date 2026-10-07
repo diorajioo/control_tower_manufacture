@@ -45,18 +45,14 @@ const SQL = `
   ORDER BY t.PROCESS_ORDER_FG, t.ACTIVITY_SEQUENCE
 `;
 
-const fetchScores = unstable_cache(
-  async (plant: string) => {
+// Cache all POs once — plant filter applied per request outside the cache boundary.
+const fetchAllScores = unstable_cache(
+  async () => {
     const model = loadModel();
-    if (!model) return { scores: [], modelMissing: true };
+    if (!model) return { scores: [] as ReturnType<typeof scoreActivePOs>, modelMissing: true as const, asOf: "" };
 
     const rows = await executeQuery<ActivePoRow>(SQL, []);
-    const all = scoreActivePOs(model, rows);
-    const filtered = plant && plant !== "All Plant"
-      ? all.filter((r) => r.plant === plant)
-      : all;
-
-    return { scores: filtered.slice(0, 15), modelMissing: false, asOf: model.asOf };
+    return { scores: scoreActivePOs(model, rows), modelMissing: false as const, asOf: model.asOf };
   },
   ["risk-score-v1"],
   { revalidate: 900 } // 15 min
@@ -66,8 +62,12 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const plant = searchParams.get("plant") ?? "All Plant";
-    const data = await fetchScores(plant);
-    return NextResponse.json(data);
+    const data = await fetchAllScores();
+    const scores = (plant && plant !== "All Plant"
+      ? data.scores.filter((r) => r.plant === plant)
+      : data.scores
+    ).filter((r) => r.score >= 0.5);
+    return NextResponse.json({ ...data, scores });
   } catch (err) {
     console.error("[risk-score]", err);
     return NextResponse.json({ scores: [], error: String(err) }, { status: 500 });

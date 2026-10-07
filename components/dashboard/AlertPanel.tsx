@@ -124,6 +124,11 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
                 {warningCount} Warning
               </span>
             )}
+            {!riskLoading && riskScores.filter((s) => s.score >= 0.5).length > 0 && (
+              <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-semibold">
+                {riskScores.filter((s) => s.score >= 0.5).length} At-Risk PO
+              </span>
+            )}
           </div>
           {collapsed ? <ChevronDown size={14} className="text-gray-400 ml-auto" /> : <ChevronUp size={14} className="text-gray-400 ml-auto" />}
         </button>
