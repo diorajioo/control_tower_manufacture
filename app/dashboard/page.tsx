@@ -72,9 +72,9 @@ interface KPIResponse {
 // Productivity card toggle: E2E (CT_MANUF_E2E) · Mixing (CT_MANUF_OLAH) · Filpac (CT_MANUF_KEMAS) — getStageProductivity()
 type ProdView = "e2e" | "mixing" | "filpac";
 const PROD_VIEWS: Record<ProdView, { label: string; unit: string; sparkUnit: string; footer: string }> = {
-  e2e:    { label: "E2E Productivity",    unit: "pcs/manhour", sparkUnit: "pcs/mh", footer: "Output per operator manhour, end to end" },
-  mixing: { label: "Mixing Productivity", unit: "kg/manhour",  sparkUnit: "kg/mh",  footer: "Released bulk per operator manhour in Mixing" },
-  filpac: { label: "Filpac Productivity", unit: "pcs/manhour", sparkUnit: "pcs/mh", footer: "Good pcs per operator manhour in Filpac" },
+  e2e:    { label: "Productivity", unit: "pcs/manhour", sparkUnit: "pcs/mh", footer: "Output per operator manhour, end to end" },
+  mixing: { label: "Productivity", unit: "kg/manhour",  sparkUnit: "kg/mh",  footer: "Released bulk per operator manhour in Mixing" },
+  filpac: { label: "Productivity", unit: "pcs/manhour", sparkUnit: "pcs/mh", footer: "Good pcs per operator manhour in Filpac" },
 };
 
 interface Filters {
