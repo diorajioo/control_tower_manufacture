@@ -122,13 +122,15 @@ interface TKpiCardProps {
   deltaAbsValue?: number | null;
   /** Unit shown alongside deltaAbsValue e.g. "days", "pcs/mh" */
   deltaUnit?: string;
+  /** Override the sub-label below the value row (default: "vs prior period" / "vs target") */
+  subLabel?: string;
   footerLeft?: string;
   noData?: boolean;
 }
 
 function TKpiCard({
   label, value, unit, trend = null, inverse = false,
-  sparkline, sparkUnit, ltDays, deltaAbsValue, deltaUnit, footerLeft, noData = false,
+  sparkline, sparkUnit, ltDays, deltaAbsValue, deltaUnit, subLabel, footerLeft, noData = false,
 }: TKpiCardProps) {
   const resolvedKey: ToneKey =
     noData || value === null ? "neutral" :
@@ -202,9 +204,9 @@ function TKpiCard({
             </div>
 
             <div style={{ fontSize: 11, color: "#98a2b3" }}>
-              {ltDays !== undefined
+              {subLabel ?? (ltDays !== undefined
                 ? `vs ${LEAD_TIME_TARGET_DAYS}-day target`
-                : deltaAbsValue != null || trend !== null ? "vs prior period" : ""}
+                : deltaAbsValue != null || trend !== null ? "vs prior period" : "")}
             </div>
 
             <StatusDot color={tone.color} label={statusLabel} />
@@ -261,6 +263,15 @@ function SkeletonCard() {
 
 // ── Sections ──────────────────────────────────────────────────────────────────
 
+function momDelta(monthly: number[] | undefined): { abs: number | null; trend: number | null } {
+  if (!monthly || monthly.length < 2) return { abs: null, trend: null };
+  const cur = monthly[monthly.length - 1];
+  const prev = monthly[monthly.length - 2];
+  const abs = Number((cur - prev).toFixed(2));
+  const trend = prev !== 0 ? Number(((cur - prev) / prev * 100).toFixed(1)) : null;
+  return { abs, trend };
+}
+
 function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasis }: TacticalViewProps) {
   const c = kpi?.leadTime.composition;
   return (
@@ -284,58 +295,72 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               footerLeft="End-to-end gross"
               noData={!kpi}
             />
-            <TKpiCard
-              label="VA"
-              value={c ? c.vaDays.toFixed(2) : null}
-              unit="days"
-              trend={c?.vaTrend ?? null}
-              inverse
-              deltaAbsValue={c ? c.vaDays - c.vaPrev : null}
-              deltaUnit="days"
-              sparkline={c?.vaWeekly}
-              sparkUnit="weeks"
-              footerLeft="Value-added"
-              noData={!kpi}
-            />
-            <TKpiCard
-              label="NNVA"
-              value={c ? c.nnvaDays.toFixed(2) : null}
-              unit="days"
-              trend={c?.nnvaTrend ?? null}
-              inverse
-              deltaAbsValue={c ? c.nnvaDays - c.nnvaPrev : null}
-              deltaUnit="days"
-              sparkline={c?.nnvaWeekly}
-              sparkUnit="weeks"
-              footerLeft="Non-value-added"
-              noData={!kpi}
-            />
-            <TKpiCard
-              label="UNVA"
-              value={c ? c.unvaDays.toFixed(2) : null}
-              unit="days"
-              trend={c?.unvaTrend ?? null}
-              inverse
-              deltaAbsValue={c ? c.unvaDays - c.unvaPrev : null}
-              deltaUnit="days"
-              sparkline={c?.unvaWeekly}
-              sparkUnit="weeks"
-              footerLeft="Unnecessary NVA"
-              noData={!kpi}
-            />
-            <TKpiCard
-              label="WIP"
-              value={c ? c.wipDays.toFixed(2) : null}
-              unit="days"
-              trend={c?.wipTrend ?? null}
-              inverse
-              deltaAbsValue={c ? c.wipDays - c.wipPrev : null}
-              deltaUnit="days"
-              sparkline={c?.wipWeekly}
-              sparkUnit="weeks"
-              footerLeft="Work in progress"
-              noData={!kpi}
-            />
+            {(() => {
+              const va   = momDelta(c?.vaMonthly);
+              const nnva = momDelta(c?.nnvaMonthly);
+              const unva = momDelta(c?.unvaMonthly);
+              const wip  = momDelta(c?.wipMonthly);
+              return (
+                <>
+                  <TKpiCard
+                    label="VA"
+                    value={c ? c.vaDays.toFixed(2) : null}
+                    unit="days"
+                    trend={va.trend}
+                    inverse
+                    deltaAbsValue={va.abs}
+                    deltaUnit="days"
+                    subLabel="vs prior month"
+                    sparkline={c?.vaWeekly}
+                    sparkUnit="weeks"
+                    footerLeft="Value-added"
+                    noData={!kpi}
+                  />
+                  <TKpiCard
+                    label="NNVA"
+                    value={c ? c.nnvaDays.toFixed(2) : null}
+                    unit="days"
+                    trend={nnva.trend}
+                    inverse
+                    deltaAbsValue={nnva.abs}
+                    deltaUnit="days"
+                    subLabel="vs prior month"
+                    sparkline={c?.nnvaWeekly}
+                    sparkUnit="weeks"
+                    footerLeft="Non-value-added"
+                    noData={!kpi}
+                  />
+                  <TKpiCard
+                    label="UNVA"
+                    value={c ? c.unvaDays.toFixed(2) : null}
+                    unit="days"
+                    trend={unva.trend}
+                    inverse
+                    deltaAbsValue={unva.abs}
+                    deltaUnit="days"
+                    subLabel="vs prior month"
+                    sparkline={c?.unvaWeekly}
+                    sparkUnit="weeks"
+                    footerLeft="Unnecessary NVA"
+                    noData={!kpi}
+                  />
+                  <TKpiCard
+                    label="WIP"
+                    value={c ? c.wipDays.toFixed(2) : null}
+                    unit="days"
+                    trend={wip.trend}
+                    inverse
+                    deltaAbsValue={wip.abs}
+                    deltaUnit="days"
+                    subLabel="vs prior month"
+                    sparkline={c?.wipWeekly}
+                    sparkUnit="weeks"
+                    footerLeft="Work in progress"
+                    noData={!kpi}
+                  />
+                </>
+              );
+            })()}
           </>
         )}
       </div>
