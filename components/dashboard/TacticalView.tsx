@@ -5,6 +5,7 @@ import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LeadTimePlantTable, type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
 import { LeadTimeStageStdChart, type StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
+import { RegularKPICard } from "@/components/dashboard/RegularKPICard";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -51,57 +52,6 @@ type TabId = typeof TABS[number]["id"];
 
 // ── Shared UI primitives ──────────────────────────────────────────────────────
 
-function Spark({ data, color = "#1E4076" }: { data: number[]; color?: string }) {
-  if (!data || data.length < 2) return null;
-  const min = Math.min(...data), max = Math.max(...data);
-  const range = max - min || 1;
-  const W = 60, H = 22;
-  const pts = data.map((v, i) => `${(i / (data.length - 1)) * W},${H - ((v - min) / range) * H}`).join(" ");
-  return (
-    <svg width={W} height={H} className="shrink-0 opacity-60">
-      <polyline fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" points={pts} />
-    </svg>
-  );
-}
-
-function TKpiCard({ label, value, unit, trend, higherIsBad = false, sparkline, sparkColor }: {
-  label: string; value: string | null; unit?: string;
-  trend?: number | null; higherIsBad?: boolean;
-  sparkline?: number[]; sparkColor?: string;
-}) {
-  const isUp = trend != null && trend > 0;
-  const isBad = higherIsBad ? isUp : !isUp;
-  return (
-    <div className="rounded-lg border border-[#EBEBEB] bg-white p-4 flex flex-col gap-2 min-w-0">
-      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-baseline gap-1 flex-wrap">
-            <span className="text-[26px] font-bold leading-none text-gray-800">{value ?? "—"}</span>
-            {unit && <span className="text-[11px] text-gray-400">{unit}</span>}
-          </div>
-          {trend != null && (
-            <p className={cn("text-[11px] mt-1 font-medium", isBad ? "text-red-500" : "text-emerald-600")}>
-              {isUp ? "↑" : "↓"} {Math.abs(trend).toFixed(1)}% vs prior
-            </p>
-          )}
-        </div>
-        {sparkline && <Spark data={sparkline} color={sparkColor} />}
-      </div>
-    </div>
-  );
-}
-
-function PlaceholderCard({ label, note }: { label: string; note?: string }) {
-  return (
-    <div className="rounded-lg border border-[#EBEBEB] bg-white p-4 flex flex-col gap-2">
-      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
-      <span className="text-[26px] font-bold leading-none text-gray-300">—</span>
-      {note && <p className="text-[10px] text-gray-300 italic">{note}</p>}
-    </div>
-  );
-}
-
 function ChartPlaceholder({ title, subtitle, height = 220 }: { title: string; subtitle?: string; height?: number }) {
   return (
     <div className="rounded-lg border border-[#EBEBEB] bg-white p-4">
@@ -119,7 +69,7 @@ function SectionHeading({ title }: { title: string }) {
 }
 
 function SkeletonCard() {
-  return <div className="rounded-lg border border-[#EBEBEB] bg-white p-4 h-[88px] animate-pulse bg-gray-50" />;
+  return <div className="rounded-lg border border-[#EBEBEB] bg-white p-4 h-[152px] animate-pulse bg-gray-50" />;
 }
 
 // ── Sections ──────────────────────────────────────────────────────────────────
@@ -130,66 +80,88 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
     <div className="flex flex-col gap-4">
       <SectionHeading title="Lead Time" />
 
-      {/* 5 KPI cards */}
       <div className="grid grid-cols-5 gap-3">
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
-            <TKpiCard
+            <RegularKPICard
+              icon={null}
               label="Lead Time"
-              value={kpi ? kpi.leadTime.grossDays.toFixed(2) : null}
+              value={kpi ? kpi.leadTime.grossDays.toFixed(2) : "—"}
               unit="days"
               trend={kpi?.leadTime.grossTrend ?? null}
-              higherIsBad
+              inverse
+              subLabel="vs prior period"
               sparkline={kpi?.leadTime.sparkline}
+              sparkUnit="days"
+              footerLeft="End-to-end gross"
+              noData={!kpi}
+              compact
             />
-            <TKpiCard
+            <RegularKPICard
+              icon={null}
               label="VA"
-              value={c ? c.vaDays.toFixed(2) : null}
+              value={c ? c.vaDays.toFixed(2) : "—"}
               unit="days"
-              sparkline={undefined}
+              subLabel="Value-added time"
+              footerLeft="Lead time component"
+              noData={!kpi}
+              compact
             />
-            <TKpiCard
+            <RegularKPICard
+              icon={null}
               label="NNVA"
-              value={c ? c.nnvaDays.toFixed(2) : null}
+              value={c ? c.nnvaDays.toFixed(2) : "—"}
               unit="days"
               trend={c?.nnvaTrend ?? null}
-              higherIsBad
+              inverse
+              subLabel="vs prior period"
               sparkline={c?.nnvaMonthly}
+              sparkUnit="days"
+              footerLeft="Non-value-added"
+              noData={!kpi}
+              compact
             />
-            <TKpiCard
+            <RegularKPICard
+              icon={null}
               label="UNVA"
-              value={c ? c.unvaDays.toFixed(2) : null}
+              value={c ? c.unvaDays.toFixed(2) : "—"}
               unit="days"
-              sparkline={undefined}
+              subLabel="Unnecessary NVA"
+              footerLeft="Lead time component"
+              noData={!kpi}
+              compact
             />
-            <TKpiCard
+            <RegularKPICard
+              icon={null}
               label="WIP"
-              value={c ? c.wipDays.toFixed(2) : null}
+              value={c ? c.wipDays.toFixed(2) : "—"}
               unit="days"
               trend={c?.wipTrend ?? null}
-              higherIsBad
+              inverse
+              subLabel="vs prior period"
               sparkline={c?.wipMonthly}
+              sparkUnit="days"
+              footerLeft="Work in progress"
+              noData={!kpi}
+              compact
             />
           </>
         )}
       </div>
 
-      {/* Pareto Lead Time — reuse existing stage chart */}
       <div className="rounded-lg border border-[#EBEBEB] bg-white p-4">
         <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-3">Pareto Lead Time</p>
         <LeadTimeStageStdChart data={stageStd} loading={stageLoading} />
       </div>
 
-      {/* Distribution histogram — placeholder */}
       <ChartPlaceholder
         title="Lead Time Distribution per PO"
         subtitle="Histogram of end-to-end gross lead time (days)"
         height={200}
       />
 
-      {/* Plant breakdown table */}
       <div className="rounded-lg border border-[#EBEBEB] bg-white overflow-hidden">
         <div className="px-4 pt-3 pb-1">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead Time by Plant</p>
@@ -212,42 +184,64 @@ function ProductivitySection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "
     <div className="flex flex-col gap-4">
       <SectionHeading title="Productivity" />
 
-      {/* 4 KPI cards */}
       <div className="grid grid-cols-4 gap-3">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
-            <TKpiCard
+            <RegularKPICard
+              icon={null}
               label="Productivity Mixing"
-              value={mixing ? mixing.value.toFixed(2) : null}
+              value={mixing ? mixing.value.toFixed(2) : "—"}
               unit="kg/manhour"
               trend={mixing?.trend ?? null}
+              subLabel="vs prior period"
               sparkline={mixing?.sparkline}
-              sparkColor="#8b5cf6"
+              sparkUnit="kg/mh"
+              footerLeft="Mixing stage"
+              noData={!kpi || !mixing}
+              compact
             />
-            <TKpiCard
+            <RegularKPICard
+              icon={null}
               label="Productivity Filpac"
-              value={filpac ? filpac.value.toFixed(2) : null}
+              value={filpac ? filpac.value.toFixed(2) : "—"}
               unit="pcs/manhour"
               trend={filpac?.trend ?? null}
+              subLabel="vs prior period"
               sparkline={filpac?.sparkline}
-              sparkColor="#8b5cf6"
+              sparkUnit="pcs/mh"
+              footerLeft="Filling &amp; packing"
+              noData={!kpi || !filpac}
+              compact
             />
-            <TKpiCard
+            <RegularKPICard
+              icon={null}
               label="Productivity E2E"
-              value={kpi ? kpi.productivity.e2e.toFixed(2) : null}
+              value={kpi ? kpi.productivity.e2e.toFixed(2) : "—"}
               unit="pcs/manhour"
               trend={kpi?.productivity.e2eTrend ?? null}
+              subLabel="vs prior period"
               sparkline={kpi?.productivity.sparkline}
-              sparkColor="#8b5cf6"
+              sparkUnit="pcs/mh"
+              footerLeft="End-to-end"
+              noData={!kpi}
+              compact
             />
-            <PlaceholderCard label="Normal Working Hours" note="Basis manhour not yet decided" />
+            <RegularKPICard
+              icon={null}
+              label="Normal Working Hours"
+              value="—"
+              unit="hours"
+              subLabel="Basis manhour not yet decided"
+              footerLeft=""
+              noData
+              compact
+            />
           </>
         )}
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-2 gap-4">
         <ChartPlaceholder title="Volume Kemas" subtitle="Qty kemas per month, million pcs" />
         <ChartPlaceholder title="Productivity Kemas" subtitle="Pcs per manhour, per month" />
@@ -262,31 +256,39 @@ function OutputSection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "loadin
     <div className="flex flex-col gap-4">
       <SectionHeading title="Output" />
 
-      {/* 2 large KPI cards */}
       <div className="grid grid-cols-2 gap-3">
         {loading ? (
           Array.from({ length: 2 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
-            <TKpiCard
+            <RegularKPICard
+              icon={null}
               label="FG Output"
-              value={kpi ? (kpi.output.fgQty / 1_000_000).toFixed(2) : null}
+              value={kpi ? (kpi.output.fgQty / 1_000_000).toFixed(2) : "—"}
               unit="million pcs"
               trend={kpi?.output.fgTrend ?? null}
+              subLabel="vs prior period"
               sparkline={kpi?.output.sparkline}
+              sparkUnit="M pcs"
+              footerLeft="Finished goods"
+              noData={!kpi}
             />
-            <TKpiCard
+            <RegularKPICard
+              icon={null}
               label="Bulk Output"
-              value={kpi ? (kpi.output.bulkQty / 1_000).toFixed(2) : null}
+              value={kpi ? (kpi.output.bulkQty / 1_000).toFixed(2) : "—"}
               unit="thousand kg"
               trend={kpi?.output.bulkTrend ?? null}
+              subLabel="vs prior period"
               sparkline={kpi?.output.bulkSparkline}
+              sparkUnit="K kg"
+              footerLeft="Bulk production"
+              noData={!kpi}
             />
           </>
         )}
       </div>
 
-      {/* Charts */}
       <ChartPlaceholder title="Pareto Output" subtitle="Contribution per plant vs target, sorted descending" />
       <ChartPlaceholder title="Output Trend (Actual vs Plan)" subtitle="Finished goods, million pcs per month" />
       <ChartPlaceholder title="Top SKU by Output" subtitle="Actual qty vs plan qty, gap %" height={240} />
@@ -294,7 +296,7 @@ function OutputSection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "loadin
   );
 }
 
-function OEESection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "loading">) {
+function OEESection() {
   return (
     <div className="flex flex-col gap-4">
       <SectionHeading title="OEE" />
@@ -330,7 +332,6 @@ export function TacticalView(props: TacticalViewProps) {
     oee: null, energy: null, yield: null,
   });
 
-  // Scroll spy via IntersectionObserver
   useEffect(() => {
     const observers: IntersectionObserver[] = [];
     const entries = new Map<TabId, boolean>();
@@ -341,7 +342,6 @@ export function TacticalView(props: TacticalViewProps) {
       const obs = new IntersectionObserver(
         ([entry]) => {
           entries.set(id, entry.isIntersecting);
-          // Set active to the first visible section in tab order
           const first = TABS.find(({ id: tid }) => entries.get(tid));
           if (first) setActiveTab(first.id);
         },
@@ -411,7 +411,7 @@ export function TacticalView(props: TacticalViewProps) {
             <OutputSection kpi={kpi} loading={loading} />
           </section>
           <section ref={setRef("oee")}>
-            <OEESection kpi={kpi} loading={loading} />
+            <OEESection />
           </section>
           <section ref={setRef("energy")}>
             <div className="flex flex-col gap-4">

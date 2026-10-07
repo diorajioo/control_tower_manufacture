@@ -44,7 +44,7 @@ const SEVERITY_CONFIG = {
 type SendState = "idle" | "sending" | "sent" | "error";
 
 export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDate, riskScores = [], riskLoading = false }: AlertPanelProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [riskExpanded, setRiskExpanded] = useState(false);
   const [sendState, setSendState] = useState<SendState>("idle");
   const [sendError, setSendError] = useState<string | null>(null);
