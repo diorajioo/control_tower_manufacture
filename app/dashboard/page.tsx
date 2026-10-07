@@ -42,9 +42,13 @@ interface KPIResponse {
       nnvaDays: number;
       unvaDays: number;
       wipDays: number;
+      vaTrend: number | null;
       nnvaTrend: number | null;
+      unvaTrend: number | null;
       wipTrend: number | null;
+      vaMonthly: number[];
       nnvaMonthly: number[];
+      unvaMonthly: number[];
       wipMonthly: number[];
     };
   };

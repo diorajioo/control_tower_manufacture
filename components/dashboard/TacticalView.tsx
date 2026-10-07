@@ -17,8 +17,10 @@ interface KPI {
     sparkline: number[];
     composition?: {
       vaDays: number; nnvaDays: number; unvaDays: number; wipDays: number;
-      nnvaTrend: number | null; wipTrend: number | null;
-      nnvaMonthly: number[]; wipMonthly: number[];
+      vaTrend: number | null; nnvaTrend: number | null;
+      unvaTrend: number | null; wipTrend: number | null;
+      vaMonthly: number[]; nnvaMonthly: number[];
+      unvaMonthly: number[]; wipMonthly: number[];
     };
   };
   output: { fgQty: number; bulkQty: number; fgTrend: number | null; bulkTrend: number | null; sparkline: number[]; bulkSparkline: number[] };
@@ -109,6 +111,8 @@ interface TKpiCardProps {
   /** Lower is better: flips trend direction for tone + arrow color */
   inverse?: boolean;
   sparkline?: number[];
+  /** Label shown below sparkline e.g. "weeks" or "months" */
+  sparkUnit?: string;
   /** Pass grossDays to use lead-time target-based tone ("On Track"/"At Risk"/"Above Target") */
   ltDays?: number;
   footerLeft?: string;
@@ -117,7 +121,7 @@ interface TKpiCardProps {
 
 function TKpiCard({
   label, value, unit, trend = null, inverse = false,
-  sparkline, ltDays, footerLeft, noData = false,
+  sparkline, sparkUnit, ltDays, footerLeft, noData = false,
 }: TKpiCardProps) {
   const resolvedKey: ToneKey =
     noData || value === null ? "neutral" :
@@ -188,10 +192,15 @@ function TKpiCard({
             <StatusDot color={tone.color} label={statusLabel} />
           </div>
 
-          {/* Sparkline */}
+          {/* Sparkline + period label */}
           {hasSpark && (
-            <div style={{ paddingTop: 4 }}>
+            <div style={{ paddingTop: 4, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
               <Spark data={sparkline!} />
+              {sparkUnit && (
+                <span style={{ fontSize: 10, color: "#a3a8b5" }}>
+                  {sparkline!.length} {sparkUnit}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -252,6 +261,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               trend={kpi?.leadTime.grossTrend ?? null}
               inverse
               sparkline={kpi?.leadTime.sparkline}
+              sparkUnit="weeks"
               ltDays={kpi?.leadTime.grossDays}
               footerLeft="End-to-end gross"
               noData={!kpi}
@@ -260,6 +270,10 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               label="VA"
               value={c ? c.vaDays.toFixed(2) : null}
               unit="days"
+              trend={c?.vaTrend ?? null}
+              inverse
+              sparkline={c?.vaMonthly}
+              sparkUnit="months"
               footerLeft="Value-added"
               noData={!kpi}
             />
@@ -270,6 +284,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               trend={c?.nnvaTrend ?? null}
               inverse
               sparkline={c?.nnvaMonthly}
+              sparkUnit="months"
               footerLeft="Non-value-added"
               noData={!kpi}
             />
@@ -277,6 +292,10 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               label="UNVA"
               value={c ? c.unvaDays.toFixed(2) : null}
               unit="days"
+              trend={c?.unvaTrend ?? null}
+              inverse
+              sparkline={c?.unvaMonthly}
+              sparkUnit="months"
               footerLeft="Unnecessary NVA"
               noData={!kpi}
             />
@@ -287,6 +306,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               trend={c?.wipTrend ?? null}
               inverse
               sparkline={c?.wipMonthly}
+              sparkUnit="months"
               footerLeft="Work in progress"
               noData={!kpi}
             />
@@ -338,6 +358,7 @@ function ProductivitySection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "
               unit="kg/manhour"
               trend={mixing?.trend ?? null}
               sparkline={mixing?.sparkline}
+              sparkUnit="weeks"
               footerLeft="Mixing stage"
               noData={!kpi || !mixing}
             />
@@ -347,6 +368,7 @@ function ProductivitySection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "
               unit="pcs/manhour"
               trend={filpac?.trend ?? null}
               sparkline={filpac?.sparkline}
+              sparkUnit="weeks"
               footerLeft="Filling & packing"
               noData={!kpi || !filpac}
             />
@@ -356,6 +378,7 @@ function ProductivitySection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "
               unit="pcs/manhour"
               trend={kpi?.productivity.e2eTrend ?? null}
               sparkline={kpi?.productivity.sparkline}
+              sparkUnit="weeks"
               footerLeft="End-to-end"
               noData={!kpi}
             />
@@ -395,6 +418,7 @@ function OutputSection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "loadin
               unit="million pcs"
               trend={kpi?.output.fgTrend ?? null}
               sparkline={kpi?.output.sparkline}
+              sparkUnit="weeks"
               footerLeft="Finished goods"
               noData={!kpi}
             />
@@ -404,6 +428,7 @@ function OutputSection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "loadin
               unit="thousand kg"
               trend={kpi?.output.bulkTrend ?? null}
               sparkline={kpi?.output.bulkSparkline}
+              sparkUnit="weeks"
               footerLeft="Bulk production"
               noData={!kpi}
             />
