@@ -51,8 +51,9 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
 
   const criticalCount = alerts.filter((a) => a.severity === "critical").length;
   const warningCount  = alerts.filter((a) => a.severity === "warning").length;
+  const atRiskCount   = riskScores.filter((s) => s.score >= 0.5).length;
 
-  if (alerts.length === 0) {
+  if (alerts.length === 0 && !riskLoading && atRiskCount === 0) {
     return (
       <div className="rounded-lg border border-[#EBEBEB] bg-white px-4 py-2.5 flex items-center gap-2 shrink-0">
         <AlertTriangle size={13} className="text-gray-300 shrink-0" />
@@ -114,27 +115,33 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
           <AlertTriangle size={14} className="text-amber-500" />
           <span className="text-xs font-semibold text-gray-700">KPI Alerts</span>
           <div className="flex gap-1.5">
-            {criticalCount > 0 && (
-              <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-semibold">
-                {criticalCount} Critical
-              </span>
+            {alerts.length === 0 ? (
+              <span className="text-[11px] text-emerald-600 font-semibold">✓ All KPIs within normal range</span>
+            ) : (
+              <>
+                {criticalCount > 0 && (
+                  <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-semibold">
+                    {criticalCount} Critical
+                  </span>
+                )}
+                {warningCount > 0 && (
+                  <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold">
+                    {warningCount} Warning
+                  </span>
+                )}
+              </>
             )}
-            {warningCount > 0 && (
-              <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold">
-                {warningCount} Warning
-              </span>
-            )}
-            {!riskLoading && riskScores.filter((s) => s.score >= 0.5).length > 0 && (
+            {!riskLoading && atRiskCount > 0 && (
               <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-semibold">
-                {riskScores.filter((s) => s.score >= 0.5).length} At-Risk PO
+                {atRiskCount} At-Risk PO
               </span>
             )}
           </div>
           {collapsed ? <ChevronDown size={14} className="text-gray-400 ml-auto" /> : <ChevronUp size={14} className="text-gray-400 ml-auto" />}
         </button>
 
-        {/* Send to Teams button */}
-        <button
+        {/* Send to Teams button — only shown when there are KPI alerts */}
+        {alerts.length > 0 && <button
           onClick={handleSendToTeams}
           disabled={sendState === "sending" || sendState === "sent"}
           title={
@@ -161,7 +168,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
             {sendState === "sent"    && "Terkirim"}
             {sendState === "error"   && "Failed"}
           </span>
-        </button>
+        </button>}
       </div>
 
       {/* Error message */}
@@ -172,7 +179,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
       )}
 
       {/* Alert list */}
-      {!collapsed && (
+      {!collapsed && alerts.length > 0 && (
         <div className="divide-y divide-gray-50">
           {alerts.map((alert) => {
             const config = SEVERITY_CONFIG[alert.severity];
