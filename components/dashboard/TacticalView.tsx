@@ -178,7 +178,7 @@ function TKpiCard({
       borderRadius: 8,
       display: "flex",
       flexDirection: "column",
-      overflow: "hidden",
+      overflow: "visible",
       fontFamily: "Lato, sans-serif",
       height: "100%",
     }}>
@@ -296,16 +296,16 @@ function LeadTimeGauge({ counts }: { counts: { onTime: number; atRisk: number; l
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+    <div
+      style={{ display: "flex", flexDirection: "column", gap: 5, position: "relative" }}
+      onMouseLeave={() => setHoveredKey(null)}
+    >
       <div style={{ fontSize: 9.5, color: "#98a2b3", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
         PO count vs {LEAD_TIME_TARGET_DAYS}-day target
       </div>
 
       {/* Stacked bar */}
-      <div
-        style={{ height: 12, borderRadius: 6, overflow: "hidden", display: "flex", cursor: "default" }}
-        onMouseLeave={() => setHoveredKey(null)}
-      >
+      <div style={{ height: 12, borderRadius: 6, overflow: "hidden", display: "flex", cursor: "default" }}>
         {segments.map(seg => {
           const pct = (seg.count / total) * 100;
           if (pct <= 0) return null;
@@ -319,17 +319,19 @@ function LeadTimeGauge({ counts }: { counts: { onTime: number; atRisk: number; l
         })}
       </div>
 
-      {/* Tooltip (inline dark pill — appears on hover, pushes layout) */}
+      {/* Floating tooltip */}
       {hoveredKey && (() => {
         const seg = segments.find(s => s.key === hoveredKey)!;
         const pct = (seg.count / total) * 100;
         return (
           <div style={{
+            position: "absolute", top: 32, left: 0, right: 0, zIndex: 30,
             background: "#1e293b", color: "white",
             borderRadius: 5, padding: "4px 8px",
             fontSize: 10.5, lineHeight: 1.35,
             fontVariantNumeric: "tabular-nums",
             display: "flex", alignItems: "center", gap: 5,
+            pointerEvents: "none",
           }}>
             <span style={{ color: seg.color, fontSize: 9 }}>●</span>
             <span style={{ fontWeight: 700 }}>{seg.label}</span>
@@ -341,18 +343,15 @@ function LeadTimeGauge({ counts }: { counts: { onTime: number; atRisk: number; l
         );
       })()}
 
-      {/* Legend */}
+      {/* Legend — PO count */}
       <div style={{ display: "flex", gap: 8, fontSize: 10.5, flexWrap: "wrap" }}>
-        {segments.map(seg => {
-          const pct = (seg.count / total) * 100;
-          return (
-            <span key={seg.key} style={{ display: "flex", alignItems: "center", gap: 3, transition: "opacity 0.12s", opacity: hoveredKey && hoveredKey !== seg.key ? 0.35 : 1 }}>
-              <span style={{ width: 7, height: 7, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
-              <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#101828" }}>{pct.toFixed(0)}%</span>
-              <span style={{ color: "#667085" }}>{seg.label}</span>
-            </span>
-          );
-        })}
+        {segments.map(seg => (
+          <span key={seg.key} style={{ display: "flex", alignItems: "center", gap: 3, transition: "opacity 0.12s", opacity: hoveredKey && hoveredKey !== seg.key ? 0.35 : 1 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#101828" }}>{seg.count.toLocaleString()}</span>
+            <span style={{ color: "#667085" }}>{seg.label}</span>
+          </span>
+        ))}
       </div>
     </div>
   );
