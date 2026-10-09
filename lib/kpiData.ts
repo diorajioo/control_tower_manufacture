@@ -26,6 +26,8 @@ import {
   getLeadTimeReleasedGross,
   getStageProductivity,
   getPlantDrivers,
+  getLeadTimeGroupProcess,
+  getLeadTimeTacticalStats,
 } from "@/lib/queries";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -124,6 +126,7 @@ async function runKPIQueries(
     ltCompRes, prevLtCompRes, ltCompMonthlyRes, ltCompWeeklyRes, ltReleasedGrossRes,
     mixingRes, prevMixingRes, mixingWeeklyRes, filpacRes, prevFilpacRes, filpacWeeklyRes,
     plantDriversRes, prevPlantDriversRes,
+    groupProcessRes, tacticalStatsRes,
   ] = await Promise.allSettled([
     getLeadTimeKPI(filters),
     getYieldKPI(filters),
@@ -163,6 +166,8 @@ async function runKPIQueries(
     // Per-plant split only means something across plants (AI one-liner causes)
     plant === "All Plant" ? getPlantDrivers(filters) : Promise.resolve(null),
     plant === "All Plant" ? getPlantDrivers(prev)    : Promise.resolve(null),
+    getLeadTimeGroupProcess(filters),
+    getLeadTimeTacticalStats(filters),
   ]);
 
   const failures = [
@@ -206,6 +211,15 @@ async function runKPIQueries(
   const ltCompMonthly    = val(ltCompMonthlyRes,     [] as { MONTH: string; VA: number; NNVA: number; UNVA: number; WIP: number }[]);
   const ltCompWeekly     = val(ltCompWeeklyRes,      [] as { WEEK: string;  VA: number; NNVA: number; UNVA: number; WIP: number }[]);
   const ltReleasedGross  = val(ltReleasedGrossRes, null as { AVG_GROSS: number | null } | null);
+  const groupProcessRows = val(groupProcessRes,    [] as { ACTIVITY: string; AVG_DAYS: number; PO_COUNT: number }[]);
+  const tacticalStats    = val(tacticalStatsRes,   { MAX_GROSS_DAYS: null as number | null, AVG_PO_STAGE_DAYS: null as number | null, PO_COUNT: 0 });
+  const groupProcessTotal = groupProcessRows.reduce((s, r) => s + (Number(r.AVG_DAYS) || 0), 0);
+  const groupProcess = groupProcessRows.map((r) => ({
+    activity: r.ACTIVITY,
+    avgDays:  Number((Number(r.AVG_DAYS) || 0).toFixed(2)),
+    poCount:  Number(r.PO_COUNT) || 0,
+    pct:      groupProcessTotal > 0 ? Number(((Number(r.AVG_DAYS) || 0) / groupProcessTotal * 100).toFixed(1)) : 0,
+  }));
 
   const avg = (arr: { OEE: number; QUALITY?: number; PERFORMANCE?: number }[], key: "OEE" | "QUALITY" | "PERFORMANCE") =>
     arr.length > 0 ? arr.reduce((s, r) => s + (r[key] ?? 0), 0) / arr.length : 0;
@@ -247,6 +261,10 @@ async function runKPIQueries(
         unvaWeekly:  ltCompWeekly.map((r) => Number((r.UNVA ?? 0).toFixed(2))),
         wipWeekly:   ltCompWeekly.map((r) => Number((r.WIP  ?? 0).toFixed(2))),
       },
+      groupProcess,
+      maxGrossDays:    tacticalStats.MAX_GROSS_DAYS != null ? Number(tacticalStats.MAX_GROSS_DAYS.toFixed(2)) : 0,
+      avgPoStageDays:  tacticalStats.AVG_PO_STAGE_DAYS != null ? Number(tacticalStats.AVG_PO_STAGE_DAYS.toFixed(2)) : 0,
+      poCount:         Number(tacticalStats.PO_COUNT) || 0,
     },
     yield: {
       bulkLossPct:   yield_.bulkLossPct,
@@ -323,7 +341,7 @@ const fetchByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runKPIQueries(plant, startDate, endDate, period);
   },
-  ["kpi-by-period-v10"],
+  ["kpi-by-period-v11"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 
@@ -331,7 +349,7 @@ const fetchByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string) => {
     return runKPIQueries(plant, startDate, endDate, undefined);
   },
-  ["kpi-by-dates-v10"],
+  ["kpi-by-dates-v11"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 

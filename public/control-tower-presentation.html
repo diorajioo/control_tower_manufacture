@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -710,6 +710,104 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
 <!-- ══════════════════════════════════
   S7R · RESULT — LEAD TIME RISK SCORE
 ══════════════════════════════════ -->
+
+<!-- PO Late Risk Prediction — formula slide (from Desktop version) -->
+<section class="slide bg-violet" id="S6b">
+<div class="W" style="gap:0">
+  <div class="ey ey-v">PO Late Risk Prediction — Live</div>
+  <div class="Ds" style="margin-bottom:6px">How the System Flags At-Risk POs</div>
+  <div class="dvd"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:4px">
+
+    <!-- LEFT: what it does + formula + disclaimer -->
+    <div style="display:flex;flex-direction:column;gap:10px">
+
+      <div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--v4);border-radius:12px;padding:14px 16px">
+        <div style="font-size:10px;font-weight:700;color:var(--v4);margin-bottom:6px;letter-spacing:.06em">WHAT IT DOES</div>
+        <div class="b" style="font-size:11.5px">Every active PO is scored against a trained <strong style="color:var(--t1)">logistic regression model</strong> that estimates the probability it will exceed the 13-day lead time target.</div>
+        <div style="display:flex;gap:20px;margin-top:10px">
+          <div style="text-align:center">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:var(--v4)">≥ 50%</div>
+            <div style="font-size:9px;color:var(--t3);margin-top:1px">flagged At-Risk</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:var(--i3)">15 min</div>
+            <div style="font-size:9px;color:var(--t3);margin-top:1px">score refresh</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:var(--em)">4</div>
+            <div style="font-size:9px;color:var(--t3);margin-top:1px">predictors</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formula box -->
+      <div style="background:#0d0c26;border:1px solid var(--bd);border-radius:12px;padding:14px 16px">
+        <div style="font-size:9.5px;font-weight:700;color:var(--t3);letter-spacing:.08em;margin-bottom:10px">THE FORMULA</div>
+        <div style="font-family:'Courier New',monospace;font-size:16px;font-weight:700;color:var(--t1);margin-bottom:6px">P(late | PO state)&nbsp;=&nbsp;σ( z )</div>
+        <div style="font-family:'Courier New',monospace;font-size:13px;color:var(--i3);margin-bottom:8px">z&nbsp;=&nbsp;Σᵢ&nbsp; wᵢ · percentile<sub style="font-size:10px">d</sub>( xᵢ )</div>
+        <div style="width:100%;height:1px;background:var(--bd);margin-bottom:8px"></div>
+        <div style="font-family:'Courier New',monospace;font-size:11px;color:var(--t3)">σ(z)&nbsp;=&nbsp;1 / (1 + e<sup style="font-size:9px">−z</sup>)&nbsp;&nbsp;—&nbsp;&nbsp;logistic / sigmoid</div>
+        <div style="font-family:'Courier New',monospace;font-size:10px;color:var(--t3);margin-top:5px">d&nbsp;=&nbsp;snap day since PO Released&nbsp; (integer days: 5, 10, 15 …)</div>
+        <div style="font-size:10px;color:var(--t3);margin-top:7px;font-style:italic;line-height:1.55">Each feature xᵢ is converted to its percentile rank vs training data at the same snap day d before entering the model — so different features remain comparable regardless of unit.</div>
+      </div>
+
+      <!-- Disclaimer -->
+      <div style="background:rgba(251,191,36,.04);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:12px 14px">
+        <div style="font-size:9.5px;font-weight:700;color:var(--am);margin-bottom:5px;letter-spacing:.04em">⚠ MODEL WILL CONTINUE TO EVOLVE</div>
+        <div class="b" style="font-size:11px;line-height:1.6">This model was trained on currently available historical data and the four predictors identified so far. As more operational data accumulates and new predictive signals are identified, the model will be retrained — additional factors may be incorporated and prediction accuracy will improve over time.</div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: feature table -->
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--v4);letter-spacing:.06em">PREDICTORS ( xᵢ ) — 4 FEATURES</div>
+
+      <div style="background:var(--sf);border:1px solid var(--bd);border-radius:12px;overflow:hidden">
+
+        <div style="display:grid;grid-template-columns:105px 1fr 1fr;background:#0d0c26;padding:8px 14px;border-bottom:1px solid var(--bd)">
+          <div style="font-size:9px;font-weight:700;color:var(--t3)">Feature</div>
+          <div style="font-size:9px;font-weight:700;color:var(--t3)">What It Measures</div>
+          <div style="font-size:9px;font-weight:700;color:var(--t3)">Intuition</div>
+        </div>
+
+        <div style="border-bottom:1px solid var(--bd);display:grid;grid-template-columns:105px 1fr 1fr;padding:11px 14px;align-items:start">
+          <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:var(--em)">SP_new</div>
+          <div class="b" style="font-size:10.5px;padding-right:10px">Share of route steps still ahead<br><span style="color:var(--t3);font-size:9px">(remaining / total expected route)</span></div>
+          <div class="b" style="font-size:10px;font-style:italic;color:var(--t3)">PO still early in process → more time to recover</div>
+        </div>
+
+        <div style="border-bottom:1px solid var(--bd);display:grid;grid-template-columns:105px 1fr 1fr;padding:11px 14px;align-items:start">
+          <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:var(--ro)">WT_cur</div>
+          <div class="b" style="font-size:10.5px;padding-right:10px">Idle hours since last activity completed<br><span style="color:var(--t3);font-size:9px">(0 if currently in-process)</span></div>
+          <div class="b" style="font-size:10px;font-style:italic;color:var(--t3)">Long idle at current stage → higher risk</div>
+        </div>
+
+        <div style="border-bottom:1px solid var(--bd);display:grid;grid-template-columns:105px 1fr 1fr;padding:11px 14px;align-items:start">
+          <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:var(--am)">PH_product</div>
+          <div class="b" style="font-size:10.5px;padding-right:10px">Shrinkage-estimated historical late rate for this product<br><span style="color:var(--t3);font-size:9px">(Bayesian-smoothed toward network average)</span></div>
+          <div class="b" style="font-size:10px;font-style:italic;color:var(--t3)">Products that historically run long tend to keep running long</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:105px 1fr 1fr;padding:11px 14px;align-items:start">
+          <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:var(--i3)">QL_new</div>
+          <div class="b" style="font-size:10.5px;padding-right:10px">Queue depth at next step ÷ estimated throughput rate<br><span style="color:var(--t3);font-size:9px">(POs waiting / starts per day at that stage)</span></div>
+          <div class="b" style="font-size:10px;font-style:italic;color:var(--t3)">Congestion ahead means the PO will wait longer</div>
+        </div>
+
+      </div>
+
+      <div style="background:#0d0c26;border:1px solid var(--bd);border-radius:8px;padding:9px 14px">
+        <div style="font-size:9.5px;color:var(--t3);line-height:1.6">Training source: <span style="color:var(--t2)">CT_MANUF_LEADTIME</span> · Model file: <span style="color:var(--t2)">data/risk-score/model.json</span><br>Retrain script: <span style="color:var(--t2)">scripts/risk-score/train.ts</span> · Threshold: score ≥ 0.50 → flagged</div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+</section>
+
 <section class="slide bg-em" id="S7R">
 <div class="W" style="gap:0">
   <div class="ey ey-em">Section 6 — Result: Lead Time Risk Score</div>

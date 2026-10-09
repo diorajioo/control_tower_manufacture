@@ -47,6 +47,10 @@ interface KPIResponse {
       vaWeekly: number[]; nnvaWeekly: number[];
       unvaWeekly: number[]; wipWeekly: number[];
     };
+    groupProcess?: { activity: string; avgDays: number; pct: number; poCount: number }[];
+    maxGrossDays?: number;
+    avgPoStageDays?: number;
+    poCount?: number;
   };
   yield: {
     bulkLossPct: number;
@@ -508,6 +512,12 @@ export default function DashboardPage() {
               stageStd={stageStd ?? []}
               stageLoading={stageLoading}
               ltBasis={ltBasis}
+              tacticalFilters={{
+                plant:     filters.plant,
+                startDate: filters.startDate,
+                endDate:   filters.endDate,
+                period:    filters.period,
+              }}
             />
           )}
         </main>

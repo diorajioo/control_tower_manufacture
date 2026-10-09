@@ -1113,3 +1113,104 @@ export async function getEtlTimestamp(): Promise<string | null> {
   `);
   return rows[0]?.LAST_ETL ?? null;
 }
+
+// Tactical Overview donut (Lead Time tab): avg days per ACTIVITY across completed POs in the period.
+export async function getLeadTimeGroupProcess(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ ACTIVITY: string; AVG_DAYS: number; PO_COUNT: number }>(`
+    SELECT ACTIVITY, AVG(net_lt) AS AVG_DAYS, COUNT(*) AS PO_COUNT
+    FROM (
+      SELECT PROCESS_ORDER_FG, ACTIVITY,
+             SUM(NET_LEADTIME) / 1440.0 AS net_lt
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ACTIVITY_TYPE = 'ACTUAL'
+        AND PO_FG_DONE_DATE IS NOT NULL
+        AND ACTIVITY <> 'ADJUST'
+        AND ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG, ACTIVITY
+    ) sub
+    GROUP BY ACTIVITY
+    ORDER BY AVG_DAYS DESC
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+}
+
+// Tactical Overview histogram (Lead Time tab): 2-day bins up to >38d, with mean/median/stddev/total.
+export async function getLeadTimeDistributionBins(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ BIN_START: number; CNT: number; MEAN_DAYS: number; MEDIAN_DAYS: number; STDDEV_DAYS: number; TOTAL_POS: number }>(`
+    WITH per_po AS (
+      SELECT PROCESS_ORDER_FG,
+        DATEDIFF('minute',
+          MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END),
+          MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END)
+        ) / 1440.0 AS gross_lt_days
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE PO_FG_DONE_DATE IS NOT NULL
+        AND ACTIVITY_TYPE = 'ACTUAL'
+        AND ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG
+      HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END) IS NOT NULL
+        AND  MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END) IS NOT NULL
+        AND  DATEDIFF('minute',
+               MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END),
+               MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END)
+             ) >= 0
+    ),
+    stats AS (
+      SELECT AVG(gross_lt_days)    AS mean_days,
+             MEDIAN(gross_lt_days) AS median_days,
+             STDDEV(gross_lt_days) AS stddev_days,
+             COUNT(*)              AS total_pos
+      FROM per_po
+    ),
+    bins AS (
+      SELECT FLOOR(LEAST(gross_lt_days, 38) / 2) * 2 AS bin_start, COUNT(*) AS cnt
+      FROM per_po
+      GROUP BY FLOOR(LEAST(gross_lt_days, 38) / 2) * 2
+    )
+    SELECT
+      b.bin_start   AS BIN_START,
+      b.cnt         AS CNT,
+      s.mean_days   AS MEAN_DAYS,
+      s.median_days AS MEDIAN_DAYS,
+      s.stddev_days AS STDDEV_DAYS,
+      s.total_pos   AS TOTAL_POS
+    FROM bins b CROSS JOIN stats s
+    ORDER BY b.bin_start
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+}
+
+// Tactical Overview gauge stats (Lead Time tab): max gross LT (gauge right end), avg PO-stage days, PO count.
+export async function getLeadTimeTacticalStats(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const rows = await executeQuery<{ MAX_GROSS_DAYS: number | null; AVG_PO_STAGE_DAYS: number | null; PO_COUNT: number }>(`
+    WITH per_po AS (
+      SELECT PROCESS_ORDER_FG,
+        DATEDIFF('minute',
+          MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END),
+          MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END)
+        ) / 1440.0 AS gross_lt_days,
+        SUM(CASE WHEN ACTIVITY = 'PO' THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS po_stage_days
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE PO_FG_DONE_DATE IS NOT NULL
+        AND ACTIVITY_TYPE = 'ACTUAL'
+        AND ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG
+      HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END) IS NOT NULL
+        AND  MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END) IS NOT NULL
+        AND  DATEDIFF('minute',
+               MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END),
+               MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END)
+             ) >= 0
+    )
+    SELECT
+      MAX(gross_lt_days)   AS MAX_GROSS_DAYS,
+      AVG(po_stage_days)   AS AVG_PO_STAGE_DAYS,
+      COUNT(*)             AS PO_COUNT
+    FROM per_po
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  return rows[0] ?? { MAX_GROSS_DAYS: null, AVG_PO_STAGE_DAYS: null, PO_COUNT: 0 };
+}

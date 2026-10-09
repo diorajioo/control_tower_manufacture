@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
-import { Lock } from "lucide-react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { Lock, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { LeadTimePlantTable, type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
 import { LeadTimeStageStdChart, type StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
+import { ResponsiveBar, type BarCustomLayerProps, type BarDatum } from "@nivo/bar";
+import { stageLabel } from "@/lib/leadTimeStages";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +27,10 @@ interface KPI {
       vaWeekly: number[]; nnvaWeekly: number[];
       unvaWeekly: number[]; wipWeekly: number[];
     };
+    groupProcess?: { activity: string; avgDays: number; pct: number; poCount: number }[];
+    maxGrossDays?: number;
+    avgPoStageDays?: number;
+    poCount?: number;
   };
   output: { fgQty: number; fgPrev?: number; bulkQty: number; bulkPrev?: number; fgTrend: number | null; bulkTrend: number | null; sparkline: number[]; bulkSparkline: number[] };
   productivity: {
@@ -35,6 +41,13 @@ interface KPI {
   yield: { bulkLossPct: number; packLossPct: number; bulkLossTrend: number | null; packLossTrend: number | null };
 }
 
+interface TacticalFilters {
+  plant: string;
+  startDate: string;
+  endDate: string;
+  period?: string;
+}
+
 interface TacticalViewProps {
   kpi: KPI | null;
   loading: boolean;
@@ -42,6 +55,7 @@ interface TacticalViewProps {
   stageStd: StageStdPoint[];
   stageLoading: boolean;
   ltBasis: "created" | "released";
+  tacticalFilters: TacticalFilters;
 }
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -126,11 +140,18 @@ interface TKpiCardProps {
   subLabel?: string;
   footerLeft?: string;
   noData?: boolean;
+  /** Render a horizontal gauge bar below the value area. Current value = numeric form of `value`. */
+  gaugeMax?: number;
+  gaugeTarget?: number;
+  gaugeCurrent?: number;
+  gaugePoCount?: number;
+  gaugePoStageLabel?: string;
 }
 
 function TKpiCard({
   label, value, unit, trend = null, inverse = false,
   sparkline, sparkUnit, ltDays, deltaAbsValue, deltaUnit, subLabel, footerLeft, noData = false,
+  gaugeMax, gaugeTarget, gaugeCurrent, gaugePoCount, gaugePoStageLabel,
 }: TKpiCardProps) {
   const resolvedKey: ToneKey =
     noData || value === null ? "neutral" :
@@ -226,7 +247,33 @@ function TKpiCard({
         </div>
       </div>
 
-      <div style={{ height: 10 }} />
+      {gaugeMax != null && gaugeMax > 0 && gaugeCurrent != null && !noData && (
+        <div style={{ padding: "4px 13px 10px" }}>
+          <LeadTimeGauge
+            max={gaugeMax}
+            target={gaugeTarget ?? LEAD_TIME_TARGET_DAYS}
+            current={gaugeCurrent}
+          />
+          {(gaugePoCount != null || gaugePoStageLabel) && (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 2 }}>
+              {gaugePoCount != null && (
+                <span style={{ fontSize: 10.5, color: "#667085", fontVariantNumeric: "tabular-nums" }}>
+                  {gaugePoCount.toLocaleString()} PO completed in period
+                </span>
+              )}
+              {gaugePoStageLabel && (
+                <span style={{ fontSize: 10.5, color: "#667085", fontVariantNumeric: "tabular-nums" }}>
+                  {gaugePoStageLabel}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!(gaugeMax != null && gaugeMax > 0 && gaugeCurrent != null && !noData) && (
+        <div style={{ height: 10 }} />
+      )}
 
       <div style={{
         borderTop: "1px solid #eceef2", padding: "6px 13px",
@@ -235,6 +282,370 @@ function TKpiCard({
       }}>
         {footerLeft ?? ""}
       </div>
+    </div>
+  );
+}
+
+// Horizontal gauge: 0 → max track with green/amber/red zones, target marker + current marker.
+function LeadTimeGauge({ max, target, current }: { max: number; target: number; current: number }) {
+  const safeMax = Math.max(max, target * 1.5, current, 1);
+  const amberEnd = Math.min(target * 1.15, safeMax);
+  const pct = (v: number) => `${Math.min(100, Math.max(0, (v / safeMax) * 100))}%`;
+  const greenPct = pct(target);
+  const amberPct = pct(amberEnd);
+  const currentPct = pct(current);
+  const targetPct = pct(target);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ position: "relative", height: 10, borderRadius: 6, overflow: "hidden", background: "#f1f3f6" }}>
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: greenPct, background: "#067647" }} />
+        <div style={{ position: "absolute", left: greenPct, top: 0, bottom: 0, width: `calc(${amberPct} - ${greenPct})`, background: "#b45309" }} />
+        <div style={{ position: "absolute", left: amberPct, top: 0, bottom: 0, right: 0, background: "#d92d20" }} />
+        <div style={{ position: "absolute", left: targetPct, top: -2, bottom: -2, width: 1, background: "#ffffff", opacity: 0.9 }} />
+        <div style={{ position: "absolute", left: `calc(${currentPct} - 1.5px)`, top: -3, bottom: -3, width: 3, background: "#101828", borderRadius: 2 }} />
+      </div>
+      <div style={{ position: "relative", height: 14, fontSize: 10, color: "#667085", fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ position: "absolute", left: 0 }}>0</span>
+        <span style={{ position: "absolute", left: targetPct, transform: "translateX(-50%)", color: "#1E4076", fontWeight: 700 }}>
+          Target {target.toFixed(0)}
+        </span>
+        <span style={{ position: "absolute", right: 0 }}>Max {safeMax.toFixed(1)}d</span>
+      </div>
+      <div style={{ fontSize: 10.5, color: "#101828", fontVariantNumeric: "tabular-nums" }}>
+        Current <span style={{ fontWeight: 700 }}>{current.toFixed(2)} days</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Donut chart (SVG, no @nivo/pie) ───────────────────────────────────────────
+
+interface DonutSegment { color: string; value: number; label: string; sub?: string }
+
+function DonutChart({ segments, size = 120 }: { segments: DonutSegment[]; size?: number }) {
+  const r = 42;
+  const cx = 50, cy = 50;
+  const circ = 2 * Math.PI * r;
+  const total = segments.reduce((s, seg) => s + Math.max(0, seg.value), 0);
+  if (total <= 0) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 100 100">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#eef0f3" strokeWidth={14} />
+      </svg>
+    );
+  }
+  let offset = 0;
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{ transform: "rotate(-90deg)" }}>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#eef0f3" strokeWidth={14} />
+      {segments.map((seg, i) => {
+        const frac = Math.max(0, seg.value) / total;
+        const dash = frac * circ;
+        const el = (
+          <circle
+            key={i}
+            cx={cx} cy={cy} r={r}
+            fill="none" stroke={seg.color} strokeWidth={14}
+            strokeDasharray={`${dash} ${circ - dash}`}
+            strokeDashoffset={-offset}
+          />
+        );
+        offset += dash;
+        return el;
+      })}
+    </svg>
+  );
+}
+
+function DonutCard({
+  title, segments, footer, loading,
+}: { title: string; segments: DonutSegment[]; footer?: string; loading?: boolean }) {
+  const total = segments.reduce((s, seg) => s + Math.max(0, seg.value), 0);
+  return (
+    <div style={{
+      background: "white", border: "1px solid #EBEBEB", borderRadius: 8,
+      padding: "11px 13px", display: "flex", flexDirection: "column",
+      height: "100%", fontFamily: "Lato, sans-serif",
+    }}>
+      <span style={{
+        fontSize: 11.5, fontWeight: 700, letterSpacing: "0.06em",
+        color: "#64748b", textTransform: "uppercase",
+      }}>
+        {title}
+      </span>
+      {loading ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 120, height: 120, borderRadius: "50%", background: "#f3f4f6" }} />
+        </div>
+      ) : total <= 0 ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a2b3", fontSize: 11 }}>
+          No data
+        </div>
+      ) : (
+        <div style={{ marginTop: 8, display: "flex", gap: 14, alignItems: "center", flex: 1 }}>
+          <div style={{ flexShrink: 0 }}>
+            <DonutChart segments={segments} size={120} />
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
+            {segments.map((seg, i) => {
+              const pct = (Math.max(0, seg.value) / total * 100);
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
+                  <span style={{ color: "#334155", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {seg.label}
+                  </span>
+                  <span style={{ color: "#101828", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                    {seg.value.toFixed(2)}d
+                  </span>
+                  <span style={{ color: "#98a2b3", fontVariantNumeric: "tabular-nums", width: 40, textAlign: "right" }}>
+                    {pct.toFixed(0)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {footer && (
+        <div style={{
+          borderTop: "1px solid #eceef2", marginTop: 10, paddingTop: 6,
+          fontSize: 11, color: "#667085",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {footer}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Histogram with normal curve + control lines ────────────────────────────────
+
+interface DistResponse {
+  bins: { binStart: number; count: number }[];
+  mean: number;
+  median: number;
+  stddev: number;
+  total: number;
+}
+
+function binLabel(start: number) {
+  if (start >= 38) return "> 38";
+  return `${start}-${start + 2}`;
+}
+
+interface HistoRow extends BarDatum {
+  bin: string;
+  binStart: number;
+  count: number;
+}
+
+function LeadTimeHistogram({ filters }: { filters: TacticalFilters }) {
+  const [data, setData] = useState<DistResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showInfo, setShowInfo] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("plant", filters.plant);
+    params.set("startDate", filters.startDate);
+    params.set("endDate", filters.endDate);
+    if (filters.period) params.set("period", filters.period);
+    setLoading(true);
+    fetch(`/api/lead-time/distribution?${params.toString()}`)
+      .then((r) => r.json())
+      .then((d: DistResponse) => setData(d))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period]);
+
+  const { rows, cumByBin, maxBin, maxBinCount } = useMemo(() => {
+    if (!data || data.bins.length === 0) {
+      return { rows: [] as HistoRow[], cumByBin: new Map<number, number>(), maxBin: 0, maxBinCount: 0 };
+    }
+    const total = data.total || data.bins.reduce((s, b) => s + b.count, 0);
+    let cum = 0;
+    const cumMap = new Map<number, number>();
+    const sorted = [...data.bins].sort((a, b) => a.binStart - b.binStart);
+    const rr: HistoRow[] = sorted.map((b) => {
+      cum += b.count;
+      cumMap.set(b.binStart, total > 0 ? (cum / total) * 100 : 0);
+      return { bin: binLabel(b.binStart), binStart: b.binStart, count: b.count };
+    });
+    let maxB = sorted[0]?.binStart ?? 0;
+    let maxC = 0;
+    for (const b of sorted) {
+      if (b.count > maxC) { maxC = b.count; maxB = b.binStart; }
+    }
+    return { rows: rr, cumByBin: cumMap, maxBin: maxB, maxBinCount: maxC };
+  }, [data]);
+
+  const mean = data?.mean ?? 0;
+  const stddev = data?.stddev ?? 0;
+  const median = data?.median ?? 0;
+  const total = data?.total ?? 0;
+
+  // KDE/normal curve + vertical mean/±1σ lines + shaded ±1σ band
+  const Overlay = ({ bars, xScale, yScale, innerWidth, innerHeight }: BarCustomLayerProps<HistoRow>) => {
+    if (!data || stddev <= 0 || bars.length === 0) return null;
+    const firstBar = bars[0];
+    const barW = firstBar.width;
+    const xForDays = (d: number) => {
+      // Each bin covers 2 days, bar center = binStart + 1 day; interpolate across bars.
+      // Use first bar as origin, each subsequent bar is +barW to the right in bandwidth terms.
+      const firstStart = (firstBar.data.data as HistoRow).binStart;
+      const unitsFromFirst = (d - (firstStart + 1)) / 2;
+      return firstBar.x + barW / 2 + unitsFromFirst * barW;
+    };
+    const clampX = (x: number) => Math.max(0, Math.min(innerWidth, x));
+    const totalRows = total || rows.reduce((s, r) => s + r.count, 0);
+    const binWidthDays = 2;
+    const scale = totalRows * binWidthDays;
+    const yForDensity = (density: number) => {
+      // expected count at this point ≈ density * scale
+      const expected = density * scale;
+      return (yScale as (v: number) => number)(expected);
+    };
+    const pdf = (x: number) => {
+      const z = (x - mean) / stddev;
+      return Math.exp(-0.5 * z * z) / (stddev * Math.sqrt(2 * Math.PI));
+    };
+    // Build path across the full x range
+    const firstStart = (firstBar.data.data as HistoRow).binStart;
+    const lastStart = (bars[bars.length - 1].data.data as HistoRow).binStart;
+    const xStartDays = firstStart;
+    const xEndDays = lastStart + 2;
+    const stepsPx = 2;
+    const pts: string[] = [];
+    for (let x = 0; x <= innerWidth; x += stepsPx) {
+      const daysPerPx = (xEndDays - xStartDays) / Math.max(1, innerWidth);
+      const d = xStartDays + x * daysPerPx;
+      const y = yForDensity(pdf(d));
+      pts.push(`${x},${y}`);
+    }
+    const curvePath = `M ${pts.join(" L ")}`;
+    const xMean = clampX(xForDays(mean));
+    const xLow = clampX(xForDays(mean - stddev));
+    const xHigh = clampX(xForDays(mean + stddev));
+    return (
+      <g style={{ pointerEvents: "none" }}>
+        <rect x={xLow} y={0} width={Math.max(0, xHigh - xLow)} height={innerHeight} fill="#fecaca" opacity={0.22} />
+        <line x1={xLow}  x2={xLow}  y1={0} y2={innerHeight} stroke="#d92d20" strokeWidth={1} strokeDasharray="4 3" />
+        <line x1={xHigh} x2={xHigh} y1={0} y2={innerHeight} stroke="#d92d20" strokeWidth={1} strokeDasharray="4 3" />
+        <line x1={xMean} x2={xMean} y1={0} y2={innerHeight} stroke="#d92d20" strokeWidth={1.5} />
+        <path d={curvePath} fill="none" stroke="#1E4076" strokeWidth={1.5} opacity={0.85} />
+      </g>
+    );
+  };
+
+  return (
+    <div className="rounded-lg border border-[#EBEBEB] bg-white p-4">
+      <div className="flex items-start justify-between mb-3 gap-3">
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead Time Distribution per PO</p>
+          <button
+            type="button"
+            onClick={() => setShowInfo((v) => !v)}
+            onBlur={() => setShowInfo(false)}
+            className="relative text-slate-400 hover:text-slate-600"
+            aria-label="info"
+          >
+            <Info size={13} strokeWidth={2} />
+            {showInfo && (
+              <span className="absolute left-5 top-0 z-10 whitespace-normal w-[240px] text-left bg-slate-800 text-white text-[11px] font-normal normal-case tracking-normal rounded-md px-2.5 py-1.5 shadow-lg">
+                Only POs completed within the selected period (PO FG Done Date is not null).
+              </span>
+            )}
+          </button>
+        </div>
+        <a href="/lead-time" className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">
+          Open detail →
+        </a>
+      </div>
+
+      {loading ? (
+        <div className="h-[280px] bg-gray-50 rounded animate-pulse" />
+      ) : rows.length === 0 ? (
+        <div className="h-[280px] flex items-center justify-center text-[11px] text-gray-400">No data for selected period</div>
+      ) : (
+        <div className="grid grid-cols-[1fr_180px] gap-4">
+          <div style={{ height: 280 }}>
+            <ResponsiveBar<HistoRow>
+              data={rows}
+              keys={["count"]}
+              indexBy="bin"
+              margin={{ top: 16, right: 12, bottom: 40, left: 44 }}
+              padding={0.12}
+              colors={() => "rgba(30,64,118,0.72)"}
+              enableLabel={false}
+              borderRadius={2}
+              axisLeft={{
+                tickSize: 0, tickPadding: 6,
+                legend: "PO count", legendPosition: "middle", legendOffset: -36,
+                format: (v) => String(v),
+              }}
+              axisBottom={{
+                tickSize: 0, tickPadding: 6,
+                legend: "End-to-end gross lead time (days)", legendPosition: "middle", legendOffset: 32,
+              }}
+              gridYValues={5}
+              theme={{
+                grid: { line: { stroke: "#eef0f3", strokeDasharray: "3 3" } },
+                axis: {
+                  ticks: { text: { fontSize: 10, fill: "#667085", fontFamily: "Lato, sans-serif" } },
+                  legend: { text: { fontSize: 10.5, fill: "#667085", fontFamily: "Lato, sans-serif", fontWeight: 700 } },
+                },
+              }}
+              layers={["grid", "axes", "bars", Overlay, "markers", "legends"]}
+              tooltip={({ data: d }) => {
+                const cum = cumByBin.get(d.binStart) ?? 0;
+                const pct = total > 0 ? (d.count / total) * 100 : 0;
+                return (
+                  <div style={{
+                    background: "rgba(15,23,42,0.95)", color: "white",
+                    padding: "6px 9px", borderRadius: 6, fontSize: 11,
+                    fontFamily: "Lato, sans-serif", lineHeight: 1.45,
+                  }}>
+                    <div style={{ fontWeight: 700 }}>{d.binStart >= 38 ? "> 38 days" : `${d.binStart}-${d.binStart + 2} days`}</div>
+                    <div style={{ fontVariantNumeric: "tabular-nums" }}>{d.count} PO ({pct.toFixed(1)}%)</div>
+                    <div style={{ fontVariantNumeric: "tabular-nums", opacity: 0.8 }}>Cumulative: {cum.toFixed(1)}%</div>
+                  </div>
+                );
+              }}
+              animate={false}
+            />
+          </div>
+          <div className="flex flex-col gap-2 border-l border-[#EBEBEB] pl-4 text-[11px]">
+            <StatRow label="PO count" value={total.toLocaleString()} />
+            <StatRow label="Mean (x̄)" value={`${mean.toFixed(2)}d`} />
+            <StatRow label="Median" value={`${median.toFixed(2)}d`} />
+            <StatRow label="Std dev (σ)" value={`${stddev.toFixed(2)}d`} />
+            <div className="border-t border-[#EBEBEB] my-1" />
+            <StatRow label="Peak bin" value={binLabel(maxBin)} />
+            <StatRow label="PO in peak" value={maxBinCount.toLocaleString()} />
+            <div className="border-t border-[#EBEBEB] my-1" />
+            <div className="flex items-center gap-2 text-[10.5px] text-slate-500">
+              <span style={{ width: 10, height: 2, background: "#d92d20" }} /> Mean
+            </div>
+            <div className="flex items-center gap-2 text-[10.5px] text-slate-500">
+              <span style={{ width: 10, height: 0, borderTop: "1px dashed #d92d20" }} /> Mean ±1σ
+            </div>
+            <div className="flex items-center gap-2 text-[10.5px] text-slate-500">
+              <span style={{ width: 10, height: 2, background: "#1E4076" }} /> Normal curve
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-slate-900 font-bold" style={{ fontVariantNumeric: "tabular-nums" }}>{value}</span>
     </div>
   );
 }
@@ -272,15 +683,62 @@ function momDelta(monthly: number[] | undefined): { abs: number | null; trend: n
   return { abs, trend };
 }
 
-function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasis }: TacticalViewProps) {
+// Fixed palette for the Group Process donut. Largest = Paragon Blue, remaining = varied hues.
+const GROUP_PROCESS_PALETTE = [
+  "#1E4076", "#4A6BA3", "#7A94C4", "#2d9a66", "#b45309",
+  "#8b5cf6", "#ec4899", "#64748b",
+];
+
+function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasis, tacticalFilters }: TacticalViewProps) {
   const c = kpi?.leadTime.composition;
+  const gross = kpi?.leadTime.grossDays;
+  const maxGross = kpi?.leadTime.maxGrossDays ?? 0;
+  const poCount = kpi?.leadTime.poCount ?? 0;
+  const avgPoStage = kpi?.leadTime.avgPoStageDays ?? 0;
+  const poStagePct = gross && gross > 0 ? (avgPoStage / gross) * 100 : 0;
+  const groupProcess = kpi?.leadTime.groupProcess ?? [];
+
+  const vanaSegments: DonutSegment[] = c ? [
+    { color: "#067647", label: "VA",   value: c.vaDays },
+    { color: "#b45309", label: "NNVA", value: c.nnvaDays },
+    { color: "#d92d20", label: "UNVA", value: c.unvaDays },
+  ] : [];
+  const vanaTotal = vanaSegments.reduce((s, seg) => s + seg.value, 0);
+  const vaPct = vanaTotal > 0 && c ? (c.vaDays   / vanaTotal) * 100 : 0;
+  const nnPct = vanaTotal > 0 && c ? (c.nnvaDays / vanaTotal) * 100 : 0;
+  const unPct = vanaTotal > 0 && c ? (c.unvaDays / vanaTotal) * 100 : 0;
+
+  const groupTop = useMemo(() => {
+    const items = [...groupProcess].sort((a, b) => b.avgDays - a.avgDays);
+    const head = items.slice(0, 7);
+    const tail = items.slice(7);
+    if (tail.length === 0) return head;
+    const otherDays = tail.reduce((s, r) => s + r.avgDays, 0);
+    return [...head, { activity: "Other", avgDays: otherDays, pct: 0, poCount: 0 }];
+  }, [groupProcess]);
+  const groupSegments: DonutSegment[] = groupTop.map((g, i) => ({
+    color: GROUP_PROCESS_PALETTE[i] ?? "#98a2b3",
+    label: g.activity === "Other" ? "Other" : stageLabel(g.activity),
+    value: g.avgDays,
+  }));
+  const groupTotal = groupSegments.reduce((s, seg) => s + seg.value, 0);
+  const groupLargest = groupSegments[0];
+  const groupLargestPct = groupLargest && groupTotal > 0 ? (groupLargest.value / groupTotal) * 100 : 0;
+
+  const nnvaFooter = c
+    ? `Largest NNVA: ${nnPct.toFixed(0)}%; UNVA ${unPct.toFixed(0)}%, VA ${vaPct.toFixed(0)}%`
+    : "";
+  const groupFooter = groupLargest
+    ? `${groupLargest.label} largest: ${groupLargest.value.toFixed(2)} days (${groupLargestPct.toFixed(0)}%)`
+    : "";
+
   return (
     <div className="flex flex-col gap-4">
       <SectionHeading title="Lead Time" />
 
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {loading ? (
-          Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
+          Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
             <TKpiCard
@@ -294,87 +752,36 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               ltDays={kpi?.leadTime.grossDays}
               footerLeft="End-to-end gross"
               noData={!kpi}
+              gaugeMax={maxGross}
+              gaugeTarget={LEAD_TIME_TARGET_DAYS}
+              gaugeCurrent={gross}
+              gaugePoCount={poCount}
+              gaugePoStageLabel={avgPoStage > 0
+                ? `PO & approval ${avgPoStage.toFixed(2)} days · ${poStagePct.toFixed(0)}% of gross`
+                : undefined}
             />
-            {(() => {
-              const va   = momDelta(c?.vaMonthly);
-              const nnva = momDelta(c?.nnvaMonthly);
-              const unva = momDelta(c?.unvaMonthly);
-              const wip  = momDelta(c?.wipMonthly);
-              return (
-                <>
-                  <TKpiCard
-                    label="VA"
-                    value={c ? c.vaDays.toFixed(2) : null}
-                    unit="days"
-                    trend={va.trend}
-                    inverse
-                    deltaAbsValue={va.abs}
-                    deltaUnit="days"
-                    subLabel="vs prior month"
-                    sparkline={c?.vaWeekly}
-                    sparkUnit="weeks"
-                    footerLeft="Value-added"
-                    noData={!kpi}
-                  />
-                  <TKpiCard
-                    label="NNVA"
-                    value={c ? c.nnvaDays.toFixed(2) : null}
-                    unit="days"
-                    trend={nnva.trend}
-                    inverse
-                    deltaAbsValue={nnva.abs}
-                    deltaUnit="days"
-                    subLabel="vs prior month"
-                    sparkline={c?.nnvaWeekly}
-                    sparkUnit="weeks"
-                    footerLeft="Non-value-added"
-                    noData={!kpi}
-                  />
-                  <TKpiCard
-                    label="UNVA"
-                    value={c ? c.unvaDays.toFixed(2) : null}
-                    unit="days"
-                    trend={unva.trend}
-                    inverse
-                    deltaAbsValue={unva.abs}
-                    deltaUnit="days"
-                    subLabel="vs prior month"
-                    sparkline={c?.unvaWeekly}
-                    sparkUnit="weeks"
-                    footerLeft="Unnecessary NVA"
-                    noData={!kpi}
-                  />
-                  <TKpiCard
-                    label="WIP"
-                    value={c ? c.wipDays.toFixed(2) : null}
-                    unit="days"
-                    trend={wip.trend}
-                    inverse
-                    deltaAbsValue={wip.abs}
-                    deltaUnit="days"
-                    subLabel="vs prior month"
-                    sparkline={c?.wipWeekly}
-                    sparkUnit="weeks"
-                    footerLeft="Work in progress"
-                    noData={!kpi}
-                  />
-                </>
-              );
-            })()}
+            <DonutCard
+              title="VA · NNVA · UNVA"
+              segments={vanaSegments}
+              footer={nnvaFooter}
+              loading={!kpi}
+            />
+            <DonutCard
+              title="Group Process"
+              segments={groupSegments}
+              footer={groupFooter}
+              loading={!kpi}
+            />
           </>
         )}
       </div>
+
+      <LeadTimeHistogram filters={tacticalFilters} />
 
       <div className="rounded-lg border border-[#EBEBEB] bg-white p-4">
         <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-3">Pareto Lead Time</p>
         <LeadTimeStageStdChart data={stageStd} loading={stageLoading} />
       </div>
-
-      <ChartPlaceholder
-        title="Lead Time Distribution per PO"
-        subtitle="Histogram of end-to-end gross lead time (days)"
-        height={200}
-      />
 
       <div className="rounded-lg border border-[#EBEBEB] bg-white overflow-hidden">
         <div className="px-4 pt-3 pb-1">
