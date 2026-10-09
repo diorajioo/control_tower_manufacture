@@ -65,7 +65,7 @@ export function LeadTimeCategoryCard({
         border: "1px solid #EBEBEB",
         borderRadius: 8,
         display: "flex",
-        overflow: "hidden",
+        overflow: "visible",
         fontFamily: "Lato, sans-serif",
       }}
     >
