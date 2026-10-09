@@ -212,7 +212,7 @@ async function runKPIQueries(
   const ltCompWeekly     = val(ltCompWeeklyRes,      [] as { WEEK: string;  VA: number; NNVA: number; UNVA: number; WIP: number }[]);
   const ltReleasedGross  = val(ltReleasedGrossRes, null as { AVG_GROSS: number | null } | null);
   const groupProcessRows = val(groupProcessRes,    [] as { ACTIVITY: string; AVG_DAYS: number; PO_COUNT: number }[]);
-  const tacticalStats    = val(tacticalStatsRes,   { MAX_GROSS_DAYS: null as number | null, AVG_PO_STAGE_DAYS: null as number | null, PO_COUNT: 0 });
+  const tacticalStats    = val(tacticalStatsRes,   { MAX_GROSS_DAYS: null as number | null, AVG_PO_STAGE_DAYS: null as number | null, PO_COUNT: 0, ON_TIME_COUNT: 0, AT_RISK_COUNT: 0, LATE_COUNT: 0 });
   const groupProcessTotal = groupProcessRows.reduce((s, r) => s + (Number(r.AVG_DAYS) || 0), 0);
   const groupProcess = groupProcessRows.map((r) => ({
     activity: r.ACTIVITY,
@@ -264,7 +264,10 @@ async function runKPIQueries(
       groupProcess,
       maxGrossDays:    tacticalStats.MAX_GROSS_DAYS != null ? Number(tacticalStats.MAX_GROSS_DAYS.toFixed(2)) : 0,
       avgPoStageDays:  tacticalStats.AVG_PO_STAGE_DAYS != null ? Number(tacticalStats.AVG_PO_STAGE_DAYS.toFixed(2)) : 0,
-      poCount:         Number(tacticalStats.PO_COUNT) || 0,
+      poCount:         Number(tacticalStats.PO_COUNT)     || 0,
+      onTimeCount:     Number(tacticalStats.ON_TIME_COUNT) || 0,
+      atRiskCount:     Number(tacticalStats.AT_RISK_COUNT) || 0,
+      lateCount:       Number(tacticalStats.LATE_COUNT)    || 0,
     },
     yield: {
       bulkLossPct:   yield_.bulkLossPct,
@@ -341,7 +344,7 @@ const fetchByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runKPIQueries(plant, startDate, endDate, period);
   },
-  ["kpi-by-period-v11"],
+  ["kpi-by-period-v12"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 
@@ -349,7 +352,7 @@ const fetchByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string) => {
     return runKPIQueries(plant, startDate, endDate, undefined);
   },
-  ["kpi-by-dates-v11"],
+  ["kpi-by-dates-v12"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 

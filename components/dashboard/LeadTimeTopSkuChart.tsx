@@ -18,7 +18,7 @@ type Category = "VA" | "NNVA" | "UNVA";
 type ViewMode = "composition" | "range";
 
 // Same entity colors as the stage chart and the VA / NNVA / Waste cards
-const CATEGORY_COLORS: Record<Category, string> = { VA: "#067647", NNVA: "#d97706", UNVA: "#d92d20" };
+const CATEGORY_COLORS: Record<Category, string> = { VA: "#067647", NNVA: "#f59e0b", UNVA: "#d92d20" };
 const CATEGORY_LABELS: Record<Category, string> = { VA: "Value-added", NNVA: "Necessary non-VA", UNVA: "Waste" };
 const RANGE_COLOR = "#b9c0cc";
 const MEAN_COLOR = "#16305C";

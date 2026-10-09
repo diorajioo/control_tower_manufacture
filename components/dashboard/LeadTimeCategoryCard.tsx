@@ -11,7 +11,7 @@ import { Info } from "lucide-react";
 
 export const CATEGORY_TONES = {
   va:     { color: "#067647" },
-  nnva:   { color: "#d97706" },
+  nnva:   { color: "#f59e0b" },
   waste:  { color: "#d92d20" },
   saving: { color: "#067647" },
 } as const;

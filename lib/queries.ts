@@ -1185,7 +1185,7 @@ export async function getLeadTimeDistributionBins(filters: QueryFilters) {
 // Tactical Overview gauge stats (Lead Time tab): max gross LT (gauge right end), avg PO-stage days, PO count.
 export async function getLeadTimeTacticalStats(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
-  const rows = await executeQuery<{ MAX_GROSS_DAYS: number | null; AVG_PO_STAGE_DAYS: number | null; PO_COUNT: number }>(`
+  const rows = await executeQuery<{ MAX_GROSS_DAYS: number | null; AVG_PO_STAGE_DAYS: number | null; PO_COUNT: number; ON_TIME_COUNT: number; AT_RISK_COUNT: number; LATE_COUNT: number }>(`
     WITH per_po AS (
       SELECT PROCESS_ORDER_FG,
         DATEDIFF('minute',
@@ -1209,8 +1209,11 @@ export async function getLeadTimeTacticalStats(filters: QueryFilters) {
     SELECT
       MAX(gross_lt_days)   AS MAX_GROSS_DAYS,
       AVG(po_stage_days)   AS AVG_PO_STAGE_DAYS,
-      COUNT(*)             AS PO_COUNT
+      COUNT(*)             AS PO_COUNT,
+      SUM(CASE WHEN gross_lt_days <= 13 THEN 1 ELSE 0 END)                               AS ON_TIME_COUNT,
+      SUM(CASE WHEN gross_lt_days > 13 AND gross_lt_days <= 13 * 1.15 THEN 1 ELSE 0 END) AS AT_RISK_COUNT,
+      SUM(CASE WHEN gross_lt_days > 13 * 1.15 THEN 1 ELSE 0 END)                         AS LATE_COUNT
     FROM per_po
   `, [...dateBinds, ...plantBinds(filters.plant)]);
-  return rows[0] ?? { MAX_GROSS_DAYS: null, AVG_PO_STAGE_DAYS: null, PO_COUNT: 0 };
+  return rows[0] ?? { MAX_GROSS_DAYS: null, AVG_PO_STAGE_DAYS: null, PO_COUNT: 0, ON_TIME_COUNT: 0, AT_RISK_COUNT: 0, LATE_COUNT: 0 };
 }

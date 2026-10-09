@@ -31,6 +31,9 @@ interface KPI {
     maxGrossDays?: number;
     avgPoStageDays?: number;
     poCount?: number;
+    onTimeCount?: number;
+    atRiskCount?: number;
+    lateCount?: number;
   };
   output: { fgQty: number; fgPrev?: number; bulkQty: number; bulkPrev?: number; fgTrend: number | null; bulkTrend: number | null; sparkline: number[]; bulkSparkline: number[] };
   productivity: {
@@ -140,10 +143,8 @@ interface TKpiCardProps {
   subLabel?: string;
   footerLeft?: string;
   noData?: boolean;
-  /** Render a horizontal gauge bar below the value area. Current value = numeric form of `value`. */
-  gaugeMax?: number;
-  gaugeTarget?: number;
-  gaugeCurrent?: number;
+  /** Stacked PO-count gauge: on-time / at-risk / late vs 13-day target. */
+  gaugeCounts?: { onTime: number; atRisk: number; late: number } | null;
   gaugePoCount?: number;
   gaugePoStageLabel?: string;
 }
@@ -151,7 +152,7 @@ interface TKpiCardProps {
 function TKpiCard({
   label, value, unit, trend = null, inverse = false,
   sparkline, sparkUnit, ltDays, deltaAbsValue, deltaUnit, subLabel, footerLeft, noData = false,
-  gaugeMax, gaugeTarget, gaugeCurrent, gaugePoCount, gaugePoStageLabel,
+  gaugeCounts, gaugePoCount, gaugePoStageLabel,
 }: TKpiCardProps) {
   const resolvedKey: ToneKey =
     noData || value === null ? "neutral" :
@@ -247,13 +248,9 @@ function TKpiCard({
         </div>
       </div>
 
-      {gaugeMax != null && gaugeMax > 0 && gaugeCurrent != null && !noData && (
+      {gaugeCounts != null && !noData && (
         <div style={{ padding: "4px 13px 10px" }}>
-          <LeadTimeGauge
-            max={gaugeMax}
-            target={gaugeTarget ?? LEAD_TIME_TARGET_DAYS}
-            current={gaugeCurrent}
-          />
+          <LeadTimeGauge counts={gaugeCounts} />
           {(gaugePoCount != null || gaugePoStageLabel) && (
             <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 2 }}>
               {gaugePoCount != null && (
@@ -271,7 +268,7 @@ function TKpiCard({
         </div>
       )}
 
-      {!(gaugeMax != null && gaugeMax > 0 && gaugeCurrent != null && !noData) && (
+      {!(gaugeCounts != null && !noData) && (
         <div style={{ height: 10 }} />
       )}
 
@@ -286,33 +283,76 @@ function TKpiCard({
   );
 }
 
-// Horizontal gauge: 0 → max track with green/amber/red zones, target marker + current marker.
-function LeadTimeGauge({ max, target, current }: { max: number; target: number; current: number }) {
-  const safeMax = Math.max(max, target * 1.5, current, 1);
-  const amberEnd = Math.min(target * 1.15, safeMax);
-  const pct = (v: number) => `${Math.min(100, Math.max(0, (v / safeMax) * 100))}%`;
-  const greenPct = pct(target);
-  const amberPct = pct(amberEnd);
-  const currentPct = pct(current);
-  const targetPct = pct(target);
+// Stacked PO-count gauge: shows how many completed POs are on-time / at-risk / late vs 13-day target.
+function LeadTimeGauge({ counts }: { counts: { onTime: number; atRisk: number; late: number } }) {
+  const [hoveredKey, setHoveredKey] = useState<"onTime" | "atRisk" | "late" | null>(null);
+  const total = counts.onTime + counts.atRisk + counts.late;
+  if (total === 0) return null;
+
+  const segments = [
+    { key: "onTime" as const, color: "#067647", label: "On-time",  detail: `≤ ${LEAD_TIME_TARGET_DAYS}d`,                               count: counts.onTime  },
+    { key: "atRisk" as const, color: "#f59e0b", label: "At risk",  detail: `${LEAD_TIME_TARGET_DAYS}–${(LEAD_TIME_TARGET_DAYS * 1.15).toFixed(1)}d`, count: counts.atRisk  },
+    { key: "late"   as const, color: "#d92d20", label: "Late",     detail: `> ${(LEAD_TIME_TARGET_DAYS * 1.15).toFixed(1)}d`,            count: counts.late    },
+  ];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <div style={{ position: "relative", height: 10, borderRadius: 6, overflow: "hidden", background: "#f1f3f6" }}>
-        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: greenPct, background: "#067647" }} />
-        <div style={{ position: "absolute", left: greenPct, top: 0, bottom: 0, width: `calc(${amberPct} - ${greenPct})`, background: "#b45309" }} />
-        <div style={{ position: "absolute", left: amberPct, top: 0, bottom: 0, right: 0, background: "#d92d20" }} />
-        <div style={{ position: "absolute", left: targetPct, top: -2, bottom: -2, width: 1, background: "#ffffff", opacity: 0.9 }} />
-        <div style={{ position: "absolute", left: `calc(${currentPct} - 1.5px)`, top: -3, bottom: -3, width: 3, background: "#101828", borderRadius: 2 }} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <div style={{ fontSize: 9.5, color: "#98a2b3", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        PO count vs {LEAD_TIME_TARGET_DAYS}-day target
       </div>
-      <div style={{ position: "relative", height: 14, fontSize: 10, color: "#667085", fontVariantNumeric: "tabular-nums" }}>
-        <span style={{ position: "absolute", left: 0 }}>0</span>
-        <span style={{ position: "absolute", left: targetPct, transform: "translateX(-50%)", color: "#1E4076", fontWeight: 700 }}>
-          Target {target.toFixed(0)}
-        </span>
-        <span style={{ position: "absolute", right: 0 }}>Max {safeMax.toFixed(1)}d</span>
+
+      {/* Stacked bar */}
+      <div
+        style={{ height: 12, borderRadius: 6, overflow: "hidden", display: "flex", cursor: "default" }}
+        onMouseLeave={() => setHoveredKey(null)}
+      >
+        {segments.map(seg => {
+          const pct = (seg.count / total) * 100;
+          if (pct <= 0) return null;
+          return (
+            <div
+              key={seg.key}
+              style={{ height: "100%", width: `${pct}%`, background: seg.color, transition: "opacity 0.12s", opacity: hoveredKey && hoveredKey !== seg.key ? 0.35 : 1 }}
+              onMouseEnter={() => setHoveredKey(seg.key)}
+            />
+          );
+        })}
       </div>
-      <div style={{ fontSize: 10.5, color: "#101828", fontVariantNumeric: "tabular-nums" }}>
-        Current <span style={{ fontWeight: 700 }}>{current.toFixed(2)} days</span>
+
+      {/* Tooltip (inline dark pill — appears on hover, pushes layout) */}
+      {hoveredKey && (() => {
+        const seg = segments.find(s => s.key === hoveredKey)!;
+        const pct = (seg.count / total) * 100;
+        return (
+          <div style={{
+            background: "#1e293b", color: "white",
+            borderRadius: 5, padding: "4px 8px",
+            fontSize: 10.5, lineHeight: 1.35,
+            fontVariantNumeric: "tabular-nums",
+            display: "flex", alignItems: "center", gap: 5,
+          }}>
+            <span style={{ color: seg.color, fontSize: 9 }}>●</span>
+            <span style={{ fontWeight: 700 }}>{seg.label}</span>
+            <span style={{ color: "#94a3b8", fontSize: 10 }}>{seg.detail}</span>
+            <span style={{ marginLeft: "auto", fontWeight: 700 }}>
+              {seg.count.toLocaleString()} PO · {pct.toFixed(1)}%
+            </span>
+          </div>
+        );
+      })()}
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 8, fontSize: 10.5, flexWrap: "wrap" }}>
+        {segments.map(seg => {
+          const pct = (seg.count / total) * 100;
+          return (
+            <span key={seg.key} style={{ display: "flex", alignItems: "center", gap: 3, transition: "opacity 0.12s", opacity: hoveredKey && hoveredKey !== seg.key ? 0.35 : 1 }}>
+              <span style={{ width: 7, height: 7, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
+              <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#101828" }}>{pct.toFixed(0)}%</span>
+              <span style={{ color: "#667085" }}>{seg.label}</span>
+            </span>
+          );
+        })}
       </div>
     </div>
   );
@@ -700,7 +740,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
 
   const vanaSegments: DonutSegment[] = c ? [
     { color: "#067647", label: "VA",   value: c.vaDays },
-    { color: "#b45309", label: "NNVA", value: c.nnvaDays },
+    { color: "#f59e0b", label: "NNVA", value: c.nnvaDays },
     { color: "#d92d20", label: "UNVA", value: c.unvaDays },
   ] : [];
   const vanaTotal = vanaSegments.reduce((s, seg) => s + seg.value, 0);
@@ -752,9 +792,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
               ltDays={kpi?.leadTime.grossDays}
               footerLeft="End-to-end gross"
               noData={!kpi}
-              gaugeMax={maxGross}
-              gaugeTarget={LEAD_TIME_TARGET_DAYS}
-              gaugeCurrent={gross}
+              gaugeCounts={kpi && poCount > 0 ? { onTime: kpi.leadTime.onTimeCount ?? 0, atRisk: kpi.leadTime.atRiskCount ?? 0, late: kpi.leadTime.lateCount ?? 0 } : null}
               gaugePoCount={poCount}
               gaugePoStageLabel={avgPoStage > 0
                 ? `PO & approval ${avgPoStage.toFixed(2)} days · ${poStagePct.toFixed(0)}% of gross`

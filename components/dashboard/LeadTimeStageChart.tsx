@@ -20,7 +20,7 @@ type ViewMode = "stage" | "stageWip";
 // Same entity colors as the VA / NNVA / Waste cards above (LeadTimeCategoryCard)
 const CATEGORY_COLORS: Record<Category, string> = {
   VA:   "#067647",
-  NNVA: "#d97706",
+  NNVA: "#f59e0b",
   UNVA: "#d92d20",
 };
 const CATEGORY_LABELS: Record<Category, string> = { VA: "VA", NNVA: "NNVA", UNVA: "UNVA" };
