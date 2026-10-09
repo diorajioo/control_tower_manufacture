@@ -6,10 +6,12 @@ import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { LeadTimePlantTable, type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
-import { LeadTimeStageStdChart, type StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
+import type { StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
+import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { LINE_THEME, LineTooltip } from "@/components/charts/StandardLine";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 import { ResponsiveBar, type BarCustomLayerProps, type BarDatum } from "@nivo/bar";
-import { stageLabel } from "@/lib/leadTimeStages";
+import { STAGE_ORDER, stageLabel } from "@/lib/leadTimeStages";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -533,53 +535,64 @@ function LeadTimeHistogram({ filters }: { filters: TacticalFilters }) {
   const total = data?.total ?? 0;
 
   // KDE/normal curve + vertical mean/±1σ lines + shaded ±1σ band
-  const Overlay = ({ bars, xScale, yScale, innerWidth, innerHeight }: BarCustomLayerProps<HistoRow>) => {
+  const Overlay = ({ bars, yScale, innerHeight }: BarCustomLayerProps<HistoRow>) => {
     if (!data || stddev <= 0 || bars.length === 0) return null;
+
+    // Ground all x-coordinates in actual nivo pixel positions to avoid outer-padding drift.
     const firstBar = bars[0];
-    const barW = firstBar.width;
-    const xForDays = (d: number) => {
-      // Each bin covers 2 days, bar center = binStart + 1 day; interpolate across bars.
-      // Use first bar as origin, each subsequent bar is +barW to the right in bandwidth terms.
-      const firstStart = (firstBar.data.data as HistoRow).binStart;
-      const unitsFromFirst = (d - (firstStart + 1)) / 2;
-      return firstBar.x + barW / 2 + unitsFromFirst * barW;
-    };
-    const clampX = (x: number) => Math.max(0, Math.min(innerWidth, x));
+    const lastBar = bars[bars.length - 1];
+    const pixelLeft = firstBar.x;
+    const pixelRight = lastBar.x + lastBar.width;
+    const dayLeft = (firstBar.data.data as HistoRow).binStart ?? 0;
+    const dayRight = ((lastBar.data.data as HistoRow).binStart ?? 38) + 2;
+    const dayRange = dayRight - dayLeft || 1;
+    const pixelRange = pixelRight - pixelLeft || 1;
+
+    const xForDay = (d: number) => pixelLeft + ((d - dayLeft) / dayRange) * pixelRange;
+    const clampX = (x: number) => Math.max(pixelLeft, Math.min(pixelRight, x));
+
     const totalRows = total || rows.reduce((s, r) => s + r.count, 0);
-    const binWidthDays = 2;
-    const scale = totalRows * binWidthDays;
-    const yForDensity = (density: number) => {
-      // expected count at this point ≈ density * scale
-      const expected = density * scale;
-      return (yScale as (v: number) => number)(expected);
-    };
-    const pdf = (x: number) => {
-      const z = (x - mean) / stddev;
+    const scale = totalRows * 2; // 2-day bin width
+    const yForDensity = (density: number) => (yScale as (v: number) => number)(density * scale);
+    const pdf = (d: number) => {
+      const z = (d - mean) / stddev;
       return Math.exp(-0.5 * z * z) / (stddev * Math.sqrt(2 * Math.PI));
     };
-    // Build path across the full x range
-    const firstStart = (firstBar.data.data as HistoRow).binStart;
-    const lastStart = (bars[bars.length - 1].data.data as HistoRow).binStart;
-    const xStartDays = firstStart;
-    const xEndDays = lastStart + 2;
+
+    // Build curve path across real bar pixel span
     const stepsPx = 2;
     const pts: string[] = [];
-    for (let x = 0; x <= innerWidth; x += stepsPx) {
-      const daysPerPx = (xEndDays - xStartDays) / Math.max(1, innerWidth);
-      const d = xStartDays + x * daysPerPx;
-      const y = yForDensity(pdf(d));
-      pts.push(`${x},${y}`);
+    for (let px = pixelLeft; px <= pixelRight; px += stepsPx) {
+      const d = dayLeft + ((px - pixelLeft) / pixelRange) * dayRange;
+      pts.push(`${px.toFixed(1)},${yForDensity(pdf(d)).toFixed(1)}`);
     }
     const curvePath = `M ${pts.join(" L ")}`;
-    const xMean = clampX(xForDays(mean));
-    const xLow = clampX(xForDays(mean - stddev));
-    const xHigh = clampX(xForDays(mean + stddev));
+
+    const xMean = clampX(xForDay(mean));
+    const xLow  = clampX(xForDay(mean - stddev));
+    const xHigh = clampX(xForDay(mean + stddev));
+
+    const labelStyle: React.CSSProperties = {
+      fontSize: 9.5, fontFamily: "Lato, sans-serif", fontWeight: 700,
+      fill: "#d92d20", dominantBaseline: "hanging",
+    };
+
     return (
       <g style={{ pointerEvents: "none" }}>
         <rect x={xLow} y={0} width={Math.max(0, xHigh - xLow)} height={innerHeight} fill="#fecaca" opacity={0.22} />
-        <line x1={xLow}  x2={xLow}  y1={0} y2={innerHeight} stroke="#d92d20" strokeWidth={1} strokeDasharray="4 3" />
-        <line x1={xHigh} x2={xHigh} y1={0} y2={innerHeight} stroke="#d92d20" strokeWidth={1} strokeDasharray="4 3" />
-        <line x1={xMean} x2={xMean} y1={0} y2={innerHeight} stroke="#d92d20" strokeWidth={1.5} />
+
+        {/* −1σ */}
+        <text x={xLow} y={2} textAnchor="middle" style={labelStyle}>−1σ</text>
+        <line x1={xLow} x2={xLow} y1={14} y2={innerHeight} stroke="#d92d20" strokeWidth={1} strokeDasharray="4 3" />
+
+        {/* +1σ */}
+        <text x={xHigh} y={2} textAnchor="middle" style={labelStyle}>+1σ</text>
+        <line x1={xHigh} x2={xHigh} y1={14} y2={innerHeight} stroke="#d92d20" strokeWidth={1} strokeDasharray="4 3" />
+
+        {/* Mean */}
+        <text x={xMean} y={2} textAnchor="middle" style={labelStyle}>x̄ {mean.toFixed(1)}</text>
+        <line x1={xMean} x2={xMean} y1={14} y2={innerHeight} stroke="#d92d20" strokeWidth={1.5} />
+
         <path d={curvePath} fill="none" stroke="#1E4076" strokeWidth={1.5} opacity={0.85} />
       </g>
     );
@@ -683,6 +696,263 @@ function StatRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-3">
       <span className="text-slate-500">{label}</span>
       <span className="text-slate-900 font-bold" style={{ fontVariantNumeric: "tabular-nums" }}>{value}</span>
+    </div>
+  );
+}
+
+// ── Pareto Lead Time chart (Tactical) ─────────────────────────────────────────
+// Replaces LeadTimeStageStdChart. Fetches /api/lead-time/charts (stages key).
+// Toggle 1: Group Process (POSITION/attached) vs Process (individual activity/stage).
+// Toggle 2: Pareto (desc by total) vs Sequence (STAGE_ORDER).
+
+type ParetoStageData = { stage: string; activity: string; activityId: number; attached: string; category: "VA" | "NNVA" | "UNVA"; days: number };
+
+interface ParetoRow extends BarDatum {
+  stage: string;
+  label: string;
+  VA: number; NNVA: number; UNVA: number;
+  total: number;
+  cumPct: number;
+}
+
+const PARETO_CAT_COLORS = { VA: "#067647", NNVA: "#f59e0b", UNVA: "#d92d20" } as const;
+const PARETO_CUMUL_COLOR = "#16305C";
+const PARETO_STD_COLOR = "#101828";
+const PARETO_MARGIN = { top: 10, right: 48, bottom: 40, left: 40 };
+
+const paretoSeq = (stage: string) => {
+  if (stage === "WIP") return STAGE_ORDER.length + 1;
+  const i = (STAGE_ORDER as readonly string[]).indexOf(stage);
+  return i === -1 ? STAGE_ORDER.length : i;
+};
+
+function TacticalParetoChart({
+  filters, stageStd, stageLoading,
+}: { filters: TacticalFilters; stageStd: StageStdPoint[]; stageLoading: boolean }) {
+  const [rawStages, setRawStages] = useState<ParetoStageData[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sort, setSort] = useState<"pareto" | "sequence">("pareto");
+  const [group, setGroup] = useState<"group" | "process">("group");
+  const [cumHover, setCumHover] = useState<{ row: ParetoRow; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate });
+    if (filters.period) params.set("period", filters.period);
+    setLoading(true);
+    fetch(`/api/lead-time/charts?${params}`)
+      .then(r => r.json())
+      .then(d => setRawStages(d.stages ?? null))
+      .catch(() => setRawStages(null))
+      .finally(() => setLoading(false));
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period]);
+
+  const stdMap = useMemo(() => new Map(stageStd.map(s => [s.stage, s.std])), [stageStd]);
+
+  const rows = useMemo((): ParetoRow[] => {
+    const src = rawStages ?? [];
+
+    // MIN ACTIVITY_ID per activity code — used as sequence key in Process+Seq mode
+    const activitySeq = new Map<string, number>();
+    for (const r of src) {
+      const cur = activitySeq.get(r.activity) ?? Infinity;
+      if (r.activityId < cur) activitySeq.set(r.activity, r.activityId);
+    }
+
+    const byKey = new Map<string, Record<"VA" | "NNVA" | "UNVA", number>>();
+    for (const r of src) {
+      const key = group === "group" ? r.attached : r.activity;
+      if (!byKey.has(key)) byKey.set(key, { VA: 0, NNVA: 0, UNVA: 0 });
+      byKey.get(key)![r.category] += r.days;
+    }
+    const list: ParetoRow[] = Array.from(byKey.entries())
+      .map(([stage, v]) => ({
+        stage, label: stageLabel(stage),
+        VA: v.VA, NNVA: v.NNVA, UNVA: v.UNVA,
+        total: v.VA + v.NNVA + v.UNVA, cumPct: 0,
+      }))
+      .filter(r => r.total > 0.005);
+
+    list.sort(sort === "pareto"
+      ? (a, b) => b.total - a.total
+      : group === "group"
+        ? (a, b) => paretoSeq(a.stage) - paretoSeq(b.stage)
+        : (a, b) => (activitySeq.get(a.stage) ?? 9999) - (activitySeq.get(b.stage) ?? 9999));
+
+    const grand = list.reduce((s, r) => s + r.total, 0);
+    let run = 0;
+    for (const r of list) { run += r.total; r.cumPct = grand > 0 ? (run / grand) * 100 : 0; }
+    return list;
+  }, [rawStages, group, sort]);
+
+  const CumulativeLayer = useCallback(({ bars, innerWidth, innerHeight }: BarCustomLayerProps<ParetoRow>) => {
+    const centers = new Map<string, number>();
+    for (const b of bars) centers.set(String(b.data.indexValue), b.x + b.width / 2);
+    const pts = rows
+      .map(r => ({ row: r, x: centers.get(r.label), y: innerHeight * (1 - r.cumPct / 100) }))
+      .filter((p): p is { row: ParetoRow; x: number; y: number } => p.x !== undefined);
+    return (
+      <g style={{ pointerEvents: "none" }}>
+        {[0, 25, 50, 75, 100].map(t => (
+          <text key={t} x={innerWidth + 8} y={innerHeight * (1 - t / 100)} dominantBaseline="middle"
+            style={{ fontSize: 10, fill: "#a0a6b1", fontFamily: "inherit" }}>{t}%</text>
+        ))}
+        {pts.length > 1 && (
+          <polyline points={pts.map(p => `${p.x},${p.y}`).join(" ")}
+            fill="none" stroke={PARETO_CUMUL_COLOR} strokeWidth={1.75} strokeLinejoin="round" />
+        )}
+        {pts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y}
+            r={cumHover?.row.label === p.row.label ? 4.5 : 3.5}
+            fill="white" stroke={PARETO_CUMUL_COLOR} strokeWidth={1.75} />
+        ))}
+        {pts.map((p, i) => (
+          <circle key={`h${i}`} cx={p.x} cy={p.y} r={9} fill="transparent"
+            style={{ pointerEvents: "all", cursor: "default" }}
+            onMouseEnter={() => setCumHover(p)}
+            onMouseLeave={() => setCumHover(null)} />
+        ))}
+      </g>
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, cumHover]);
+
+  const StdLayer = useCallback(({ bars, yScale }: BarCustomLayerProps<ParetoRow>) => {
+    const y = yScale as (v: number) => number;
+    const firstByStage = new Map<string, typeof bars[0]>();
+    for (const b of bars) { if (!firstByStage.has(b.data.data.stage)) firstByStage.set(b.data.data.stage, b); }
+    return (
+      <g style={{ pointerEvents: "none" }}>
+        {Array.from(firstByStage.values()).map(b => {
+          const std = stdMap.get(b.data.data.stage) ?? 0;
+          if (std <= 0) return null;
+          return (
+            <circle key={b.data.data.stage} cx={b.x + b.width / 2} cy={y(std)} r={3.5}
+              fill={PARETO_STD_COLOR} stroke="white" strokeWidth={1} />
+          );
+        })}
+      </g>
+    );
+  }, [stdMap]);
+
+  const isLoading = loading || stageLoading;
+  const maxTotal = rows.reduce((m, r) => Math.max(m, r.total), 0);
+  const yTicks = [0, 0.5, 1, 2, 5, 10, 20, 50, 100].filter(t => t <= maxTotal * 1.1);
+  const hasStd = stageStd.some(s => s.std > 0);
+
+  return (
+    <div className="rounded-lg border border-[#EBEBEB] bg-white p-4">
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Pareto Lead Time</p>
+          <a href="/lead-time" className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">Buka detail →</a>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <SegmentedToggle<"group" | "process">
+            options={[{ key: "group", label: "Group Process" }, { key: "process", label: "Process" }]}
+            value={group}
+            onChange={setGroup}
+          />
+          <SegmentedToggle<"pareto" | "sequence">
+            options={[{ key: "pareto", label: "Par" }, { key: "sequence", label: "Seq" }]}
+            value={sort}
+            onChange={setSort}
+          />
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="h-[280px] bg-gray-50 rounded animate-pulse" />
+      ) : rows.length === 0 ? (
+        <div className="h-[280px] flex items-center justify-center text-[11px] text-gray-400">No data for selected period</div>
+      ) : (
+        <div style={{ height: 280, position: "relative" }}>
+          <ResponsiveBar<ParetoRow>
+            data={rows}
+            keys={["VA", "NNVA", "UNVA"]}
+            indexBy="label"
+            theme={LINE_THEME}
+            margin={PARETO_MARGIN}
+            padding={0.32}
+            groupMode="stacked"
+            colors={({ id }) => PARETO_CAT_COLORS[id as keyof typeof PARETO_CAT_COLORS]}
+            borderRadius={2}
+            enableLabel={false}
+            enableGridX={false}
+            valueScale={{ type: "symlog", constant: 1 }}
+            gridYValues={yTicks}
+            axisLeft={{ tickSize: 0, tickPadding: 8, tickValues: yTicks, format: (v) => Number(v).toFixed(1) }}
+            axisBottom={{
+              tickSize: 0,
+              renderTick: (t) => (
+                <g transform={`translate(${t.x},${t.y + 14})`}>
+                  <text textAnchor="middle" dominantBaseline="middle"
+                    style={{ fontSize: 10.5, fill: "#101828", fontFamily: "inherit" }}>
+                    {String(t.value)}
+                  </text>
+                </g>
+              ),
+            }}
+            layers={["grid", "axes", "bars", StdLayer, CumulativeLayer]}
+            tooltip={({ id, data: d }) => {
+              const std = stdMap.get(d.stage) ?? 0;
+              return (
+                <LineTooltip
+                  title={d.label}
+                  subtitle={d.stage}
+                  rows={[
+                    { label: "VA",   color: PARETO_CAT_COLORS.VA,   value: Number(d.VA).toFixed(2),   unit: "days", strong: id === "VA"   },
+                    { label: "NNVA", color: PARETO_CAT_COLORS.NNVA, value: Number(d.NNVA).toFixed(2), unit: "days", strong: id === "NNVA" },
+                    { label: "UNVA", color: PARETO_CAT_COLORS.UNVA, value: Number(d.UNVA).toFixed(2), unit: "days", strong: id === "UNVA" },
+                    ...(std > 0 ? [{ label: "Standard", color: PARETO_STD_COLOR, value: std.toFixed(2), unit: "days" }] : []),
+                  ]}
+                  footer={{ label: "Total · cumulative", value: `${d.total.toFixed(2)} days · ${Math.round(d.cumPct)}%` }}
+                />
+              );
+            }}
+            animate={false}
+            role="img"
+            ariaLabel="Pareto lead time per stage, stacked by VA, NNVA and UNVA"
+          />
+          {cumHover && (
+            <div style={{
+              position: "absolute", pointerEvents: "none", zIndex: 10,
+              left: PARETO_MARGIN.left + cumHover.x,
+              top: PARETO_MARGIN.top + cumHover.y,
+              transform: "translate(-50%, calc(-100% - 12px))",
+            }}>
+              <LineTooltip
+                title={stageLabel(cumHover.row.stage)}
+                subtitle={cumHover.row.stage}
+                rows={[
+                  { label: "Cumulative", color: PARETO_CUMUL_COLOR, value: `${Math.round(cumHover.row.cumPct)}%` },
+                  { label: "Total", value: cumHover.row.total.toFixed(2), unit: "days" },
+                ]}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 mt-2">
+          <span className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
+            <span className="w-2.5 h-2.5 rounded-full border-[1.75px] bg-white" style={{ borderColor: PARETO_CUMUL_COLOR }} />
+            Cumulative
+          </span>
+          {(["VA", "NNVA", "UNVA"] as const).map(k => (
+            <span key={k} className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: PARETO_CAT_COLORS[k] }} />
+              {k}
+            </span>
+          ))}
+          {hasStd && (
+            <span className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
+              <span className="w-2 h-2 rounded-full" style={{ background: PARETO_STD_COLOR }} />
+              Standard
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -813,10 +1083,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
 
       <LeadTimeHistogram filters={tacticalFilters} />
 
-      <div className="rounded-lg border border-[#EBEBEB] bg-white p-4">
-        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-3">Pareto Lead Time</p>
-        <LeadTimeStageStdChart data={stageStd} loading={stageLoading} />
-      </div>
+      <TacticalParetoChart filters={tacticalFilters} stageStd={stageStd} stageLoading={stageLoading} />
 
       <div className="rounded-lg border border-[#EBEBEB] bg-white overflow-hidden">
         <div className="px-4 pt-3 pb-1">

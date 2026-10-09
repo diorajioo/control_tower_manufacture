@@ -10,7 +10,8 @@
       "design-strategic-mockup.html",
       "app/lead-time/page.tsx",
       "design-minimalist-mockup.html",
-      "components/dashboard/OutputKPICard.tsx"
+      "components/dashboard/OutputKPICard.tsx",
+      "public/control-tower-presentation.html"
     ],
     "ignoreValues": [
       {

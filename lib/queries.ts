@@ -244,9 +244,9 @@ export async function getLeadTimeWeeklyByPosition(filters: QueryFilters, grain?:
 // so the chart can show WIP either as its own bar or folded into the stage it follows.
 export async function getLeadTimeByStageCategory(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
-  return executeQuery<{ STAGE: string; ATTACHED_STAGE: string; CATEGORY: string; DAYS: number }>(`
+  return executeQuery<{ STAGE: string; ACTIVITY: string; MIN_ACTIVITY_ID: number; ATTACHED_STAGE: string; CATEGORY: string; DAYS: number }>(`
     WITH base AS (
-      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_CATEGORY, NET_LEADTIME
+      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_ID, ACTIVITY_CATEGORY, NET_LEADTIME
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
       WHERE ${datePred}
         AND POSITION IS NOT NULL
@@ -260,7 +260,9 @@ export async function getLeadTimeByStageCategory(filters: QueryFilters) {
     ),
     po AS (SELECT COUNT(DISTINCT PROCESS_ORDER_FG) AS N FROM base)
     SELECT
-      b.POSITION AS STAGE,
+      b.POSITION  AS STAGE,
+      b.ACTIVITY  AS ACTIVITY,
+      MIN(b.ACTIVITY_ID) AS MIN_ACTIVITY_ID,
       CASE WHEN b.POSITION = 'WIP' THEN COALESCE(ap.POSITION, 'WIP') ELSE b.POSITION END AS ATTACHED_STAGE,
       b.ACTIVITY_CATEGORY AS CATEGORY,
       SUM(b.NET_LEADTIME) / 1440.0 / NULLIF(MAX(po.N), 0) AS DAYS
@@ -269,7 +271,7 @@ export async function getLeadTimeByStageCategory(filters: QueryFilters) {
       ON b.POSITION = 'WIP' AND ap.ACTIVITY = REGEXP_REPLACE(b.ACTIVITY, '^WIP AFTER ', '')
     CROSS JOIN po
     WHERE b.ACTIVITY_CATEGORY IN ('VA', 'NNVA', 'UNVA')
-    GROUP BY 1, 2, 3
+    GROUP BY b.POSITION, b.ACTIVITY, ATTACHED_STAGE, b.ACTIVITY_CATEGORY
   `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 

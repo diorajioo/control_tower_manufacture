@@ -16,8 +16,8 @@ export interface LeadTimeChartData {
     positions: { week: string; position: string; days: number }[];
   };
   skus: { code: string; name: string; poCount: number; days: number }[];
-  /** Per stage (POSITION) × category, days per PO; WIP rows carry the stage they follow in `attached` */
-  stages?: { stage: string; attached: string; category: "VA" | "NNVA" | "UNVA"; days: number }[];
+  /** Per stage (POSITION) × activity × category, days per PO; WIP rows carry the stage they follow in `attached` */
+  stages?: { stage: string; activity: string; activityId: number; attached: string; category: "VA" | "NNVA" | "UNVA"; days: number }[];
   /** Top 10 SKU (≥5 POs) by average gross lead time; p10 / p90 = percentiles of gross days per PO */
   topSkus?: { code: string; name: string; poCount: number; avg: number; p10: number; p90: number; va: number; nnva: number; unva: number }[];
 }

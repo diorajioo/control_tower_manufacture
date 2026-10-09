@@ -41,10 +41,12 @@ async function runChartQueries(plant: string, startDate: string, endDate: string
       positions: byPos.map((r) => ({ week: week(r.WEEK), position: r.POSITION, days: Number((r.AVG_DAYS ?? 0).toFixed(2)) })),
     },
     stages: byStage.map((r) => ({
-      stage:    r.STAGE,
-      attached: r.ATTACHED_STAGE,
-      category: r.CATEGORY as "VA" | "NNVA" | "UNVA",
-      days:     Number((r.DAYS ?? 0).toFixed(3)),
+      stage:      r.STAGE,
+      activity:   r.ACTIVITY,
+      activityId: Number(r.MIN_ACTIVITY_ID ?? 0),
+      attached:   r.ATTACHED_STAGE,
+      category:   r.CATEGORY as "VA" | "NNVA" | "UNVA",
+      days:       Number((r.DAYS ?? 0).toFixed(3)),
     })),
     skus: bySku.map((r) => ({
       code:    r.PRODUCT_CODE,
@@ -67,7 +69,7 @@ async function runChartQueries(plant: string, startDate: string, endDate: string
   };
 }
 
-const cached = unstable_cache(runChartQueries, ["lead-time-charts-v6"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runChartQueries, ["lead-time-charts-v8"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
