@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ResponsiveLine } from "@nivo/line";
-import { Info } from "lucide-react";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lead Time category card — VA / NNVA / Waste / Potential Saving (/lead-time).
@@ -80,9 +80,7 @@ export function LeadTimeCategoryCard({
           }}>
             {label}
           </span>
-          <span title={info} style={{ display: "flex", flexShrink: 0, cursor: "help" }}>
-            <Info size={12} color="#c0c5d0" strokeWidth={1.75} />
-          </span>
+          <InfoTooltip text={info} size={12} />
         </div>
 
         {/* Value row */}

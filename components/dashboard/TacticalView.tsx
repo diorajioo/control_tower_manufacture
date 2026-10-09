@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
-import { Lock, Info } from "lucide-react";
+import { Lock } from "lucide-react";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { LeadTimePlantTable, type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
@@ -286,7 +287,6 @@ function TKpiCard({
 // Stacked PO-count gauge: shows how many completed POs are on-time / at-risk / late vs 13-day target.
 function LeadTimeGauge({ counts }: { counts: { onTime: number; atRisk: number; late: number } }) {
   const [hoveredKey, setHoveredKey] = useState<"onTime" | "atRisk" | "late" | null>(null);
-  const [showInfo, setShowInfo] = useState(false);
   const total = counts.onTime + counts.atRisk + counts.late;
   if (total === 0) return null;
 
@@ -305,20 +305,11 @@ function LeadTimeGauge({ counts }: { counts: { onTime: number; atRisk: number; l
         <span style={{ fontSize: 9.5, color: "#98a2b3", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
           PO count vs {LEAD_TIME_TARGET_DAYS}-day target
         </span>
-        <button
-          type="button"
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 13, height: 13, borderRadius: "50%", border: "1px solid #cbd5e1", background: "none", cursor: "pointer", flexShrink: 0, padding: 0, color: "#94a3b8", fontSize: 9, fontWeight: 700, lineHeight: 1 }}
-          onClick={() => setShowInfo(v => !v)}
-          onBlur={() => setShowInfo(false)}
-          aria-label="About this data"
-        >
-          ?
-        </button>
-        {showInfo && (
-          <div style={{ position: "absolute", top: 18, left: 0, zIndex: 40, width: 230, background: "#1e293b", color: "white", borderRadius: 6, padding: "7px 10px", fontSize: 10.5, lineHeight: 1.5, pointerEvents: "none", boxShadow: "0 4px 14px rgba(0,0,0,0.18)" }}>
-            Covers <strong>completed POs only</strong> (PO FG Done Date is set) within the selected period. Categorised by actual gross lead time vs the {LEAD_TIME_TARGET_DAYS}-day target — not the predictive risk score shown in the alerts bar.
-          </div>
-        )}
+        <InfoTooltip
+          text={`Completed POs only (PO FG Done Date is set) within the selected period, categorised by actual gross lead time vs the ${LEAD_TIME_TARGET_DAYS}-day target — not the predictive risk score shown in the alerts bar.`}
+          size={11}
+          width={240}
+        />
       </div>
 
       {/* Stacked bar */}
@@ -500,7 +491,6 @@ interface HistoRow extends BarDatum {
 function LeadTimeHistogram({ filters }: { filters: TacticalFilters }) {
   const [data, setData] = useState<DistResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showInfo, setShowInfo] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -600,20 +590,11 @@ function LeadTimeHistogram({ filters }: { filters: TacticalFilters }) {
       <div className="flex items-start justify-between mb-3 gap-3">
         <div className="flex items-center gap-2">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead Time Distribution per PO</p>
-          <button
-            type="button"
-            onClick={() => setShowInfo((v) => !v)}
-            onBlur={() => setShowInfo(false)}
-            className="relative text-slate-400 hover:text-slate-600"
-            aria-label="info"
-          >
-            <Info size={13} strokeWidth={2} />
-            {showInfo && (
-              <span className="absolute left-5 top-0 z-10 whitespace-normal w-[240px] text-left bg-slate-800 text-white text-[11px] font-normal normal-case tracking-normal rounded-md px-2.5 py-1.5 shadow-lg">
-                Only POs completed within the selected period (PO FG Done Date is not null).
-              </span>
-            )}
-          </button>
+          <InfoTooltip
+            text="Only POs completed within the selected period (PO FG Done Date is not null)."
+            size={13}
+            width={240}
+          />
         </div>
         <a href="/lead-time" className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">
           Open detail →

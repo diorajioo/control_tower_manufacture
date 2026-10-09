@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { TrendingUp, TrendingDown, Info } from "lucide-react";
+import { TrendingUp, TrendingDown } from "lucide-react";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import {
   animate,
   AnimatePresence,
@@ -65,38 +66,6 @@ function AnimatedNumber({ value, className, style }: AnimatedNumberProps) {
   }, [raw]);
 
   return <span className={className} style={style}>{display}</span>;
-}
-
-// ── InfoTooltip ───────────────────────────────────────────────────────────────
-
-function InfoTooltip({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span
-      className="relative inline-flex items-center"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={() => setOpen(false)}
-    >
-      <Info size={11} className={cn("cursor-help transition-colors", open ? "text-gray-400" : "text-gray-200")} />
-      <AnimatePresence>
-        {open && (
-          <motion.span
-            role="tooltip"
-            initial={{ opacity: 0, scale: 0.88, y: 6 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.88, y: 6 }}
-            transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 text-xs text-slate-100 bg-[#2A3D4A] px-3 py-2 rounded-xl shadow-2xl z-50 leading-relaxed font-normal normal-case tracking-normal"
-            style={{ transformOrigin: "50% 100%" }}
-          >
-            {text}
-          </motion.span>
-        )}
-      </AnimatePresence>
-    </span>
-  );
 }
 
 // ── KPICard types ─────────────────────────────────────────────────────────────
