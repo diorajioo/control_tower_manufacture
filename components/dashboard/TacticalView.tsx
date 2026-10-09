@@ -286,6 +286,7 @@ function TKpiCard({
 // Stacked PO-count gauge: shows how many completed POs are on-time / at-risk / late vs 13-day target.
 function LeadTimeGauge({ counts }: { counts: { onTime: number; atRisk: number; late: number } }) {
   const [hoveredKey, setHoveredKey] = useState<"onTime" | "atRisk" | "late" | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
   const total = counts.onTime + counts.atRisk + counts.late;
   if (total === 0) return null;
 
@@ -300,8 +301,24 @@ function LeadTimeGauge({ counts }: { counts: { onTime: number; atRisk: number; l
       style={{ display: "flex", flexDirection: "column", gap: 5, position: "relative" }}
       onMouseLeave={() => setHoveredKey(null)}
     >
-      <div style={{ fontSize: 9.5, color: "#98a2b3", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-        PO count vs {LEAD_TIME_TARGET_DAYS}-day target
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <span style={{ fontSize: 9.5, color: "#98a2b3", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          PO count vs {LEAD_TIME_TARGET_DAYS}-day target
+        </span>
+        <button
+          type="button"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 13, height: 13, borderRadius: "50%", border: "1px solid #cbd5e1", background: "none", cursor: "pointer", flexShrink: 0, padding: 0, color: "#94a3b8", fontSize: 9, fontWeight: 700, lineHeight: 1 }}
+          onClick={() => setShowInfo(v => !v)}
+          onBlur={() => setShowInfo(false)}
+          aria-label="About this data"
+        >
+          ?
+        </button>
+        {showInfo && (
+          <div style={{ position: "absolute", top: 18, left: 0, zIndex: 40, width: 230, background: "#1e293b", color: "white", borderRadius: 6, padding: "7px 10px", fontSize: 10.5, lineHeight: 1.5, pointerEvents: "none", boxShadow: "0 4px 14px rgba(0,0,0,0.18)" }}>
+            Covers <strong>completed POs only</strong> (PO FG Done Date is set) within the selected period. Categorised by actual gross lead time vs the {LEAD_TIME_TARGET_DAYS}-day target — not the predictive risk score shown in the alerts bar.
+          </div>
+        )}
       </div>
 
       {/* Stacked bar */}
