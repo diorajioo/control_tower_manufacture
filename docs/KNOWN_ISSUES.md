@@ -86,6 +86,16 @@ confirmed. See `docs/BUSINESS_LOGIC.md` → Lead Time basis.
 
 ## Technical Limitations
 
+### Cross-plant POs are not attributed to a plant
+
+**Status: Open — waiting for the user to pick the owner plant · Area: every per-plant lead time query, plant filter**
+
+About 167 POs in YTD 2026 have `CT_MANUF_LEADTIME` rows in two or three plants: bulk (PO, Timbang, Olah) in one plant, packing (Kemas, WIP, RECEIVE NDC) in another — J2+J4, J1+J4, J2+J6, J1+J4+J6, J2+J4+J6. Grouped per (plant, PO) each part has no start or no end, so these POs drop out of per-plant lead time (plant table rows, By plant trend lines) and out of every query with a plant filter.
+
+Network figures are correct since 2026-10-12: the Tactical card (`getLeadTimeByPlant` network row) and the Overview trend "All plants" line are computed per PO over all rows, and match `getLeadTimeKPI` and the histogram (YTD Created 15.91 d, Released 9.45 d). Before that the card showed 15.82 d.
+
+Fix when decided: attribute each PO to one owner plant — recommended the FG packing / RECEIVE NDC plant, alternative the plant where the PO and bulk started — and filter by POs of that plant instead of by rows.
+
 ### Scheduled Teams sends run once a day on Vercel Hobby
 
 **Status: Open (hosting limit) · Area: `/api/cron/notifications`, `vercel.json`**

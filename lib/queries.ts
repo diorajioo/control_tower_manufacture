@@ -318,6 +318,9 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
   const [plantRows, stageRows] = await Promise.all([
     executeQuery<{ IS_NETWORK: number; PLANT: string | null; PO_COUNT: number; GROSS_DAYS: number; NETT_DAYS: number; ONTIME_PCT: number | null }>(`
       WITH base AS (${base}),
+      -- Plant rows: per (plant, PO). Network row: per PO over all its rows — a PO made in one plant and
+      -- packed in another has no start or no end inside either plant, so a per-plant split would drop it
+      -- (cross-plant POs are not attributed to a plant yet — docs/KNOWN_ISSUES.md).
       po AS (
         SELECT
           PLANT,
@@ -329,17 +332,37 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
           SUM(CASE WHEN ACTIVITY_TYPE = 'ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END) AS nett_minutes
         FROM base
         GROUP BY PLANT, PROCESS_ORDER_FG
+      ),
+      po_network AS (
+        SELECT
+          PROCESS_ORDER_FG,
+          DATEDIFF('minute',
+            ${startSql},
+            ${NDC_RECEIVED_AT_SQL}
+          ) AS gross_minutes,
+          SUM(CASE WHEN ACTIVITY_TYPE = 'ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END) AS nett_minutes
+        FROM base
+        GROUP BY PROCESS_ORDER_FG
       )
       SELECT
-        GROUPING(PLANT) AS IS_NETWORK,
+        0 AS IS_NETWORK,
         PLANT,
         COUNT(*) AS PO_COUNT,
         AVG(gross_minutes) / 1440.0 AS GROSS_DAYS,
         AVG(nett_minutes) / 1440.0 AS NETT_DAYS,
         COUNT_IF(gross_minutes <= ? * 1440) * 100.0 / NULLIF(COUNT(gross_minutes), 0) AS ONTIME_PCT
       FROM po
-      GROUP BY ROLLUP (PLANT)
-    `, [...binds, targetDays]),
+      GROUP BY PLANT
+      UNION ALL
+      SELECT
+        1 AS IS_NETWORK,
+        NULL AS PLANT,
+        COUNT(*) AS PO_COUNT,
+        AVG(gross_minutes) / 1440.0 AS GROSS_DAYS,
+        AVG(nett_minutes) / 1440.0 AS NETT_DAYS,
+        COUNT_IF(gross_minutes <= ? * 1440) * 100.0 / NULLIF(COUNT(gross_minutes), 0) AS ONTIME_PCT
+      FROM po_network
+    `, [...binds, targetDays, targetDays]),
     executeQuery<{ PLANT: string; STAGE: string; MINUTES: number }>(`
       SELECT PLANT, POSITION AS STAGE, SUM(NET_LEADTIME) AS MINUTES
       FROM (${base}) b
@@ -948,27 +971,38 @@ export async function getTrendKPIByPlant(
       // {FIXED [Process Order Fg]: AVG([Leadtime In Day])} — gross lead time
       // Same DATEDIFF logic as getLeadTimeKPI: ACTIVITY='PO' start → ACTIVITY='RECEIVE NDC' stop
       // N + LATE (POs above the Lead Time target) feed the Laney P′ chart on the Overview (% PO > target).
+      // "All plants" is computed per PO over all its rows: a PO made in one plant and packed in another
+      // (bulk J2 → packing J4) has no start or no end inside either plant, so a per-plant split would drop it.
+      // Plant lines keep the per-plant rows (cross-plant POs are not attributed to a plant yet — docs/KNOWN_ISSUES.md).
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number; N: number; LATE: number }>(`
-        SELECT WEEK, IFF(GROUPING(PLANT) = 1, 'All plants', PLANT) AS PLANT, AVG(po_days) AS KPI_VALUE, COUNT(*) AS N, COUNT_IF(po_days > ?) AS LATE
-        FROM (
-          SELECT
-            PROCESS_ORDER_FG,
-            DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK,
-            PLANT,
-            DATEDIFF('minute',
-              ${LEAD_TIME_START_SQL},
-              ${NDC_RECEIVED_AT_SQL}
-            ) / 1440.0 AS po_days
+        WITH base AS (
+          SELECT PROCESS_ORDER_FG, PLANT, ACTIVITY, ACTIVITY_START, ACTIVITY_STOP,
+            DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
           WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
             ${pf}
+        ),
+        by_plant AS (
+          SELECT PROCESS_ORDER_FG, WEEK, PLANT,
+            DATEDIFF('minute', ${LEAD_TIME_START_SQL}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 AS po_days
+          FROM base
           GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
-          HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
-            AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
-        ) sub
-        GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
+          HAVING ${LEAD_TIME_START_SQL} IS NOT NULL AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
+        ),
+        by_po AS (
+          SELECT PROCESS_ORDER_FG, WEEK,
+            DATEDIFF('minute', ${LEAD_TIME_START_SQL}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 AS po_days
+          FROM base
+          GROUP BY PROCESS_ORDER_FG, WEEK
+          HAVING ${LEAD_TIME_START_SQL} IS NOT NULL AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
+        )
+        SELECT WEEK, PLANT, AVG(po_days) AS KPI_VALUE, COUNT(*) AS N, COUNT_IF(po_days > ?) AS LATE
+        FROM by_plant GROUP BY WEEK, PLANT
+        UNION ALL
+        SELECT WEEK, 'All plants' AS PLANT, AVG(po_days) AS KPI_VALUE, COUNT(*) AS N, COUNT_IF(po_days > ?) AS LATE
+        FROM by_po GROUP BY WEEK
         ORDER BY WEEK
-      `, [LEAD_TIME_TARGET_DAYS, startDate, endDate, ...plantBinds(plant)]);
+      `, [startDate, endDate, ...plantBinds(plant), LEAD_TIME_TARGET_DAYS, LEAD_TIME_TARGET_DAYS]);
 
     case "upstream":
       // Tableau LOD: {FIXED [Process Order Sfg]: MAX(Release_Bulk)/((SUM(Leadtime)/60)/SUM(Operators))} → AVG per week per plant

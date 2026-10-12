@@ -62,7 +62,7 @@ const fetchTrendByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runTrendQuery(plant, startDate, endDate, kpiType, period, grain);
   },
-  ["trends-by-period-v5"],
+  ["trends-by-period-v6"],
   { revalidate: 3600, tags: ["trends"] }
 );
 
@@ -71,7 +71,7 @@ const fetchTrendByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string, kpiType: string, grain: TrendGrain) => {
     return runTrendQuery(plant, startDate, endDate, kpiType, undefined, grain);
   },
-  ["trends-by-dates-v5"],
+  ["trends-by-dates-v6"],
   { revalidate: 3600, tags: ["trends"] }
 );
 

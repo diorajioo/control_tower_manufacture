@@ -49,7 +49,7 @@ async function runStageQuery(plant: string, startDate: string, endDate: string, 
   };
 }
 
-const cached = unstable_cache(runStageQuery, ["lead-time-stages-v3"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runStageQuery, ["lead-time-stages-v4"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);

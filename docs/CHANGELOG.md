@@ -4,6 +4,12 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-10-12
+
+### Fixed
+- **Tactical Lead Time card ≠ "Lead time distribution per PO" mean** (YTD 15.82 vs 15.91 d): the card read the network row of `getLeadTimeByPlant`, which grouped per (plant, PO) and dropped ~167 POs made in one plant and packed in another. Network row and the Overview trend "All plants" line are now computed per PO. Caches `lead-time-stages-v4`, `trends-by-*-v6`. Plant attribution of those POs is still open (`docs/KNOWN_ISSUES.md`).
+- ClickHouse translator: `x::TIMESTAMP → toDateTime(x)` (used by the "Today" period since `dfb645b`).
+
 ## 2026-10-06
 
 ### Changed

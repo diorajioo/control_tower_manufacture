@@ -3,6 +3,7 @@
 //
 // Covers exactly the constructs the app uses (see docs/ARCHITECTURE.md → Data source):
 //   x::DATE → toDate(x)            x::FLOAT → toFloat64(x)        x::VARCHAR → toString(x)
+//   x::TIMESTAMP → toDateTime(x)
 //   DATE_TRUNC('week'|'month'|'year', x) → toMonday / toStartOfMonth / toStartOfYear
 //   DATEADD('day'|'week'|'month'|'year', n, x) → addDays / addWeeks / addMonths / addYears(x, n)
 //   DATEDIFF('unit', a, b) → dateDiff('unit', a, b)      DAYOFWEEKISO(x) → toDayOfWeek(x)
@@ -65,8 +66,8 @@ function rewriteCalls(sql: string, name: string, fn: (args: string[]) => string)
 
 /** Rewrite `operand::TYPE` casts; operand = identifier, ?, placeholder or a balanced (…) / fn(…) expression. */
 function rewriteCasts(sql: string): string {
-  const CASTS: Record<string, string> = { DATE: "toDate", FLOAT: "toFloat64", VARCHAR: "toString" };
-  const re = /::(DATE|FLOAT|VARCHAR)\b/i;
+  const CASTS: Record<string, string> = { DATE: "toDate", FLOAT: "toFloat64", VARCHAR: "toString", TIMESTAMP: "toDateTime" };
+  const re = /::(DATE|FLOAT|VARCHAR|TIMESTAMP)\b/i;
   for (let guard = 0; guard < 500; guard++) {
     const m = re.exec(sql);
     if (!m) return sql;
