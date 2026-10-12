@@ -161,7 +161,7 @@ export function OutputKPICard({
                     lineHeight: 1,
                   }}
                 >
-                  {fmt(primaryValue)}
+                  {mode === "bulk" ? primaryValue.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : fmt(primaryValue)}
                 </span>
                 <span
                   style={{
