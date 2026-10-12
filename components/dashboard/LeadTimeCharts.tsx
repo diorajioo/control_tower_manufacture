@@ -185,15 +185,15 @@ export function LeadTimeSkuScatter({ filters }: { filters?: ScatterFilters }) {
           <ResponsiveScatterPlotCanvas
             data={[{ id: dimLabel, data: points }]}
             theme={scatterTheme}
-            margin={{ top: 8, right: 20, bottom: 44, left: 52 }}
+            margin={{ top: 8, right: 20, bottom: 32, left: 52 }}
             xScale={{ type: "linear", min: 0, max: "auto" }}
             yScale={{ type: "linear", min: 0, max: "auto" }}
             colors={["rgba(42,120,214,0.55)"]}
             nodeSize={8}
             enableGridX
             axisBottom={{
-              tickSize: 0, tickPadding: 8, tickValues: 6,
-              legend: "PO count", legendOffset: 36, legendPosition: "middle",
+              tickSize: 0, tickPadding: 6, tickValues: 6,
+              legend: "PO count", legendOffset: 26, legendPosition: "middle",
             }}
             axisLeft={{
               tickSize: 0, tickPadding: 6, tickValues: 6,
