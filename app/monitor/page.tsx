@@ -35,16 +35,16 @@ function MonitorShell() {
   const params     = useSearchParams();
 
   const [activePage, setActivePage] = useState<MonitorPage>(
-    () => (params.get("page") as MonitorPage | null) ?? "strategic"
+    () => (params?.get("page") as MonitorPage | null) ?? "strategic"
   );
   const currentPage = MONITOR_PAGES.find((p) => p.key === activePage) ?? MONITOR_PAGES[0];
 
   const filters = {
-    plant:     params.get("plant")     ?? "All Plant",
-    period:    params.get("period")    ?? "YTD",
-    startDate: params.get("startDate") ?? `${new Date().getFullYear()}-01-01`,
-    endDate:   params.get("endDate")   ?? new Date().toISOString().split("T")[0],
-    dataLevel: params.get("dataLevel") ?? "Daily",
+    plant:     params?.get("plant")     ?? "All Plant",
+    period:    params?.get("period")    ?? "YTD",
+    startDate: params?.get("startDate") ?? `${new Date().getFullYear()}-01-01`,
+    endDate:   params?.get("endDate")   ?? new Date().toISOString().split("T")[0],
+    dataLevel: params?.get("dataLevel") ?? "Daily",
   };
 
   useEffect(() => {

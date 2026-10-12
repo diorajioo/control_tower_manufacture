@@ -962,7 +962,7 @@ function StrategicView({ filters, refreshKey, ltBasis }: { filters: LeadTimeFilt
             trend={lt?.grossTrend ?? null}
             series={lt?.sparkline ?? []}
             noData={!lt}
-            gaugeCounts={lt && lt.poCount > 0 ? { onTime: lt.onTimeCount ?? 0, atRisk: lt.atRiskCount ?? 0, late: lt.lateCount ?? 0 } : null}
+            gaugeCounts={lt && (lt.poCount ?? 0) > 0 ? { onTime: lt.onTimeCount ?? 0, atRisk: lt.atRiskCount ?? 0, late: lt.lateCount ?? 0 } : null}
           />
         </KpiHighlightTarget>
         <KpiHighlightTarget id="va">

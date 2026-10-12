@@ -226,7 +226,7 @@ function SettingsShell() {
   const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const active = (searchParams.get("s") as SectionId) || "profil";
+  const active = ((searchParams?.get("s") ?? "") as SectionId) || "profil";
   const { t, setLang } = useI18n();
 
   const [notif, setNotif] = useState<NotifSettings>(DEFAULT_NOTIF);
