@@ -880,6 +880,10 @@ interface LeadTimeKPI {
   byPositionGross: { position: string; avgHours: number }[];
   byPositionNett:  { position: string; avgHours: number }[];
   sparkline: number[];
+  poCount?: number;
+  onTimeCount?: number;
+  atRiskCount?: number;
+  lateCount?: number;
   composition?: {
     vaDays: number; nnvaDays: number; unvaDays: number; wipDays: number;
     vaPrev: number; nnvaPrev: number; unvaPrev: number; wipPrev: number;
