@@ -336,6 +336,12 @@
         "value": "#1e4076",
         "createdAt": "2026-10-07T06:56:51.251Z",
         "reason": "Paragon Blue — primary brand color defined in CLAUDE.md design system"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f5a39a",
+        "createdAt": "2026-10-12T03:27:00.048Z",
+        "reason": "SPC out-of-limit highlight in control chart tooltips (UCL/LCL); intentional red tint, not brand drift"
       }
     ]
   }

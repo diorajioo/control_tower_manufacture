@@ -72,6 +72,12 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
   const plantLocked = kpiType === "bulkloss";
   const [pView, setPView] = useState<"overall" | "plant">("overall");
   const overall = pView === "overall" || plantLocked;
+  const [chartOpacity, setChartOpacity] = useState(1);
+  useEffect(() => {
+    setChartOpacity(0);
+    const t = setTimeout(() => setChartOpacity(1), 160);
+    return () => clearTimeout(t);
+  }, [pView, kpiType]);
 
   useEffect(() => {
     // Ignore responses from a previous metric/filter: a slow Lead Time query must not overwrite the newly picked tab
@@ -258,7 +264,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       )}
 
       {/* Chart */}
-      <div className={fillHeight ? "flex-1 min-h-0" : ""} style={fillHeight ? undefined : { height: chartHeight }}>
+      <div className={fillHeight ? "flex-1 min-h-0" : ""} style={{ ...(fillHeight ? undefined : { height: chartHeight }), opacity: chartOpacity, transition: "opacity 0.18s ease" }}>
         {isEmpty ? (
           <div className="h-full flex items-center justify-center text-[11px] text-gray-300">No data available</div>
         ) : (
