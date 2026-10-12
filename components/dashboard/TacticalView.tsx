@@ -998,7 +998,9 @@ const GROUP_PROCESS_PALETTE = [
 
 function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasis, tacticalFilters }: TacticalViewProps) {
   const c = kpi?.leadTime.composition;
-  const gross = kpi?.leadTime.grossDays;
+  // Use basis-aware network gross from plantLT (already computed with ltBasis in getLeadTimeByPlant)
+  const networkGross = plantLT?.plants.find((p) => p.plant === null)?.gross ?? null;
+  const gross = networkGross ?? kpi?.leadTime.grossDays;
   const maxGross = kpi?.leadTime.maxGrossDays ?? 0;
   const poCount = kpi?.leadTime.poCount ?? 0;
   const avgPoStage = kpi?.leadTime.avgPoStageDays ?? 0;
@@ -1050,13 +1052,13 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
           <>
             <TKpiCard
               label="Lead Time"
-              value={kpi ? kpi.leadTime.grossDays.toFixed(2) : null}
+              value={gross != null ? gross.toFixed(2) : null}
               unit="days"
               trend={kpi?.leadTime.grossTrend ?? null}
               inverse
               sparkline={kpi?.leadTime.sparkline}
               sparkUnit="weeks"
-              ltDays={kpi?.leadTime.grossDays}
+              ltDays={gross ?? undefined}
               footerLeft="End-to-end gross"
               noData={!kpi}
               gaugeCounts={kpi && poCount > 0 ? { onTime: kpi.leadTime.onTimeCount ?? 0, atRisk: kpi.leadTime.atRiskCount ?? 0, late: kpi.leadTime.lateCount ?? 0 } : null}

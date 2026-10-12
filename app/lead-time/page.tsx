@@ -1020,7 +1020,7 @@ function StrategicView({ filters, refreshKey, ltBasis }: { filters: LeadTimeFilt
       {/* Lead time trend (overall + per POSITION) and SKU scatter */}
       <div className="grid grid-cols-2 gap-3.5 px-5 mb-4">
         <LeadTimeTrendChart data={charts.data} loading={charts.loading} filters={filters} />
-        <LeadTimeSkuScatter data={charts.data} loading={charts.loading} />
+        <LeadTimeSkuScatter filters={filters} />
       </div>
 
       {/* Lead time per stage — Pareto, real data (replaces the mock StageGroupChart, whose code is kept but no longer rendered) */}

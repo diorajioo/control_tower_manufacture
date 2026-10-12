@@ -380,6 +380,45 @@ export async function getLeadTimeBySku(filters: QueryFilters) {
   `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
+export type ScatterDimension = "brand" | "variant" | "su_group" | "plant" | "sku";
+
+const SCATTER_DIM_COL: Record<ScatterDimension, string> = {
+  brand:    "PRODUCT_BRAND",
+  variant:  "PRODUCT_VARIANT",
+  su_group: "SU_GROUP",
+  plant:    "PLANT",
+  sku:      "PRODUCT_CODE",
+};
+
+export async function getLeadTimeScatterByDim(filters: QueryFilters, dimension: ScatterDimension) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const col = SCATTER_DIM_COL[dimension];
+  return executeQuery<{ DIM_VALUE: string; PO_COUNT: number; AVG_DAYS: number }>(`
+    SELECT
+      ${col}             AS DIM_VALUE,
+      COUNT(DISTINCT PROCESS_ORDER_FG) AS PO_COUNT,
+      AVG(gross_minutes) / 1440.0      AS AVG_DAYS
+    FROM (
+      SELECT
+        PROCESS_ORDER_FG,
+        MAX(${col}) AS ${col},
+        DATEDIFF('minute',
+          ${LEAD_TIME_START_SQL},
+          ${NDC_RECEIVED_AT_SQL}
+        ) AS gross_minutes
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      WHERE ${datePred}
+        ${plantWhere(filters.plant)}
+      GROUP BY PROCESS_ORDER_FG
+      HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
+        AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
+    ) sub
+    WHERE ${col} IS NOT NULL
+    GROUP BY ${col}
+    HAVING COUNT(DISTINCT PROCESS_ORDER_FG) < 100
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
+}
+
 // Top 10 SKU by lead time → composition / range chart on /lead-time
 // Per PO: gross lead time (PO start → RECEIVE NDC stop) + SUM(NET_LEADTIME) per ACTIVITY_CATEGORY.
 // Per SKU (≥5 POs): AVG / P10 / P90 of gross days, AVG VA / NNVA / UNVA days. Top 10 by AVG gross.
@@ -1144,8 +1183,8 @@ export async function getLeadTimeDistributionBins(filters: QueryFilters) {
     WITH per_po AS (
       SELECT PROCESS_ORDER_FG,
         DATEDIFF('minute',
-          MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END),
-          MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END)
+          ${LEAD_TIME_START_SQL},
+          ${NDC_RECEIVED_AT_SQL}
         ) / 1440.0 AS gross_lt_days
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
       WHERE PO_FG_DONE_DATE IS NOT NULL
@@ -1153,11 +1192,11 @@ export async function getLeadTimeDistributionBins(filters: QueryFilters) {
         AND ${datePred}
         ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_FG
-      HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END) IS NOT NULL
-        AND  MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END) IS NOT NULL
+      HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
+        AND  ${NDC_RECEIVED_AT_SQL} IS NOT NULL
         AND  DATEDIFF('minute',
-               MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END),
-               MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END)
+               ${LEAD_TIME_START_SQL},
+               ${NDC_RECEIVED_AT_SQL}
              ) >= 0
     ),
     stats AS (

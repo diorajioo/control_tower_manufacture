@@ -18,7 +18,7 @@ async function runDistQuery(plant: string, startDate: string, endDate: string, p
   };
 }
 
-const cached = unstable_cache(runDistQuery, ["lead-time-distribution-v1"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runDistQuery, ["lead-time-distribution-v2"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);

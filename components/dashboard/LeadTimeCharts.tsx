@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { ResponsiveScatterPlotCanvas } from "@nivo/scatterplot";
 import { Info } from "lucide-react";
 import { LINE_THEME, LineTooltip } from "@/components/charts/StandardLine";
+import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lead Time page charts — data from /api/lead-time/charts (CT_MANUF_LEADTIME)
@@ -63,23 +64,80 @@ export function EmptyState({ loading }: { loading: boolean }) {
   );
 }
 
-// ── 2. Lead time vs PO count per SKU ─────────────────────────────────────────
+// ── 2. Lead time vs PO count scatter (self-fetching, dimension toggle) ────────
 
-export function LeadTimeSkuScatter({ data, loading }: { data: LeadTimeChartData | null; loading: boolean }) {
+type ScatterDim = "brand" | "variant" | "su_group" | "plant" | "sku";
+
+interface ScatterFilters {
+  plant?: string;
+  startDate?: string;
+  endDate?: string;
+  period?: string;
+}
+
+interface ScatterPoint { label: string; poCount: number; days: number }
+
+const DIM_OPTIONS: { value: ScatterDim; label: string }[] = [
+  { value: "brand",    label: "Brand" },
+  { value: "variant",  label: "Variant" },
+  { value: "su_group", label: "SU Group" },
+  { value: "plant",    label: "Plant" },
+  { value: "sku",      label: "SKU" },
+];
+
+function useScatterData(filters: ScatterFilters, dim: ScatterDim) {
+  const [data, setData] = useState<ScatterPoint[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      plant:     filters.plant     ?? "All Plant",
+      startDate: filters.startDate ?? `${new Date().getFullYear()}-01-01`,
+      endDate:   filters.endDate   ?? new Date().toISOString().split("T")[0],
+      dim,
+    });
+    if (filters.period) params.set("period", filters.period);
+
+    fetch(`/api/lead-time/scatter?${params}`)
+      .then((r) => r.json())
+      .then((rows: ScatterPoint[]) => { setData(rows); setLoading(false); })
+      .catch(() => { setData([]); setLoading(false); });
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, dim]);
+
+  return { data, loading };
+}
+
+export function LeadTimeSkuScatter({ filters }: { filters?: ScatterFilters }) {
+  const [dim, setDim] = useState<ScatterDim>("sku");
+  const { data, loading } = useScatterData(filters ?? {}, dim);
+
   const points = useMemo(
-    () => (data?.skus ?? []).map((s) => ({ x: s.poCount, y: s.days, name: s.name, code: s.code })),
+    () => (data ?? []).map((s) => ({ x: s.poCount, y: s.days, label: s.label })),
     [data],
   );
 
+  const dimLabel = DIM_OPTIONS.find((o) => o.value === dim)?.label ?? "SKU";
+
   return (
-    <ChartCard title="Lead time and PO count per SKU" subtitle={`Each dot is one SKU with fewer than 100 POs${points.length ? ` · ${points.length.toLocaleString("en-US")} SKUs` : ""}.`}
-      info="Only SKUs with fewer than 100 completed POs in the selected period are shown. SKUs with 100+ POs are few outliers that compress the rest of the chart.">
+    <ChartCard
+      title="Lead time and PO count"
+      subtitle={`Each dot is one ${dimLabel} with fewer than 100 POs${points.length ? ` · ${points.length.toLocaleString("en-US")} items` : ""}.`}
+      info="Only items with fewer than 100 completed POs in the selected period are shown. Items with 100+ POs are outliers that would compress the rest of the chart."
+      actions={
+        <SegmentedToggle
+          options={DIM_OPTIONS.map((o) => ({ key: o.value, label: o.label }))}
+          value={dim}
+          onChange={(v) => setDim(v as ScatterDim)}
+        />
+      }
+    >
       <div style={{ height: 262 }}>
         {points.length === 0 ? (
           <EmptyState loading={loading} />
         ) : (
           <ResponsiveScatterPlotCanvas
-            data={[{ id: "SKU", data: points }]}
+            data={[{ id: dimLabel, data: points }]}
             theme={scatterTheme}
             margin={{ top: 8, right: 16, bottom: 40, left: 48 }}
             xScale={{ type: "linear", min: 0, max: "auto" }}
@@ -96,11 +154,10 @@ export function LeadTimeSkuScatter({ data, loading }: { data: LeadTimeChartData 
               legend: "Lead time (days)", legendOffset: -38, legendPosition: "middle",
             }}
             tooltip={({ node }) => {
-              const d = node.data as { x: number; y: number; name: string; code: string };
+              const d = node.data as { x: number; y: number; label: string };
               return (
                 <LineTooltip
-                  title={d.name}
-                  subtitle={d.code}
+                  title={d.label}
                   rows={[
                     { label: "Lead time", value: d.y.toFixed(1), unit: "days" },
                     { label: "POs completed", value: d.x.toLocaleString("en-US") },
