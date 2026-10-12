@@ -8,7 +8,6 @@ import {
   evenWeekTicks, isolatedColor, rowsAtX, seriesColor, monthLabel, GRAIN_OPTIONS,
   makeActivePointsLayer, makeActiveLineLayer, type StandardSeries, type TrendGrain,
 } from "@/components/charts/StandardLine";
-import { Fade } from "@/components/ui/Fade";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import type { LeadTimeChartData } from "@/components/dashboard/LeadTimeCharts";
 import { stageLabel } from "@/lib/leadTimeStages";
@@ -114,7 +113,6 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
       empty={isEmpty}
       emptyText="No data for the selected filters"
     >
-      <Fade depKey={data?.trend?.total?.[0]?.days}>
       <ResponsiveLine
         {...LINE_DEFAULTS}
         data={series}
@@ -132,7 +130,6 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
           return <LineTooltip title={`${x} · average per PO`} rows={rows} />;
         }}
       />
-      </Fade>
     </LineChartCard>
   );
 }

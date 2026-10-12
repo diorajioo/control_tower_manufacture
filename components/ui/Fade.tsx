@@ -15,7 +15,7 @@ export function Fade({ depKey, children, className }: { depKey: unknown; childre
   }
 
   return (
-    <div ref={ref} className={`contents ui-fade-in${className ? ` ${className}` : ""}`}>
+    <div ref={ref} className={`ui-fade-in${className ? ` ${className}` : ""}`} style={{ display: "flex", flex: 1, minWidth: 0, minHeight: 0, flexDirection: "column" }}>
       {children}
     </div>
   );
