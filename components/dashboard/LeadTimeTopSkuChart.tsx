@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ResponsiveBar, type BarCustomLayerProps, type BarDatum } from "@nivo/bar";
 import { ChartCard, EmptyState, type LeadTimeChartData } from "@/components/dashboard/LeadTimeCharts";
+import { Fade } from "@/components/ui/Fade";
 import { LINE_THEME, LineTooltip } from "@/components/charts/StandardLine";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 
@@ -125,6 +126,7 @@ export function LeadTimeTopSkuChart({ data, loading }: { data: LeadTimeChartData
         />
       }
     >
+      <Fade depKey={data?.topSkus?.[0]?.avg}>
       <div style={{ height: 300 }} className={isRange ? undefined : "[&_rect]:cursor-pointer"}>
         {rows.length === 0 ? (
           <EmptyState loading={loading} />
@@ -196,6 +198,7 @@ export function LeadTimeTopSkuChart({ data, loading }: { data: LeadTimeChartData
           />
         )}
       </div>
+      </Fade>
 
       {/* Legend + insight pinned to bottom so footer aligns with sibling cards in grid layouts */}
       <div className="mt-auto">

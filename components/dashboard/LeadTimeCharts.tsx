@@ -5,6 +5,7 @@ import { ResponsiveScatterPlotCanvas } from "@nivo/scatterplot";
 import { Info } from "lucide-react";
 import { LINE_THEME, LineTooltip } from "@/components/charts/StandardLine";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { Fade } from "@/components/ui/Fade";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lead Time page charts — data from /api/lead-time/charts (CT_MANUF_LEADTIME)
@@ -51,7 +52,9 @@ export function ChartCard({ title, subtitle, info, actions, children }: { title:
         )}
       </div>
       <p className="text-[11px] text-slate-400 mt-1 mb-2">{subtitle}</p>
-      {children}
+      <Fade depKey={children}>
+        {children}
+      </Fade>
     </div>
   );
 }

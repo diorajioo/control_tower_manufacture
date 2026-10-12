@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ResponsiveLine } from "@nivo/line";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
+import { Fade } from "@/components/ui/Fade";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Regular KPI card — generic version of the OutputKPICard / LeadTimeKPICard style
@@ -120,6 +121,7 @@ export function RegularKPICard({
                 </span>
               </div>
 
+              <Fade depKey={value}>
               <div style={{ display: "flex", alignItems: "baseline", gap: z(6), flexWrap: "wrap" }}>
                 <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.015em", color: noData ? "#d0d5dd" : "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
                   {noData ? "—" : value}
@@ -137,6 +139,7 @@ export function RegularKPICard({
               <div style={{ display: "flex", alignItems: "center", gap: z(8) }}>
                 <StatusDot color={tone.color} label={statusLabel} />
               </div>
+              </Fade>
             </div>
 
             {/* RIGHT column — sparkline */}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { Fade } from "@/components/ui/Fade";
 import { Lock } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { cn } from "@/lib/utils";
@@ -620,6 +621,7 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
       ) : rows.length === 0 ? (
         <div className="h-[280px] flex items-center justify-center text-[11px] text-gray-400">No data for selected period</div>
       ) : (
+        <Fade depKey={data?.mean}>
         <div className="grid grid-cols-[1fr_180px] gap-4">
           <div style={{ height: 280 }}>
             <ResponsiveBar<HistoRow>
@@ -687,6 +689,7 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
             </div>
           </div>
         </div>
+        </Fade>
       )}
     </div>
   );
@@ -866,6 +869,7 @@ function TacticalParetoChart({
       ) : rows.length === 0 ? (
         <div className="h-[280px] flex items-center justify-center text-[11px] text-gray-400">No data for selected period</div>
       ) : (
+        <Fade depKey={rows[0]?.stage}>
         <div style={{ height: 280, position: "relative" }}>
           <ResponsiveBar<ParetoRow>
             data={rows}
@@ -932,6 +936,7 @@ function TacticalParetoChart({
             </div>
           )}
         </div>
+        </Fade>
       )}
 
       {rows.length > 0 && (
