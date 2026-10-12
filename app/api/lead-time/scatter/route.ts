@@ -6,7 +6,7 @@ import { getLeadTimeScatterByDim, ScatterDimension } from "@/lib/queries";
 
 export const maxDuration = 60;
 
-const VALID_DIMS: ScatterDimension[] = ["brand", "variant", "su_group", "plant", "sku"];
+const VALID_DIMS: ScatterDimension[] = ["brand", "variant", "su_group", "sku"];
 
 async function runQuery(plant: string, startDate: string, endDate: string, period: string | undefined, dimension: ScatterDimension) {
   const rows = await getLeadTimeScatterByDim({ plant, startDate, endDate, period }, dimension);

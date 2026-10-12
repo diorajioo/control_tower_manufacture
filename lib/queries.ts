@@ -380,13 +380,12 @@ export async function getLeadTimeBySku(filters: QueryFilters) {
   `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
-export type ScatterDimension = "brand" | "variant" | "su_group" | "plant" | "sku";
+export type ScatterDimension = "brand" | "variant" | "su_group" | "sku";
 
 const SCATTER_DIM_COL: Record<ScatterDimension, string> = {
   brand:    "PRODUCT_BRAND",
   variant:  "PRODUCT_VARIANT",
   su_group: "SKU_GROUP",
-  plant:    "PLANT",
   sku:      "PRODUCT_CODE",
 };
 
