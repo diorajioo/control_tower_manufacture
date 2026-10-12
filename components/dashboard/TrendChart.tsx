@@ -59,25 +59,37 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
   const activeXRef = useRef<string | null>(null);
   const { t } = useI18n();
 
-  const selectedKpi = TREND_KPI_OPTIONS.find((o) => o.value === kpiType) ?? TREND_KPI_OPTIONS[0];
+  const [chartOpacity, setChartOpacity] = useState(1);
+
+  // displayedKpiType and displayedPView lag behind their sources by one fade
+  // cycle so the chart only receives new data after fading to 0 — no flicker.
+  const [displayedKpiType, setDisplayedKpiType] = useState(kpiType);
+  useEffect(() => {
+    setChartOpacity(0);
+    const tid = setTimeout(() => { setDisplayedKpiType(kpiType); setChartOpacity(1); }, 180);
+    return () => clearTimeout(tid);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kpiType]);
+
+  const selectedKpi = TREND_KPI_OPTIONS.find((o) => o.value === displayedKpiType) ?? TREND_KPI_OPTIONS[0];
   // Control chart per metric: Laney P′ for count proportions (Lead Time = % PO above target, RFT = % activities
   // without ADJUST — limits move with the count n), XmR for the rest (Output, OEE, OPE, Yield Loss).
-  const isPChart = kpiType === "leadtime" || kpiType === "rft";
-  const isPct = kpiType !== "output" && kpiType !== "productivity";
-  const unitLabel = kpiType === "leadtime" ? `% PO > ${LEAD_TIME_TARGET_DAYS} d` : kpiType === "rft" ? "% RFT" : selectedKpi.unit;
-  const countLabel = kpiType === "leadtime" ? "POs" : "activities";
+  const isPChart = displayedKpiType === "leadtime" || displayedKpiType === "rft";
+  const isPct = displayedKpiType !== "output" && displayedKpiType !== "productivity";
+  const unitLabel = displayedKpiType === "leadtime" ? `% PO > ${LEAD_TIME_TARGET_DAYS} d` : displayedKpiType === "rft" ? "% RFT" : selectedKpi.unit;
+  const countLabel = displayedKpiType === "leadtime" ? "POs" : "activities";
   // Overall = the "All plants" series from the API (default); By plant = one line per plant.
   // Yield Loss has no PLANT column in its source, so By plant is locked.
   const OVERALL = "All plants";
-  const plantLocked = kpiType === "bulkloss";
+  const plantLocked = displayedKpiType === "bulkloss";
   const [pView, setPView] = useState<"overall" | "plant">("overall");
-  const overall = pView === "overall" || plantLocked;
-  const [chartOpacity, setChartOpacity] = useState(1);
+  const [displayedPView, setDisplayedPView] = useState<"overall" | "plant">("overall");
+  const overall = displayedPView === "overall" || plantLocked;
   useEffect(() => {
     setChartOpacity(0);
-    const t = setTimeout(() => setChartOpacity(1), 160);
-    return () => clearTimeout(t);
-  }, [pView, kpiType]);
+    const tid = setTimeout(() => { setDisplayedPView(pView); setChartOpacity(1); }, 180);
+    return () => clearTimeout(tid);
+  }, [pView]);
 
   useEffect(() => {
     // Ignore responses from a previous metric/filter: a slow Lead Time query must not overwrite the newly picked tab
