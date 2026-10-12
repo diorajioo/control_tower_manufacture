@@ -17,7 +17,7 @@ async function runQuery(plant: string, startDate: string, endDate: string, perio
   }));
 }
 
-const cached = unstable_cache(runQuery, ["lead-time-scatter-v2"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runQuery, ["lead-time-scatter-v3"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);

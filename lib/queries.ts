@@ -385,7 +385,7 @@ export type ScatterDimension = "brand" | "variant" | "su_group" | "plant" | "sku
 const SCATTER_DIM_COL: Record<ScatterDimension, string> = {
   brand:    "PRODUCT_BRAND",
   variant:  "PRODUCT_VARIANT",
-  su_group: "SU_GROUP",
+  su_group: "SKU_GROUP",
   plant:    "PLANT",
   sku:      "PRODUCT_CODE",
 };
@@ -393,9 +393,12 @@ const SCATTER_DIM_COL: Record<ScatterDimension, string> = {
 export async function getLeadTimeScatterByDim(filters: QueryFilters, dimension: ScatterDimension) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const col = SCATTER_DIM_COL[dimension];
+  // Brand includes null rows (shown as "(No Brand)"); other dims filter null.
+  const nullLabel = dimension === "brand" ? `COALESCE(${col}, '(No Brand)')` : col;
+  const nullFilter = dimension === "brand" ? "" : `WHERE ${col} IS NOT NULL`;
   return executeQuery<{ DIM_VALUE: string; PO_COUNT: number; AVG_DAYS: number }>(`
     SELECT
-      ${col}             AS DIM_VALUE,
+      ${nullLabel}       AS DIM_VALUE,
       COUNT(DISTINCT PROCESS_ORDER_FG) AS PO_COUNT,
       AVG(gross_minutes) / 1440.0      AS AVG_DAYS
     FROM (
@@ -413,8 +416,8 @@ export async function getLeadTimeScatterByDim(filters: QueryFilters, dimension: 
       HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
         AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
     ) sub
-    WHERE ${col} IS NOT NULL
-    GROUP BY ${col}
+    ${nullFilter}
+    GROUP BY ${nullLabel}
     ${dimension === "sku" ? "HAVING COUNT(DISTINCT PROCESS_ORDER_FG) < 100" : ""}
   `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
