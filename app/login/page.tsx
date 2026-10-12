@@ -80,6 +80,7 @@ export default function LoginPage() {
     setLoading(true);
     if (remember) localStorage.setItem(REMEMBER_PENDING, "true");
     else { localStorage.removeItem(REMEMBER_PENDING); localStorage.removeItem(REMEMBER_KEY); setSavedEmail(null); }
+    sessionStorage.setItem('op_login', '1');
     await signIn("azure-ad", { callbackUrl: "/dashboard" });
   };
 

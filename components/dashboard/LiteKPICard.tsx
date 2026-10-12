@@ -3,6 +3,7 @@
 import React from "react";
 import { ResponsiveLine } from "@nivo/line";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { LeadTimeGaugeBar, type GaugeCounts } from "@/components/ui/LeadTimeGaugeBar";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tone system
@@ -45,6 +46,7 @@ export interface LiteKPICardProps {
   status?: StatusOverride;
   noData?: boolean;
   icon?: React.ReactNode;
+  gaugeCounts?: GaugeCounts | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,6 +64,7 @@ export function LiteKPICard({
   status,
   noData = false,
   icon,
+  gaugeCounts,
 }: LiteKPICardProps) {
   const toneKey  = toneFromAttainment(attainment, status);
   const tone     = TONES[toneKey];
@@ -182,19 +185,20 @@ export function LiteKPICard({
               <StatusDot color={tone.color} label={tone.label} />
             </div>
 
-            {/* 5. Attainment bar */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ height: 5, background: "#eef0f3", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{
-                  width: `${barPct}%`, height: "100%",
-                  background: tone.color, borderRadius: 3,
-                }} />
+            {/* 5. Attainment bar — replaced by gauge bar when PO counts are available */}
+            {gaugeCounts ? (
+              <LeadTimeGaugeBar counts={gaugeCounts} compact />
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ height: 5, background: "#eef0f3", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: `${barPct}%`, height: "100%", background: tone.color, borderRadius: 3 }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", whiteSpace: "nowrap" }}>
+                  <span style={{ fontSize: 9.5, color: "#98a2b3", fontFamily: "monospace" }}>{pctStr}</span>
+                  <span style={{ fontSize: 9.5, color: "#98a2b3", fontFamily: "monospace" }}>100%</span>
+                </div>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", whiteSpace: "nowrap" }}>
-                <span style={{ fontSize: 9.5, color: "#98a2b3", fontFamily: "monospace" }}>{pctStr}</span>
-                <span style={{ fontSize: 9.5, color: "#98a2b3", fontFamily: "monospace" }}>100%</span>
-              </div>
-            </div>
+            )}
 
             {/* 6. Sparkline */}
             {nivoData.length > 0 && (

@@ -342,6 +342,14 @@
         "value": "#f5a39a",
         "createdAt": "2026-10-12T03:27:00.048Z",
         "reason": "SPC out-of-limit highlight in control chart tooltips (UCL/LCL); intentional red tint, not brand drift"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "text-slate-400",
+        "files": [
+          "components/dashboard/Sidebar.tsx"
+        ],
+        "createdAt": "2026-10-12T09:54:12.667Z"
       }
     ]
   }

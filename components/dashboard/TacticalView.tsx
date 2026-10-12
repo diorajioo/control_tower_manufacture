@@ -9,8 +9,9 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { LeadTimePlantTable, type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
 import type { StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
-import { LINE_THEME, LineTooltip } from "@/components/charts/StandardLine";
+import { LINE_THEME, LineTooltip, TOOLTIP_COLORS } from "@/components/charts/StandardLine";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
+import { LeadTimeGaugeBar } from "@/components/ui/LeadTimeGaugeBar";
 import { ResponsiveBar, type BarCustomLayerProps, type BarDatum } from "@nivo/bar";
 import { STAGE_ORDER, stageLabel } from "@/lib/leadTimeStages";
 
@@ -254,7 +255,7 @@ function TKpiCard({
 
       {gaugeCounts != null && !noData && (
         <div style={{ padding: "4px 13px 10px" }}>
-          <LeadTimeGauge counts={gaugeCounts} />
+          <LeadTimeGaugeBar counts={gaugeCounts} />
           {(gaugePoCount != null || gaugePoStageLabel) && (
             <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 2 }}>
               {gaugePoCount != null && (
@@ -288,122 +289,97 @@ function TKpiCard({
 }
 
 // Stacked PO-count gauge: shows how many completed POs are on-time / at-risk / late vs 13-day target.
-function LeadTimeGauge({ counts }: { counts: { onTime: number; atRisk: number; late: number } }) {
-  const [hoveredKey, setHoveredKey] = useState<"onTime" | "atRisk" | "late" | null>(null);
-  const total = counts.onTime + counts.atRisk + counts.late;
-  if (total === 0) return null;
-
-  const segments = [
-    { key: "onTime" as const, color: "#067647", label: "On-time",  detail: `≤ ${LEAD_TIME_TARGET_DAYS}d`,                               count: counts.onTime  },
-    { key: "atRisk" as const, color: "#f59e0b", label: "At risk",  detail: `${LEAD_TIME_TARGET_DAYS}–${(LEAD_TIME_TARGET_DAYS * 1.15).toFixed(1)}d`, count: counts.atRisk  },
-    { key: "late"   as const, color: "#d92d20", label: "Late",     detail: `> ${(LEAD_TIME_TARGET_DAYS * 1.15).toFixed(1)}d`,            count: counts.late    },
-  ];
-
-  return (
-    <div
-      style={{ display: "flex", flexDirection: "column", gap: 5, position: "relative" }}
-      onMouseLeave={() => setHoveredKey(null)}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <span style={{ fontSize: 9.5, color: "#98a2b3", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          PO count vs {LEAD_TIME_TARGET_DAYS}-day target
-        </span>
-        <InfoTooltip
-          text={`Completed POs only (PO FG Done Date is set) within the selected period, categorised by actual gross lead time vs the ${LEAD_TIME_TARGET_DAYS}-day target — not the predictive risk score shown in the alerts bar.`}
-          size={11}
-          width={240}
-        />
-      </div>
-
-      {/* Stacked bar */}
-      <div style={{ height: 12, borderRadius: 6, overflow: "hidden", display: "flex", cursor: "default" }}>
-        {segments.map(seg => {
-          const pct = (seg.count / total) * 100;
-          if (pct <= 0) return null;
-          return (
-            <div
-              key={seg.key}
-              style={{ height: "100%", width: `${pct}%`, background: seg.color, transition: "opacity 0.12s", opacity: hoveredKey && hoveredKey !== seg.key ? 0.35 : 1 }}
-              onMouseEnter={() => setHoveredKey(seg.key)}
-            />
-          );
-        })}
-      </div>
-
-      {/* Floating tooltip */}
-      {hoveredKey && (() => {
-        const seg = segments.find(s => s.key === hoveredKey)!;
-        const pct = (seg.count / total) * 100;
-        return (
-          <div style={{
-            position: "absolute", top: 32, left: 0, right: 0, zIndex: 30,
-            background: "#1e293b", color: "white",
-            borderRadius: 5, padding: "4px 8px",
-            fontSize: 10.5, lineHeight: 1.35,
-            fontVariantNumeric: "tabular-nums",
-            display: "flex", alignItems: "center", gap: 5,
-            pointerEvents: "none",
-          }}>
-            <span style={{ color: seg.color, fontSize: 9 }}>●</span>
-            <span style={{ fontWeight: 700 }}>{seg.label}</span>
-            <span style={{ color: "#94a3b8", fontSize: 10 }}>{seg.detail}</span>
-            <span style={{ marginLeft: "auto", fontWeight: 700 }}>
-              {seg.count.toLocaleString()} PO · {pct.toFixed(1)}%
-            </span>
-          </div>
-        );
-      })()}
-
-      {/* Legend — PO count */}
-      <div style={{ display: "flex", gap: 8, fontSize: 10.5, flexWrap: "wrap" }}>
-        {segments.map(seg => (
-          <span key={seg.key} style={{ display: "flex", alignItems: "center", gap: 3, transition: "opacity 0.12s", opacity: hoveredKey && hoveredKey !== seg.key ? 0.35 : 1 }}>
-            <span style={{ width: 7, height: 7, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
-            <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#101828" }}>{seg.count.toLocaleString()}</span>
-            <span style={{ color: "#667085" }}>{seg.label}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── Donut chart (SVG, no @nivo/pie) ───────────────────────────────────────────
 
 interface DonutSegment { color: string; value: number; label: string; sub?: string }
 
-function DonutChart({ segments, size = 120 }: { segments: DonutSegment[]; size?: number }) {
-  const r = 42;
-  const cx = 50, cy = 50;
-  const circ = 2 * Math.PI * r;
+function PieChart({ segments, size = 120 }: { segments: DonutSegment[]; size?: number }) {
+  const cx = 50, cy = 50, r = 46;
   const total = segments.reduce((s, seg) => s + Math.max(0, seg.value), 0);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number } | null>(null);
+
   if (total <= 0) {
     return (
       <svg width={size} height={size} viewBox="0 0 100 100">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#eef0f3" strokeWidth={14} />
+        <circle cx={cx} cy={cy} r={r} fill="#eef0f3" />
       </svg>
     );
   }
-  let offset = 0;
+
+  const slices: React.ReactNode[] = [];
+  let startAngle = -Math.PI / 2;
+  segments.forEach((seg, i) => {
+    const frac = Math.max(0, seg.value) / total;
+    const sweep = frac * 2 * Math.PI;
+    const endAngle = startAngle + sweep;
+    const midAngle = startAngle + sweep / 2;
+    const hovered = hoveredIdx === i;
+    // Hovered slice pops out slightly along its midpoint direction
+    const ox = hovered ? Math.cos(midAngle) * 4 : 0;
+    const oy = hovered ? Math.sin(midAngle) * 4 : 0;
+    const rx = cx + ox, ry = cy + oy;
+    const x1 = rx + r * Math.cos(startAngle);
+    const y1 = ry + r * Math.sin(startAngle);
+    const x2 = rx + r * Math.cos(endAngle);
+    const y2 = ry + r * Math.sin(endAngle);
+    const large = sweep > Math.PI ? 1 : 0;
+    const d = `M ${rx} ${ry} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
+    slices.push(
+      <path
+        key={i}
+        d={d}
+        fill={seg.color}
+        stroke="white"
+        strokeWidth={1.2}
+        style={{ cursor: "pointer", transition: "d 0.12s ease" }}
+        onMouseEnter={(e) => { setHoveredIdx(i); setTooltip({ x: e.clientX, y: e.clientY }); }}
+        onMouseMove={(e) => setTooltip({ x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => { setHoveredIdx(null); setTooltip(null); }}
+      />
+    );
+    startAngle = endAngle;
+  });
+
+  const hovSeg = hoveredIdx !== null ? segments[hoveredIdx] : null;
+  const hovPct = hovSeg ? (Math.max(0, hovSeg.value) / total * 100) : 0;
+
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" style={{ transform: "rotate(-90deg)" }}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#eef0f3" strokeWidth={14} />
-      {segments.map((seg, i) => {
-        const frac = Math.max(0, seg.value) / total;
-        const dash = frac * circ;
-        const el = (
-          <circle
-            key={i}
-            cx={cx} cy={cy} r={r}
-            fill="none" stroke={seg.color} strokeWidth={14}
-            strokeDasharray={`${dash} ${circ - dash}`}
-            strokeDashoffset={-offset}
-          />
-        );
-        offset += dash;
-        return el;
-      })}
-    </svg>
+    <>
+      <svg width={size} height={size} viewBox="0 0 100 100">{slices}</svg>
+      {tooltip && hovSeg && (
+        <div style={{
+          position: "fixed",
+          left: tooltip.x + 12,
+          top: tooltip.y - 8,
+          zIndex: 9999,
+          background: TOOLTIP_COLORS.bg,
+          border: `1px solid ${TOOLTIP_COLORS.border}`,
+          backdropFilter: "blur(4px)",
+          borderRadius: 8,
+          padding: "8px 10px",
+          pointerEvents: "none",
+          minWidth: 140,
+          boxShadow: "0 6px 20px -6px rgba(16,24,40,0.28)",
+          fontFamily: "Lato, sans-serif",
+          animation: "chart-tooltip-in 0.15s ease-out",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+            <span style={{ width: 6, height: 6, borderRadius: 999, background: hovSeg.color, flexShrink: 0 }} />
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: TOOLTIP_COLORS.title, flex: 1 }}>
+              {hovSeg.label}
+            </span>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: TOOLTIP_COLORS.value, fontVariantNumeric: "tabular-nums" }}>
+              {hovSeg.value.toFixed(2)}
+            </span>
+            <span style={{ fontSize: 10.5, color: TOOLTIP_COLORS.muted }}>days</span>
+          </div>
+          <p style={{ margin: "2px 0 0 14px", fontSize: 9.5, color: TOOLTIP_COLORS.muted, fontVariantNumeric: "tabular-nums" }}>
+            {hovPct.toFixed(1)}% of total
+          </p>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -434,7 +410,7 @@ function DonutCard({
       ) : (
         <div style={{ marginTop: 8, display: "flex", gap: 14, alignItems: "center", flex: 1 }}>
           <div style={{ flexShrink: 0 }}>
-            <DonutChart segments={segments} size={120} />
+            <PieChart segments={segments} size={120} />
           </div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
             {segments.map((seg, i) => {
@@ -654,16 +630,16 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
               tooltip={({ data: d }) => {
                 const cum = cumByBin.get(d.binStart) ?? 0;
                 const pct = total > 0 ? (d.count / total) * 100 : 0;
+                const binLabel = d.binStart >= 38 ? "> 38 days" : `${d.binStart}–${d.binStart + 2} days`;
                 return (
-                  <div style={{
-                    background: "rgba(15,23,42,0.95)", color: "white",
-                    padding: "6px 9px", borderRadius: 6, fontSize: 11,
-                    fontFamily: "Lato, sans-serif", lineHeight: 1.45,
-                  }}>
-                    <div style={{ fontWeight: 700 }}>{d.binStart >= 38 ? "> 38 days" : `${d.binStart}-${d.binStart + 2} days`}</div>
-                    <div style={{ fontVariantNumeric: "tabular-nums" }}>{d.count} PO ({pct.toFixed(1)}%)</div>
-                    <div style={{ fontVariantNumeric: "tabular-nums", opacity: 0.8 }}>Cumulative: {cum.toFixed(1)}%</div>
-                  </div>
+                  <LineTooltip
+                    title={binLabel}
+                    rows={[
+                      { label: "PO count", value: d.count.toLocaleString() },
+                      { label: "Share", value: `${pct.toFixed(1)}%` },
+                    ]}
+                    footer={{ label: "Cumulative", value: `${cum.toFixed(1)}%` }}
+                  />
                 );
               }}
               animate={false}

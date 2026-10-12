@@ -32,7 +32,8 @@ function periodDateWhere(
 ): { sql: string; binds: unknown[] } {
   switch (period) {
     case "Today":
-      return { sql: `${col}::DATE = CURRENT_DATE()`, binds: [] };
+      // Shift 1 starts at 07:00 WIB — "Today" shows data from 07:00 today until now, not from midnight.
+      return { sql: `${col} >= DATEADD('hour', 7, CURRENT_DATE()::TIMESTAMP) AND ${col} <= CURRENT_TIMESTAMP()`, binds: [] };
     case "This Week":
       return { sql: `DATEADD('day', 1-DAYOFWEEKISO(${col}::DATE), ${col}::DATE) = DATEADD('day', 1-DAYOFWEEKISO(CURRENT_DATE()), CURRENT_DATE())`, binds: [] };
     case "Last Week":

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import { trackFeatureUsed } from "@/lib/analytics/events";
 import type { KPIAlert } from "@/lib/alerts";
 
 interface Risk { title: string; desc: string; level: "warn" | "info" }
@@ -127,7 +128,7 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
           <span className="text-slate-400">Risks &amp; Recommendations</span>
         </span>
         <button
-          onClick={() => fetchRisks(true)}
+          onClick={() => { fetchRisks(true); trackFeatureUsed({ report: "dashboard_strategic", feature: "ai_risks_opened" }); }}
           disabled={loading}
           className="ml-auto text-[#1E4076] hover:text-[#16305C] transition-colors disabled:opacity-40"
           title="Refresh AI analysis"

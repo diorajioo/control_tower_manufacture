@@ -221,7 +221,7 @@ Legacy, not rendered anywhere: `components/dashboard/KPICard.tsx` (5px accent ba
 7. Weekly axis: `evenWeekTicks()`.
 
 **Anti-patterns — do not repeat**
-- Local Nivo theme, tooltip or legend in a chart file (use the module).
+- Local Nivo theme, tooltip or legend in a chart file (use the module). **All chart tooltips — line, bar, scatter, pie, gauge — must use `LineTooltip` + `TOOLTIP_COLORS` from `StandardLine.tsx`.** Custom inline tooltip divs are banned. For `position: fixed` tooltips (e.g. SVG-rendered pie/donut charts) use `TOOLTIP_COLORS` tokens directly but match the same structure: bg `rgba(42,61,74,0.82)`, `backdropFilter: blur(4px)`, `border-radius: 8`, `1px solid rgba(255,255,255,0.08)`, `box-shadow: 0 6px 20px -6px rgba(16,24,40,0.28)`, `animation: chart-tooltip-in 0.15s ease-out`.
 - Dark tooltip panel, thick (2.5px+) straight lines, resting points on every data point.
 - Vertical grid lines, axis domain lines, axis titles.
 - Black (`#101828`) for a "Total" series; colors assigned by rank/sort order.

@@ -9,7 +9,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
-  "connect-src 'self' https://api.groq.com https://graph.microsoft.com https://login.microsoftonline.com",
+  "connect-src 'self' https://api.groq.com https://graph.microsoft.com https://login.microsoftonline.com https://openpanel.pti-cosmetics.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

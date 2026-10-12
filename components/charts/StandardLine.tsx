@@ -14,7 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { ReactNode } from "react";
-import { line, curveMonotoneX } from "d3-shape";
+import { line, curveLinear } from "d3-shape";
 import { SERIES_COLORS, SERIES_OVERFLOW_COLOR } from "@/lib/chartConfig";
 
 export interface StandardSeries {
@@ -47,7 +47,7 @@ export const LINE_DEFAULTS = {
   margin:        { top: 10, right: 8, bottom: 26, left: 36 },
   xScale:        { type: "point" as const },
   yScale:        { type: "linear" as const, min: "auto" as const, max: "auto" as const, stacked: false },
-  curve:         "monotoneX" as const,
+  curve:         "linear" as const,
   lineWidth:     2,
   enablePoints:  false,
   enableGridX:   false,
@@ -123,7 +123,7 @@ export function makeActiveLineLayer(series: StandardSeries[], hovered: string | 
     const pathD = line<{ x: string; y: number | null }>()
       .x((d) => props.xScale(d.x))
       .y((d) => props.yScale(d.y))
-      .curve(curveMonotoneX)(points) ?? "";
+      .curve(curveLinear)(points) ?? "";
     return (
       <path
         d={pathD}

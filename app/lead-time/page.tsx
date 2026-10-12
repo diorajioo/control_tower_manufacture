@@ -20,6 +20,7 @@ import { LeadTimeTopSkuChart } from "@/components/dashboard/LeadTimeTopSkuChart"
 import { LineTooltip } from "@/components/charts/StandardLine";
 import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
+import { trackFilterApplied } from "@/lib/analytics/events";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -957,6 +958,7 @@ function StrategicView({ filters, refreshKey, ltBasis }: { filters: LeadTimeFilt
             trend={lt?.grossTrend ?? null}
             series={lt?.sparkline ?? []}
             noData={!lt}
+            gaugeCounts={lt && lt.poCount > 0 ? { onTime: lt.onTimeCount ?? 0, atRisk: lt.atRiskCount ?? 0, late: lt.lateCount ?? 0 } : null}
           />
         </KpiHighlightTarget>
         <KpiHighlightTarget id="va">
@@ -1175,6 +1177,10 @@ export default function LeadTimePage() {
           onFilterChange={({ plant, startDate, endDate, period }) => {
             setFilters({ plant, startDate, endDate, period });
             setLastUpdated(new Date());
+            trackFilterApplied("lead_time", "apply", {
+              period: period ?? "",
+              plant: Array.isArray(plant) ? plant.join(",") : (plant ?? "All"),
+            });
           }}
           views={LEAD_TIME_VIEWS}
           activeView={persona}

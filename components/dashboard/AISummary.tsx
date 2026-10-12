@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { highlightKpi, isKpiHighlightId, KPI_TRIGGER_ATTR } from "@/components/ui/KpiHighlight";
 import { setKpiOneLiners } from "@/components/ui/KpiOneLiner";
+import { trackFeatureUsed } from "@/lib/analytics/events";
 
 // KPI keyword → look for the next number within 50 chars and make it clickable.
 // Only IDs that have a highlight target (KPI_HIGHLIGHT_IDS) become clickable.
@@ -285,7 +286,7 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
             <span className="text-[10px] text-white/60 shrink-0">{ageLabel}</span>
           )}
           <button
-            onClick={() => fetchSummary(true)}
+            onClick={() => { fetchSummary(true); trackFeatureUsed({ report: "dashboard_strategic", feature: "ai_summary_opened" }); }}
             disabled={loading}
             className="flex items-center gap-1 text-[10px] text-white/85 hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-white/15 disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
           >

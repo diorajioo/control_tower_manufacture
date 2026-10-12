@@ -26,6 +26,7 @@ import { formatThousands } from "@/lib/utils";
 import { alertsFromKpi, type KPIAlert } from "@/lib/alerts";
 import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { trackFilterApplied, trackReportViewed, trackErrorShown } from "@/lib/analytics/events";
 
 interface KPIResponse {
   leadTime: {
@@ -249,6 +250,7 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error("Dashboard fetch error:", err);
+      trackErrorShown({ report: "dashboard_strategic", error_type: "load_failed" });
       setFetchError(
         err instanceof Error ? err.message : "Failed to load data — try refreshing"
       );
@@ -271,9 +273,15 @@ export default function DashboardPage() {
     fetchData(filters);
   }, [filters, fetchData]);
 
-  const handleFilterChange = (newFilters: Filters) => {
+  const handleFilterChange = (newFilters: Filters, trigger: "apply" | "reset" = "apply") => {
     setFilters(newFilters);
     try { localStorage.setItem("ct-filters", JSON.stringify(newFilters)); } catch { /* ignore */ }
+    const report = activeView === "tactical" ? "dashboard_tactical" : "dashboard_strategic";
+    trackFilterApplied(report, trigger, {
+      period: newFilters.period,
+      plant: Array.isArray(newFilters.plant) ? newFilters.plant.join(",") : (newFilters.plant ?? "All"),
+      data_level: newFilters.dataLevel ?? "",
+    });
     fetchData(newFilters);
   };
 
@@ -316,9 +324,13 @@ export default function DashboardPage() {
           initialFilters={filters}
           views={[{ key: "strategic", label: "Strategic" }, { key: "tactical", label: "Tactical" }]}
           activeView={activeView}
-          onViewChange={(v) => setActiveView(v as "strategic" | "tactical")}
+          onViewChange={(v) => {
+            const next = v as "strategic" | "tactical";
+            setActiveView(next);
+            trackReportViewed(next === "tactical" ? "dashboard_tactical" : "dashboard_strategic");
+          }}
           ltBasis={activeView === "tactical" ? ltBasis : undefined}
-          onLtBasisChange={activeView === "tactical" ? setLtBasis : undefined}
+          onLtBasisChange={activeView === "tactical" ? (b) => { setLtBasis(b); trackFilterApplied("dashboard_tactical", "apply", { lt_basis: b }); } : undefined}
           onRefresh={handleRefresh}
           isLoading={loading}
           lastUpdated={lastUpdated}

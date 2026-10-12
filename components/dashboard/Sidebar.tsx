@@ -8,6 +8,7 @@ import {
   FileText, Sparkles, Settings, UserCog, GraduationCap, LogOut, type LucideIcon,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
+import { trackUserLoggedOut } from "@/lib/analytics/events";
 import { cn } from "@/lib/utils";
 import { computeAlerts } from "@/lib/alerts";
 
@@ -144,7 +145,10 @@ export function Sidebar() {
   useEffect(() => {
     const reset = () => {
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => signOut({ callbackUrl: "/login" }), INACTIVITY_MS);
+      timer.current = setTimeout(async () => {
+        await trackUserLoggedOut();
+        signOut({ callbackUrl: "/login" });
+      }, INACTIVITY_MS);
     };
     const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"] as const;
     events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
@@ -182,7 +186,7 @@ export function Sidebar() {
           <NavRow key={item.label} item={item} pathname={pathname} alertCount={alertCount} />
         ))}
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={async () => { await trackUserLoggedOut(); signOut({ callbackUrl: "/login" }); }}
           className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors duration-150 w-full text-left"
         >
           <LogOut size={15} strokeWidth={1.6} className="shrink-0" />

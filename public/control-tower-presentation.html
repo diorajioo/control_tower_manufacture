@@ -9,13 +9,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif;background:#07061a}
+html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif;background:#eeebe6}
 :root{
-  --i3:#a5b4fc;--i4:#818cf8;--i5:#6366f1;--i6:#4f46e5;
-  --v4:#a78bfa;--em:#34d399;--am:#fbbf24;--ro:#fb7185;
-  --t1:rgba(255,255,255,.95);--t2:rgba(255,255,255,.6);--t3:rgba(255,255,255,.32);
-  --sf:rgba(255,255,255,.04);--sfh:rgba(255,255,255,.07);--bd:rgba(255,255,255,.08);
-  --card:#11102e;--cardmid:#0e0d28;
+  --i3:#6366f1;--i4:#4f46e5;--i5:#4338ca;--i6:#3730a3;
+  --v4:#7c3aed;--em:#059669;--am:#d97706;--ro:#e11d48;
+  --t1:#0f172a;--t2:#475569;--t3:#94a3b8;
+  --sf:rgba(0,0,0,.025);--sfh:rgba(0,0,0,.045);--bd:rgba(0,0,0,.09);
+  --card:#f7f4f0;--cardmid:#f0ede8;
 }
 
 #stage{position:fixed;inset:0}
@@ -31,35 +31,36 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
 .slide.out{opacity:0;transform:translateY(-14px)}
 .slide::before{
   content:'';position:absolute;inset:0;pointer-events:none;
-  background-image:linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),
-                   linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);
+  background-image:linear-gradient(rgba(0,0,0,.04) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(0,0,0,.04) 1px,transparent 1px);
   background-size:54px 54px;
 }
-.bg-cover{background:radial-gradient(ellipse 80% 65% at 50% 38%,rgba(79,70,229,.28) 0%,transparent 70%),#07061a}
-.bg-dark{background:#07061a}
-.bg-l{background:radial-gradient(ellipse 65% 55% at 14% 50%,rgba(67,56,202,.15) 0%,transparent 65%),#07061a}
-.bg-r{background:radial-gradient(ellipse 65% 55% at 86% 50%,rgba(99,102,241,.15) 0%,transparent 65%),#07061a}
-.bg-rose{background:radial-gradient(ellipse 70% 55% at 50% 40%,rgba(251,113,133,.1) 0%,transparent 65%),#07061a}
-.bg-em{background:radial-gradient(ellipse 70% 55% at 50% 40%,rgba(52,211,153,.08) 0%,transparent 65%),#07061a}
-.bg-violet{background:radial-gradient(ellipse 70% 55% at 50% 40%,rgba(167,139,250,.1) 0%,transparent 65%),#07061a}
+.bg-cover{background:radial-gradient(ellipse 80% 65% at 50% 38%,rgba(99,102,241,.13) 0%,transparent 70%),#eeebe6}
+.bg-dark{background:#eeebe6}
+.bg-l{background:radial-gradient(ellipse 65% 55% at 14% 50%,rgba(67,56,202,.09) 0%,transparent 65%),#eeebe6}
+.bg-r{background:radial-gradient(ellipse 65% 55% at 86% 50%,rgba(99,102,241,.09) 0%,transparent 65%),#eeebe6}
+.bg-rose{background:radial-gradient(ellipse 70% 55% at 50% 40%,rgba(225,29,72,.07) 0%,transparent 65%),#eeebe6}
+.bg-em{background:radial-gradient(ellipse 70% 55% at 50% 40%,rgba(5,150,105,.06) 0%,transparent 65%),#eeebe6}
+.bg-violet{background:radial-gradient(ellipse 70% 55% at 50% 40%,rgba(124,58,237,.08) 0%,transparent 65%),#eeebe6}
 
 /* NAV */
 #nav{
   position:fixed;bottom:28px;left:50%;transform:translateX(-50%);
   display:flex;align-items:center;gap:14px;z-index:100;
-  background:rgba(12,11,36,.88);backdrop-filter:blur(12px);
-  border:1px solid var(--bd);border-radius:999px;padding:9px 18px;
+  background:rgba(240,237,232,.94);backdrop-filter:blur(12px);
+  border:1px solid rgba(0,0,0,.09);border-radius:999px;padding:9px 18px;
+  box-shadow:0 4px 20px rgba(0,0,0,.1);
 }
-.nb{background:none;border:none;cursor:pointer;color:var(--t2);padding:3px 7px;font-size:18px;line-height:1;transition:color .15s}
-.nb:hover{color:var(--t1)}.nb:disabled{color:var(--t3);cursor:default}
-#ctr{font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--t3);min-width:44px;text-align:center;letter-spacing:.08em}
+.nb{background:none;border:none;cursor:pointer;color:rgba(0,0,0,.4);padding:3px 7px;font-size:18px;line-height:1;transition:color .15s}
+.nb:hover{color:#0f172a}.nb:disabled{color:rgba(0,0,0,.2);cursor:default}
+#ctr{font-family:'Space Grotesk',sans-serif;font-size:12px;color:rgba(0,0,0,.35);min-width:44px;text-align:center;letter-spacing:.08em}
 #dots{display:flex;gap:5px;align-items:center}
-.dot{width:5px;height:5px;border-radius:50%;background:var(--bd);transition:all .22s;cursor:pointer}
+.dot{width:5px;height:5px;border-radius:50%;background:rgba(0,0,0,.18);transition:all .22s;cursor:pointer}
 .dot.on{background:var(--i4);width:16px;border-radius:3px}
-#badge{position:fixed;top:22px;right:28px;font-family:'Space Grotesk',sans-serif;font-size:11px;color:var(--t3);letter-spacing:.12em;z-index:100}
-#hint{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--t3);animation:fh 4s forwards}
-#cur-btn{position:fixed;top:16px;left:28px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--i3);background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:999px;padding:5px 14px;cursor:pointer;transition:all .2s}
-#cur-btn:hover{background:rgba(99,102,241,.2);border-color:rgba(99,102,241,.5)}
+#badge{position:fixed;top:22px;right:28px;font-family:'Space Grotesk',sans-serif;font-size:11px;color:rgba(0,0,0,.35);letter-spacing:.12em;z-index:100}
+#hint{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);font-size:11px;color:rgba(0,0,0,.3);animation:fh 4s forwards}
+#cur-btn{position:fixed;top:16px;left:28px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--i4);background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);border-radius:999px;padding:5px 14px;cursor:pointer;transition:all .2s}
+#cur-btn:hover{background:rgba(99,102,241,.14);border-color:rgba(99,102,241,.4)}
 @keyframes fh{0%,60%{opacity:1}100%{opacity:0}}
 
 /* TYPE */
@@ -73,52 +74,52 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
 .H{font-family:'Space Grotesk',sans-serif;font-size:clamp(15px,2vw,22px);font-weight:600;color:var(--t1);line-height:1.3}
 .b{font-size:13px;color:var(--t2);line-height:1.65}
 .c{font-size:11px;color:var(--t3);letter-spacing:.04em}
-.gt{background:linear-gradient(135deg,#a5b4fc 0%,#818cf8 40%,#c4b5fd 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.gt{background:linear-gradient(135deg,#6366f1 0%,#4f46e5 40%,#7c3aed 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 
 /* LAYOUT */
 .W{width:100%;max-width:1120px;display:flex;flex-direction:column}
 
 /* CARDS */
-.card{background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:20px}
-.card-sm{background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:12px 14px}
-.hl{background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.22);border-left:3px solid var(--i5);border-radius:0 10px 10px 0;padding:13px 18px}
+.card{background:var(--card);border:1px solid var(--bd);box-shadow:0 1px 4px rgba(0,0,0,.06);border-radius:12px;padding:20px}
+.card-sm{background:var(--card);border:1px solid var(--bd);box-shadow:0 1px 4px rgba(0,0,0,.06);border-radius:8px;padding:12px 14px}
+.hl{background:rgba(99,102,241,.05);border:1px solid rgba(99,102,241,.18);border-left:3px solid var(--i5);border-radius:0 10px 10px 0;padding:13px 18px}
 
 /* PILL / TAG */
 .pl{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
-.pl-g{background:rgba(52,211,153,.12);color:var(--em);border:1px solid rgba(52,211,153,.25)}
-.pl-i{background:rgba(99,102,241,.12);color:var(--i3);border:1px solid rgba(99,102,241,.25)}
-.pl-v{background:rgba(167,139,250,.12);color:var(--v4);border:1px solid rgba(167,139,250,.25)}
-.pl-a{background:rgba(251,191,36,.12);color:var(--am);border:1px solid rgba(251,191,36,.25)}
-.pl-r{background:rgba(251,113,133,.12);color:var(--ro);border:1px solid rgba(251,113,133,.25)}
+.pl-g{background:rgba(5,150,105,.09);color:#059669;border:1px solid rgba(5,150,105,.22)}
+.pl-i{background:rgba(99,102,241,.09);color:#4f46e5;border:1px solid rgba(99,102,241,.22)}
+.pl-v{background:rgba(124,58,237,.09);color:#7c3aed;border:1px solid rgba(124,58,237,.22)}
+.pl-a{background:rgba(217,119,6,.09);color:#d97706;border:1px solid rgba(217,119,6,.22)}
+.pl-r{background:rgba(225,29,72,.09);color:#e11d48;border:1px solid rgba(225,29,72,.22)}
 .pd{width:5px;height:5px;border-radius:50%;background:currentColor}
 
 /* DIVIDER */
-.dvd{width:100%;height:1px;background:var(--bd);margin:14px 0}
+.dvd{width:100%;height:1px;background:rgba(0,0,0,.09);margin:14px 0}
 
 /* LEFT BAR accent */
 .lbar{width:3px;border-radius:2px;flex-shrink:0}
 
 /* CHIP */
-.chip{display:inline-block;font-family:'Space Grotesk',sans-serif;font-size:11px;color:var(--t3);background:rgba(255,255,255,.04);border:1px solid var(--bd);border-radius:6px;padding:5px 12px}
+.chip{display:inline-block;font-family:'Space Grotesk',sans-serif;font-size:11px;color:#64748b;background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.09);border-radius:6px;padding:5px 12px}
 
 /* ══ APP MOCKUPS ══ */
-.app-shell{display:flex;width:100%;border:1px solid rgba(255,255,255,.1);border-radius:14px;overflow:hidden;box-shadow:0 32px 80px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.04);background:#0f0e26}
+.app-shell{display:flex;width:100%;border:1px solid rgba(0,0,0,.12);border-radius:14px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.16),0 0 0 1px rgba(0,0,0,.06);background:#0f0e26}
 .app-sidebar{width:58px;background:#0c0b22;border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:8px;flex-shrink:0}
-.sbi{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--t3)}
-.sbi.act{background:rgba(99,102,241,.18);color:var(--i3)}
+.sbi{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;color:rgba(255,255,255,.4)}
+.sbi.act{background:rgba(99,102,241,.18);color:#a5b4fc}
 .app-body{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .app-topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.06);background:#0c0b22}
 .app-content{flex:1;padding:14px;overflow:hidden}
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .kpi-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px}
-.kpi-val{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:var(--t1);line-height:1}
-.kpi-lbl{font-size:10px;color:var(--t3);margin-top:3px}
+.kpi-val{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:rgba(255,255,255,.95);line-height:1}
+.kpi-lbl{font-size:10px;color:rgba(255,255,255,.32);margin-top:3px}
 .kpi-badge{display:inline-block;font-size:9px;padding:1px 6px;border-radius:4px;margin-top:5px}
-.kpi-warn{background:rgba(251,191,36,.15);color:var(--am)}
-.kpi-ok{background:rgba(52,211,153,.15);color:var(--em)}
-.kpi-crit{background:rgba(251,113,133,.15);color:var(--ro)}
+.kpi-warn{background:rgba(251,191,36,.15);color:#fbbf24}
+.kpi-ok{background:rgba(52,211,153,.15);color:#34d399}
+.kpi-crit{background:rgba(251,113,133,.15);color:#fb7185}
 .sparkline{display:flex;align-items:flex-end;gap:2px;height:24px;margin-top:6px}
-.sp-bar{flex:1;border-radius:2px 2px 0 0;background:rgba(99,102,241,.4)}
+.sp-bar{flex:1;border-radius:2px 2px 0 0;background:rgba(99,102,241,.45)}
 </style>
 </head>
 <body>
@@ -265,19 +266,19 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
   <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:6px"><div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--ro);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
 <div style="display:flex;align-items:center;gap:8px"><div style="width:24px;height:24px;flex-shrink:0;border-radius:6px;background:rgba(251,113,133,.15);border:1px solid rgba(251,113,133,.3);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--ro)">1</div>
 <div style="font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--t1);line-height:1.25">Passive, view-only monitoring</div></div>
-<div style="font-size:10.5px;color:var(--ro);font-style:italic">Users must self-initiate</div><div class="b" style="font-size:10.5px;line-height:1.5">Dashboards only show data when someone opens them.</div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">No background check on KPI health</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">No push to Teams when a KPI breaches</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Response time = how often a manager opens Tableau</div></div><div style="margin-top:auto;padding-top:7px;border-top:1px solid var(--bd);font-size:10px;line-height:1.45;color:var(--em)">Fix: KPI health checked on every refresh; breaches pushed to Teams DM</div></div><div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--am);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
+<div style="font-size:10.5px;color:var(--ro);font-style:italic">Users must self-initiate</div><div class="b" style="font-size:10.5px;line-height:1.5">Dashboards only show data when someone opens them.</div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">No background check on KPI health</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">No push to Teams when a KPI breaches</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Response time = how often a manager opens Tableau</div></div><div style="margin-top:auto;padding-top:7px;border-top:1px solid var(--bd);font-size:10px;line-height:1.45;color:var(--em)">Fix: KPI health checked on every refresh; breaches pushed to Teams DM</div></div><div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--am);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
 <div style="display:flex;align-items:center;gap:8px"><div style="width:24px;height:24px;flex-shrink:0;border-radius:6px;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--am)">2</div>
 <div style="font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--t1);line-height:1.25">Insight takes days, not minutes</div></div>
-<div style="font-size:10.5px;color:var(--am);font-style:italic">Data is visible — not understood</div><div class="b" style="font-size:10.5px;line-height:1.5">No AI to explain the numbers, so people compile and interpret by hand.</div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--am);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Views exported one by one into Excel</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--am);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">3–4 days to collect data for one report</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--am);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">"OEE dropped 6 points" — cause needs manual investigation</div></div><div style="margin-top:auto;padding-top:7px;border-top:1px solid var(--bd);font-size:10px;line-height:1.45;color:var(--em)">Fix: data already combined; AI summary + chat → ~3–4 h instead of 3–4 days (est.)</div></div><div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--i3);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
+<div style="font-size:10.5px;color:var(--am);font-style:italic">Data is visible — not understood</div><div class="b" style="font-size:10.5px;line-height:1.5">No AI to explain the numbers, so people compile and interpret by hand.</div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--am);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Views exported one by one into Excel</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--am);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">3–4 days to collect data for one report</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--am);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">"OEE dropped 6 points" — cause needs manual investigation</div></div><div style="margin-top:auto;padding-top:7px;border-top:1px solid var(--bd);font-size:10px;line-height:1.45;color:var(--em)">Fix: data already combined; AI summary + chat → ~3–4 h instead of 3–4 days (est.)</div></div><div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--i3);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
 <div style="display:flex;align-items:center;gap:8px"><div style="width:24px;height:24px;flex-shrink:0;border-radius:6px;background:rgba(165,180,252,.15);border:1px solid rgba(165,180,252,.3);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--i3)">3</div>
 <div style="font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--t1);line-height:1.25">KPIs scattered across self-built reports</div></div>
-<div style="font-size:10.5px;color:var(--i3);font-style:italic">Data exists — but is copied into many reports</div><div class="b" style="font-size:10.5px;line-height:1.5">Raw data is downloaded from Metabase and each KPI is rebuilt in the team’s own report.</div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--i3);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Refreshed only when someone downloads again</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--i3);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Formulas live in each report — definitions can drift</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--i3);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">No single screen shows how the plant is doing overall</div></div><div style="margin-top:auto;padding-top:7px;border-top:1px solid var(--bd);font-size:10px;line-height:1.45;color:var(--em)">Fix: each KPI calculated once on Snowflake, one definition, one entry point</div></div><div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--em);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
+<div style="font-size:10.5px;color:var(--i3);font-style:italic">Data exists — but is copied into many reports</div><div class="b" style="font-size:10.5px;line-height:1.5">Raw data is downloaded from Metabase and each KPI is rebuilt in the team’s own report.</div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--i3);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Refreshed only when someone downloads again</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--i3);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Formulas live in each report — definitions can drift</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--i3);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">No single screen shows how the plant is doing overall</div></div><div style="margin-top:auto;padding-top:7px;border-top:1px solid var(--bd);font-size:10px;line-height:1.45;color:var(--em)">Fix: each KPI calculated once on Snowflake, one definition, one entry point</div></div><div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--em);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
 <div style="display:flex;align-items:center;gap:8px"><div style="width:24px;height:24px;flex-shrink:0;border-radius:6px;background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.3);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--em)">4</div>
 <div style="font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--t1);line-height:1.25">No daily management system for TQM</div></div>
-<div style="font-size:10.5px;color:var(--em);font-style:italic">Reports look back, not at today</div><div class="b" style="font-size:10.5px;line-height:1.5">The daily board is built by hand from static reports.</div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">No live per-plant / per-stage daily view</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">No shared screen for the daily meeting</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">PDCA cycle can’t run on live data</div></div><div style="margin-top:auto;padding-top:7px;border-top:1px solid var(--bd);font-size:10px;line-height:1.45;color:var(--em)">Fix: live per-plant view, alerts and plant-TV Monitor for the daily PDCA meeting</div></div><div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--v4);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
+<div style="font-size:10.5px;color:var(--em);font-style:italic">Reports look back, not at today</div><div class="b" style="font-size:10.5px;line-height:1.5">The daily board is built by hand from static reports.</div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">No live per-plant / per-stage daily view</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">No shared screen for the daily meeting</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">PDCA cycle can’t run on live data</div></div><div style="margin-top:auto;padding-top:7px;border-top:1px solid var(--bd);font-size:10px;line-height:1.45;color:var(--em)">Fix: live per-plant view, alerts and plant-TV Monitor for the daily PDCA meeting</div></div><div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--v4);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:7px">
 <div style="display:flex;align-items:center;gap:8px"><div style="width:24px;height:24px;flex-shrink:0;border-radius:6px;background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.3);display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--v4)">5</div>
 <div style="font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:var(--t1);line-height:1.25">Locked platform: slow to change, costly to scale</div></div>
-<div style="font-size:10.5px;color:var(--v4);font-style:italic">Tableau sets the limits</div><div class="b" style="font-size:10.5px;line-height:1.5">Closed SaaS priced per seat; only licensed Creators can build.</div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--v4);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Changes take weeks: request → Creator → publish</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--v4);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Cannot add custom alerts, AI or integrations</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--v4);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45"><span class="px" data-usd="278220">$278,220</span>/year license limits who gets access</div></div><div style="margin-top:auto;padding-top:7px;border-top:1px solid var(--bd);font-size:10px;line-height:1.45;color:var(--em)">Fix: owned app — changes ship in days, no per-seat cost</div></div></div>
+<div style="font-size:10.5px;color:var(--v4);font-style:italic">Tableau sets the limits</div><div class="b" style="font-size:10.5px;line-height:1.5">Closed SaaS priced per seat; only licensed Creators can build.</div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--v4);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Changes take weeks: request → Creator → publish</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--v4);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45">Cannot add custom alerts, AI or integrations</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--v4);border-radius:0 6px 6px 0;padding:6px 9px"><div class="b" style="font-size:10px;line-height:1.45"><span class="px" data-usd="278220">$278,220</span>/year license limits who gets access</div></div><div style="margin-top:auto;padding-top:7px;border-top:1px solid var(--bd);font-size:10px;line-height:1.45;color:var(--em)">Fix: owned app — changes ship in days, no per-seat cost</div></div></div>
 </div>
 </section>
 
@@ -299,11 +300,11 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
       </div>
       <div class="b" style="font-size:12px;margin-bottom:12px">Build a Next.js web application on top of existing Snowflake and Azure AD infrastructure — eliminating vendor dependency while maintaining enterprise-grade security.</div>
       <div style="display:flex;flex-direction:column;gap:7px">
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
           <div style="font-size:11px;font-weight:700;color:var(--i3);flex-shrink:0">Target</div>
           <div class="b" style="font-size:11px">Production-deployed, accessible to all team members via Azure AD SSO</div>
         </div>
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
           <div style="font-size:11px;font-weight:700;color:var(--t3);flex-shrink:0">Constraint</div>
           <div class="b" style="font-size:11px">Must reuse existing Snowflake data warehouse — no duplicate data pipeline</div>
         </div>
@@ -317,11 +318,11 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
       </div>
       <div class="b" style="font-size:12px;margin-bottom:12px">Every KPI (Lead Time, Output, Productivity, OEE, Yield Loss…) in one place, pulled live from Snowflake and filtered by plant and period — a daily visual system for the TQM PDCA cycle.</div>
       <div style="display:flex;flex-direction:column;gap:7px">
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
           <div style="font-size:11px;font-weight:700;color:var(--em);flex-shrink:0">Target</div>
           <div class="b" style="font-size:11px">All KPIs on one screen; Strategic + Tactical views and Monitor mode for the daily meeting</div>
         </div>
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
           <div style="font-size:11px;font-weight:700;color:var(--t3);flex-shrink:0">Constraint</div>
           <div class="b" style="font-size:11px">Snowflake auto-suspend requires graceful timeout handling (60s)</div>
         </div>
@@ -335,11 +336,11 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
       </div>
       <div class="b" style="font-size:12px;margin-bottom:12px">When a KPI breaches its warning or critical threshold, the system sends a direct message to the relevant recipient in Teams — without requiring anyone to open the dashboard.</div>
       <div style="display:flex;flex-direction:column;gap:7px">
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
           <div style="font-size:11px;font-weight:700;color:var(--am);flex-shrink:0">Target</div>
           <div class="b" style="font-size:11px">Per-user, per-KPI alert subscriptions via Microsoft Graph API</div>
         </div>
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
           <div style="font-size:11px;font-weight:700;color:var(--t3);flex-shrink:0">Constraint</div>
           <div class="b" style="font-size:11px">Must work within delegated Graph API permissions — no admin consent required</div>
         </div>
@@ -353,11 +354,11 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
       </div>
       <div class="b" style="font-size:12px;margin-bottom:12px">Cut report prep from 3–4 days to hours. Generate a 3-sentence executive summary automatically on every session and provide a conversational chatbot that queries Snowflake directly and answers manufacturing performance questions.</div>
       <div style="display:flex;flex-direction:column;gap:7px">
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
           <div style="font-size:11px;font-weight:700;color:var(--v4);flex-shrink:0">Target</div>
           <div class="b" style="font-size:11px">Summary cached 5h per filter combo; chatbot with max 3 tool-use rounds per session</div>
         </div>
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:8px 12px;display:flex;gap:8px">
           <div style="font-size:11px;font-weight:700;color:var(--t3);flex-shrink:0">Constraint</div>
           <div class="b" style="font-size:11px">AI responses must be grounded in actual data — no hallucination of KPI values</div>
         </div>
@@ -384,11 +385,11 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
       <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--t1);margin-bottom:8px">Tableau is a read tool, not an event-driven system</div>
       <div class="b" style="font-size:12px;margin-bottom:10px">Tableau has no built-in scheduler or webhook mechanism to check KPI values autonomously. It serves dashboards when opened — it does not watch data and push when something changes.</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
           <div style="font-size:10px;font-weight:700;color:var(--ro);flex-shrink:0">Effect</div>
           <div class="b" style="font-size:10px">Problem response time = time between manual checks. Issues can go unnoticed for hours.</div>
         </div>
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
           <div style="font-size:10px;font-weight:700;color:var(--t3);flex-shrink:0;white-space:nowrap">Why not Tableau?</div>
           <div class="b" style="font-size:10px">Tableau Alerts are limited to specific chart types, cannot be per-user per-KPI, and require admin access.</div>
         </div>
@@ -400,11 +401,11 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
       <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--t1);margin-bottom:8px">Tableau renders data — it does not reason about it</div>
       <div class="b" style="font-size:12px;margin-bottom:10px">Tableau's core function is rendering pre-defined visualizations. It has no language model, no summarization engine, and no conversational interface. Adding AI requires external tools with no native data binding.</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
           <div style="font-size:10px;font-weight:700;color:var(--am);flex-shrink:0">Effect</div>
           <div class="b" style="font-size:10px">Managers spend time reading multiple charts to form a picture that AI could narrate in 3 sentences.</div>
         </div>
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
           <div style="font-size:10px;font-weight:700;color:var(--t3);flex-shrink:0;white-space:nowrap">Why not Tableau?</div>
           <div class="b" style="font-size:10px">Tableau Pulse (AI) is a separate paid add-on with limited customization, not available in all regions.</div>
         </div>
@@ -416,11 +417,11 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
       <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--t1);margin-bottom:8px">A SaaS platform cannot be extended beyond its API</div>
       <div class="b" style="font-size:12px;margin-bottom:10px">Tableau Cloud is a closed platform. Custom features — per-user alert logic, Teams integration, AI chatbot, action tracking — are impossible to build inside Tableau. These require owning the application layer.</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
           <div style="font-size:10px;font-weight:700;color:var(--v4);flex-shrink:0">Effect</div>
           <div class="b" style="font-size:10px">Every time a new operational need arises (e.g. "notify quality manager on RFT drop"), it cannot be built.</div>
         </div>
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
           <div style="font-size:10px;font-weight:700;color:var(--t3);flex-shrink:0;white-space:nowrap">Why not Tableau?</div>
           <div class="b" style="font-size:10px">Tableau does not expose an application development framework. Custom logic must live outside the tool.</div>
         </div>
@@ -432,11 +433,11 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
       <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--t1);margin-bottom:8px">Per-seat licensing is structurally misaligned with operations</div>
       <div class="b" style="font-size:12px;margin-bottom:10px">A manufacturing operation needs KPI access for Plant Managers, Shift Supervisors, Quality Teams, and Operations staff. Tableau's model charges per seat regardless of usage frequency.</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
           <div style="font-size:10px;font-weight:700;color:var(--i3);flex-shrink:0">Effect</div>
           <div class="b" style="font-size:10px">Access is rationed to limit cost — roles that would benefit from visibility are excluded.</div>
         </div>
-        <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
+        <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px;display:flex;gap:8px">
           <div style="font-size:10px;font-weight:700;color:var(--t3);flex-shrink:0;white-space:nowrap">Why not Tableau?</div>
           <div class="b" style="font-size:10px">Fundamental pricing model issue. No free viewer tier or flat-rate enterprise option for small teams.</div>
         </div>
@@ -524,7 +525,7 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
         </div>
       </div>
 
-      <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:8px;padding:9px 14px">
+      <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:8px;padding:9px 14px">
         <div class="b" style="font-size:10px;color:var(--t3)">Stack: Next.js 14 · Snowflake · Azure AD · DeepSeek V4 + Groq (fallback) · Microsoft Graph API · Vercel · Nivo · TypeScript</div>
       </div>
 
@@ -617,10 +618,10 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
     <div class="card" style="padding:16px 18px">
       <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--t3);margin-bottom:10px">Weights learned from 12,601 POs (Jan–Jun 2026)</div>
       <div style="display:flex;flex-direction:column;gap:9px">
-        <div><div style="display:flex;justify-content:space-between" class="b"><span style="font-size:12px;color:var(--t1)">Stage Progress</span><b style="color:var(--t1)">34%</b></div><div style="height:6px;background:rgba(255,255,255,.06);border-radius:3px"><div style="width:33.6%;height:100%;background:var(--i4);border-radius:3px"></div></div></div>
-        <div><div style="display:flex;justify-content:space-between" class="b"><span style="font-size:12px;color:var(--t1)">Waiting</span><b style="color:var(--t1)">31%</b></div><div style="height:6px;background:rgba(255,255,255,.06);border-radius:3px"><div style="width:31%;height:100%;background:var(--am);border-radius:3px"></div></div></div>
-        <div><div style="display:flex;justify-content:space-between" class="b"><span style="font-size:12px;color:var(--t1)">Product History</span><b style="color:var(--t1)">29%</b></div><div style="height:6px;background:rgba(255,255,255,.06);border-radius:3px"><div style="width:28.8%;height:100%;background:var(--v4);border-radius:3px"></div></div></div>
-        <div><div style="display:flex;justify-content:space-between" class="b"><span style="font-size:12px;color:var(--t1)">Queue Load</span><b style="color:var(--t1)">6%</b></div><div style="height:6px;background:rgba(255,255,255,.06);border-radius:3px"><div style="width:6.5%;height:100%;background:var(--em);border-radius:3px"></div></div></div>
+        <div><div style="display:flex;justify-content:space-between" class="b"><span style="font-size:12px;color:var(--t1)">Stage Progress</span><b style="color:var(--t1)">34%</b></div><div style="height:6px;background:rgba(0,0,0,.08);border-radius:3px"><div style="width:33.6%;height:100%;background:var(--i4);border-radius:3px"></div></div></div>
+        <div><div style="display:flex;justify-content:space-between" class="b"><span style="font-size:12px;color:var(--t1)">Waiting</span><b style="color:var(--t1)">31%</b></div><div style="height:6px;background:rgba(0,0,0,.08);border-radius:3px"><div style="width:31%;height:100%;background:var(--am);border-radius:3px"></div></div></div>
+        <div><div style="display:flex;justify-content:space-between" class="b"><span style="font-size:12px;color:var(--t1)">Product History</span><b style="color:var(--t1)">29%</b></div><div style="height:6px;background:rgba(0,0,0,.08);border-radius:3px"><div style="width:28.8%;height:100%;background:var(--v4);border-radius:3px"></div></div></div>
+        <div><div style="display:flex;justify-content:space-between" class="b"><span style="font-size:12px;color:var(--t1)">Queue Load</span><b style="color:var(--t1)">6%</b></div><div style="height:6px;background:rgba(0,0,0,.08);border-radius:3px"><div style="width:6.5%;height:100%;background:var(--em);border-radius:3px"></div></div></div>
       </div>
       <div class="c" style="margin-top:10px;line-height:1.5">Share of each component's influence on the prediction. Queue load adds little once progress and waiting are known.</div>
     </div>
@@ -656,7 +657,7 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
 
   <!-- Table header -->
   <div style="display:grid;grid-template-columns:2fr 2fr 2fr;gap:0;margin-top:4px">
-    <div style="background:rgba(255,255,255,.04);border:1px solid var(--bd);border-radius:8px 0 0 0;padding:9px 14px">
+    <div style="background:rgba(0,0,0,.03);border:1px solid var(--bd);border-radius:8px 0 0 0;padding:9px 14px">
       <div style="font-size:11px;font-weight:700;color:var(--t3)">Dimension</div>
     </div>
     <div style="background:rgba(251,113,133,.06);border:1px solid var(--bd);border-left:none;padding:9px 14px">
@@ -672,7 +673,7 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
   </div>
 
   <!-- Savings callout -->
-  <div style="margin-top:10px;background:rgba(11,31,24,.8);border:1px solid rgba(26,80,56,.6);border-radius:10px;padding:14px 20px;display:flex;align-items:center;gap:24px">
+  <div style="margin-top:10px;background:rgba(5,150,105,.06);border:1px solid rgba(5,150,105,.2);border-radius:10px;padding:14px 20px;display:flex;align-items:center;gap:24px">
     <div class="b" style="font-size:13px">Net annual saving vs Tableau Plus contract:</div>
     <div style="font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:var(--em);white-space:nowrap"><span class="px" data-usd="275820">$275,820</span> / year</div>
     <div class="b" style="font-size:12px">— <span class="px" data-usd="278220">$278,220</span> Tableau vs ~<span class="px" data-usd="2400">$2,400</span> estimated AI cost for 300 users. AI + Teams integration included, not as add-ons.</div>
@@ -695,11 +696,11 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
   ];
   var tbl = document.getElementById('result-table');
   rows.forEach(function(r, i){
-    var bg = i%2===0?'rgba(255,255,255,.025)':'rgba(255,255,255,.01)';
+    var bg = i%2===0?'rgba(0,0,0,.02)':'rgba(0,0,0,.01)';
     tbl.innerHTML += '<div style="display:grid;grid-template-columns:2fr 2fr 2fr;gap:0">'
-      +'<div style="background:'+bg+';border:1px solid rgba(255,255,255,.08);border-top:none;padding:8px 14px;font-size:12px;font-weight:700;color:rgba(255,255,255,.9)">'+r[0]+'</div>'
-      +'<div style="background:'+bg+';border:1px solid rgba(255,255,255,.08);border-left:none;border-top:none;padding:8px 14px;font-size:11px;color:rgba(255,255,255,.5)">'+r[1]+'</div>'
-      +'<div style="background:'+bg+';border:1px solid rgba(255,255,255,.08);border-left:none;border-top:none;padding:8px 14px;font-size:11px;color:var(--em);border-left:2px solid rgba(52,211,153,.35)">'+r[2]+'</div>'
+      +'<div style="background:'+bg+';border:1px solid rgba(0,0,0,.09);border-top:none;padding:8px 14px;font-size:12px;font-weight:700;color:#0f172a">'+r[0]+'</div>'
+      +'<div style="background:'+bg+';border:1px solid rgba(0,0,0,.09);border-left:none;border-top:none;padding:8px 14px;font-size:11px;color:#475569">'+r[1]+'</div>'
+      +'<div style="background:'+bg+';border:1px solid rgba(0,0,0,.09);border-left:none;border-top:none;padding:8px 14px;font-size:11px;color:var(--em);border-left:2px solid rgba(5,150,105,.3)">'+r[2]+'</div>'
     +'</div>';
   });
 })();
@@ -864,11 +865,11 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
  <div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--ro);border-radius:12px;padding:20px">
  <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ro)">Tableau Cloud</div>
  <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;color:var(--ro);margin:8px 0"><span class="px" data-usd="278220">$278,220</span><span style="font-size:14px;color:var(--t3)"> / year</span></div>
- <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">24 Creators × $200 / month</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">3 Explorers × $120 / month</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">300 Viewers × $60 / month</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">AI (Tableau Pulse) and extra seats cost more</div></div></div>
+ <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">24 Creators × $200 / month</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">3 Explorers × $120 / month</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">300 Viewers × $60 / month</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--ro);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">AI (Tableau Pulse) and extra seats cost more</div></div></div>
  <div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--em);border-radius:12px;padding:20px">
  <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--em)">Control Tower web app</div>
  <div style="font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;color:var(--em);margin:8px 0">~<span class="px" data-usd="2400">$2,400</span><span style="font-size:14px;color:var(--t3)"> / year (est.)</span></div>
- <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">AI API usage only: 300 users × 5 questions/workday, DeepSeek peak rates</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">Snowflake and Azure AD: existing infrastructure</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">No per-seat cost — add users freely</div></div><div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">AI, alerts and Teams included</div></div></div></div>
+ <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">AI API usage only: 300 users × 5 questions/workday, DeepSeek peak rates</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">Snowflake and Azure AD: existing infrastructure</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">No per-seat cost — add users freely</div></div><div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-left:2px solid var(--em);border-radius:0 6px 6px 0;padding:8px 12px"><div class="b" style="font-size:11px">AI, alerts and Teams included</div></div></div></div>
  <div style="margin-top:14px"><div style="display:flex;justify-content:space-between" class="c"><span>Tableau</span><span>Web app</span></div>
  <div style="display:flex;height:12px;border-radius:4px;overflow:hidden;margin-top:4px"><div style="flex:278220;background:var(--ro)"></div><div style="flex:2400;background:var(--em)"></div></div>
  <div class="b" style="margin-top:8px">Net saving: <b style="color:var(--em)"><span class="px" data-usd="275820">$275,820</span> per year</b></div></div>
@@ -898,7 +899,7 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
         <div style="font-size:10px;font-weight:700;color:var(--em);margin-bottom:3px">Resolution</div>
         <div class="b" style="font-size:11px">Implemented a 60-second timeout with a user-facing skeleton loading state. The KPI fetch waits gracefully and shows an animated placeholder while the warehouse wakes up.</div>
       </div>
-      <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px">
+      <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px">
         <div class="b" style="font-size:10px;font-style:italic">⚠ This is a known UX friction point — first load after inactivity is noticeably slow.</div>
       </div>
     </div>
@@ -916,7 +917,7 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
         <div style="font-size:10px;font-weight:700;color:var(--em);margin-bottom:3px">Resolution</div>
         <div class="b" style="font-size:11px">Moved to DeepSeek as the primary model, with one reliable Groq model (qwen3.6-27b) as fallback. If the first call fails, the next model is tried automatically.</div>
       </div>
-      <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px">
+      <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px">
         <div class="b" style="font-size:10px;font-style:italic">⚠ The Groq fallback must be checked when Groq changes model availability.</div>
       </div>
     </div>
@@ -934,12 +935,12 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
         <div style="font-size:10px;font-weight:700;color:var(--em);margin-bottom:3px">Resolution</div>
         <div class="b" style="font-size:11px">Used delegated permissions (Chat.Create + ChatMessage.Send) that work with standard user consent. Implemented token refresh alongside NextAuth.js JWT rotation to keep Teams access active.</div>
       </div>
-      <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px">
+      <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px">
         <div class="b" style="font-size:10px;font-style:italic">⚠ Token expiry edge cases still possible on very long sessions without activity.</div>
       </div>
     </div>
 
-    <div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid rgba(255,255,255,.2);border-radius:12px;padding:16px 18px">
+    <div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid var(--i3);border-radius:12px;padding:16px 18px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <span class="pl pl-i">Data Integration</span>
         <div style="font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--t1)">Wiring Lead Time to Live Data</div>
@@ -952,7 +953,7 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
         <div style="font-size:10px;font-weight:700;color:var(--em);margin-bottom:3px">Status</div>
         <div class="b" style="font-size:11px">Done for the Strategic view: KPI cards (VA / NNVA / Waste / Potential Saving), weekly trend per stage, SKU scatter, stage Pareto and Top 10 SKU all run on Snowflake. On-time = gross lead time ≤ 13 days. Overview Tactical adds stage vs standard and a per-plant breakdown.</div>
       </div>
-      <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:7px;padding:7px 11px">
+      <div style="background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:7px;padding:7px 11px">
         <div class="b" style="font-size:10px;font-style:italic">✓ Lead Time now runs on real Snowflake data.</div>
       </div>
     </div>
@@ -1031,7 +1032,7 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
       <div style="margin-top:8px;font-size:9px;color:var(--t3);font-style:italic">↳ Tool-use chatbot + multi-KPI Snowflake query pattern already live</div>
     </div>
 
-    <div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid rgba(255,255,255,.15);border-radius:10px;padding:13px 14px">
+    <div style="background:var(--sf);border:1px solid var(--bd);border-top:3px solid rgba(0,0,0,.15);border-radius:10px;padding:13px 14px">
       <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
         <span class="pl pl-v" style="font-size:9px">Long Term</span>
         <span class="pl pl-r" style="font-size:9px;background:rgba(251,113,133,.06)">High effort</span>
@@ -1042,7 +1043,7 @@ html,body{height:100%;overflow:hidden;font-family:'Plus Jakarta Sans',sans-serif
     </div>
 
   </div>
-  <div style="margin-top:12px;background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:8px;padding:10px 16px">
+  <div style="margin-top:12px;background:rgba(0,0,0,.025);border:1px solid var(--bd);border-radius:8px;padding:10px 16px">
     <div class="b" style="font-size:11px">Nothing in Short or Medium Term requires rebuilding existing architecture. All planned improvements are additive — built on top of what is already live and running.</div>
   </div>
 </div>

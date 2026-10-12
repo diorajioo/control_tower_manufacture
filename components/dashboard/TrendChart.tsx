@@ -123,7 +123,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
           setData(series);
         }
         setPlants(d.plants ?? []);
-        setPointStats(isPChart ? d.pointStats ?? null : null);
+        const fetchedIsPChart = kpiType === "leadtime" || kpiType === "rft";
+        setPointStats(fetchedIsPChart ? d.pointStats ?? null : null);
       })
       .catch(console.error)
       .finally(() => { if (!stale) setLoading(false); });
@@ -221,6 +222,19 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
 
   const isEmpty = nivoData.length === 0 || nivoData.every((s) => s.data.length === 0);
 
+  // Nivo's yScale auto-fits to series data only — it doesn't know about UCL/LCL drawn by the custom
+  // ControlLayer. For monthly grain the limits can extend well outside the data range and get clipped.
+  // Compute explicit bounds that cover both the data values and all limit values.
+  const yScaleBounds = useMemo(() => {
+    const dataVals = nivoData.flatMap((s) => s.data.filter((p) => p.y != null).map((p) => p.y as number));
+    const limVals = Object.values(limits).flatMap((lim) => Object.values(lim).flatMap((l) => [l.ucl, l.lcl]));
+    const all = [...dataVals, ...limVals];
+    if (all.length === 0) return { min: "auto" as const, max: "auto" as const };
+    const lo = Math.min(...all), hi = Math.max(...all);
+    const pad = (hi - lo) * 0.08 || 1;
+    return { min: Math.max(0, lo - pad), max: hi + pad };
+  }, [nivoData, limits]);
+
   return (
     <div className={cn("bg-white rounded-lg p-3 border border-[#EBEBEB] hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200", fillHeight && "h-full flex flex-col")}>
       {/* Header */}
@@ -283,6 +297,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
           <ResponsiveLine
             {...LINE_DEFAULTS}
             data={nivoData}
+            yScale={{ ...LINE_DEFAULTS.yScale, ...yScaleBounds }}
             axisLeft={isPct ? LINE_DEFAULTS.axisLeft : { ...LINE_DEFAULTS.axisLeft, format: (v: string | number | Date) => formatCompact(Number(v)) }}
             axisBottom={{
               format: (v) => formatTick(String(v)),
