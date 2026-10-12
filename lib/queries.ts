@@ -415,7 +415,7 @@ export async function getLeadTimeScatterByDim(filters: QueryFilters, dimension: 
     ) sub
     WHERE ${col} IS NOT NULL
     GROUP BY ${col}
-    HAVING COUNT(DISTINCT PROCESS_ORDER_FG) < 100
+    ${dimension === "sku" ? "HAVING COUNT(DISTINCT PROCESS_ORDER_FG) < 100" : ""}
   `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 

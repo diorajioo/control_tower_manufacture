@@ -80,7 +80,7 @@ interface ScatterPoint { label: string; poCount: number; days: number }
 const DIM_OPTIONS: { value: ScatterDim; label: string }[] = [
   { value: "brand",    label: "Brand" },
   { value: "variant",  label: "Variant" },
-  { value: "su_group", label: "SU Group" },
+  { value: "su_group", label: "SKU Group" },
   { value: "plant",    label: "Plant" },
   { value: "sku",      label: "SKU" },
 ];
@@ -122,8 +122,8 @@ export function LeadTimeSkuScatter({ filters }: { filters?: ScatterFilters }) {
   return (
     <ChartCard
       title="Lead time and PO count"
-      subtitle={`Each dot is one ${dimLabel} with fewer than 100 POs${points.length ? ` · ${points.length.toLocaleString("en-US")} items` : ""}.`}
-      info="Only items with fewer than 100 completed POs in the selected period are shown. Items with 100+ POs are outliers that would compress the rest of the chart."
+      subtitle={`Each dot is one ${dimLabel}${points.length ? ` · ${points.length.toLocaleString("en-US")} items` : ""}.${dim === "sku" ? " SKUs with 100+ POs are excluded." : ""}`}
+      info={dim === "sku" ? "SKUs with fewer than 100 completed POs in the selected period are shown. SKUs with 100+ POs are few outliers that would compress the rest of the chart." : `Average gross lead time vs PO count per ${dimLabel}.`}
       actions={
         <SegmentedToggle
           options={DIM_OPTIONS.map((o) => ({ key: o.value, label: o.label }))}
