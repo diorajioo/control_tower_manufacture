@@ -6,8 +6,8 @@ import { getLeadTimeDistributionBins } from "@/lib/queries";
 
 export const maxDuration = 60;
 
-async function runDistQuery(plant: string, startDate: string, endDate: string, period?: string) {
-  const rows = await getLeadTimeDistributionBins({ plant, startDate, endDate, period });
+async function runDistQuery(plant: string, startDate: string, endDate: string, period: string | undefined, basis: "created" | "released") {
+  const rows = await getLeadTimeDistributionBins({ plant, startDate, endDate, period }, basis);
   const first = rows[0];
   return {
     bins:   rows.map((r) => ({ binStart: Number(r.BIN_START), count: Number(r.CNT) })),
@@ -18,7 +18,7 @@ async function runDistQuery(plant: string, startDate: string, endDate: string, p
   };
 }
 
-const cached = unstable_cache(runDistQuery, ["lead-time-distribution-v2"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runDistQuery, ["lead-time-distribution-v3"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -29,9 +29,10 @@ export async function GET(req: NextRequest) {
   const startDate = searchParams.get("startDate") ?? `${new Date().getFullYear()}-01-01`;
   const endDate   = searchParams.get("endDate")   ?? new Date().toISOString().split("T")[0];
   const period    = searchParams.get("period")    ?? undefined;
+  const basis     = (searchParams.get("basis") ?? "created") as "created" | "released";
 
   try {
-    return NextResponse.json(await cached(plant, startDate, endDate, period));
+    return NextResponse.json(await cached(plant, startDate, endDate, period, basis));
   } catch (e) {
     console.error("Lead time distribution failed:", (e as Error).message);
     return NextResponse.json({ bins: [], mean: 0, median: 0, stddev: 0, total: 0, error: "query_failed" }, { status: 500 });

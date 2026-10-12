@@ -490,7 +490,7 @@ interface HistoRow extends BarDatum {
   count: number;
 }
 
-function LeadTimeHistogram({ filters }: { filters: TacticalFilters }) {
+function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis: "created" | "released" }) {
   const [data, setData] = useState<DistResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -499,6 +499,7 @@ function LeadTimeHistogram({ filters }: { filters: TacticalFilters }) {
     params.set("plant", filters.plant);
     params.set("startDate", filters.startDate);
     params.set("endDate", filters.endDate);
+    params.set("basis", basis);
     if (filters.period) params.set("period", filters.period);
     setLoading(true);
     fetch(`/api/lead-time/distribution?${params.toString()}`)
@@ -506,7 +507,7 @@ function LeadTimeHistogram({ filters }: { filters: TacticalFilters }) {
       .then((d: DistResponse) => setData(d))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period]);
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, basis]);
 
   const { rows, cumByBin, maxBin, maxBinCount } = useMemo(() => {
     if (!data || data.bins.length === 0) {
@@ -1083,7 +1084,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
         )}
       </div>
 
-      <LeadTimeHistogram filters={tacticalFilters} />
+      <LeadTimeHistogram filters={tacticalFilters} basis={ltBasis} />
 
       <TacticalParetoChart filters={tacticalFilters} stageStd={stageStd} stageLoading={stageLoading} />
 

@@ -1177,13 +1177,14 @@ export async function getLeadTimeGroupProcess(filters: QueryFilters) {
 }
 
 // Tactical Overview histogram (Lead Time tab): 2-day bins up to >38d, with mean/median/stddev/total.
-export async function getLeadTimeDistributionBins(filters: QueryFilters) {
+export async function getLeadTimeDistributionBins(filters: QueryFilters, basis: "created" | "released" = "created") {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const startSql = basis === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
   return executeQuery<{ BIN_START: number; CNT: number; MEAN_DAYS: number; MEDIAN_DAYS: number; STDDEV_DAYS: number; TOTAL_POS: number }>(`
     WITH per_po AS (
       SELECT PROCESS_ORDER_FG,
         DATEDIFF('minute',
-          ${LEAD_TIME_START_SQL},
+          ${startSql},
           ${NDC_RECEIVED_AT_SQL}
         ) / 1440.0 AS gross_lt_days
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
@@ -1192,10 +1193,10 @@ export async function getLeadTimeDistributionBins(filters: QueryFilters) {
         AND ${datePred}
         ${plantWhere(filters.plant)}
       GROUP BY PROCESS_ORDER_FG
-      HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
+      HAVING ${startSql} IS NOT NULL
         AND  ${NDC_RECEIVED_AT_SQL} IS NOT NULL
         AND  DATEDIFF('minute',
-               ${LEAD_TIME_START_SQL},
+               ${startSql},
                ${NDC_RECEIVED_AT_SQL}
              ) >= 0
     ),
