@@ -128,9 +128,10 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
       ) : total <= 0 ? (
         <div className="flex-1 min-h-[280px] flex items-center justify-center text-[11px] text-slate-400">No process time for the selected filters</div>
       ) : (
-        <div className="flex-1 grid grid-cols-[minmax(0,1fr)_250px] gap-4 items-center px-4 py-2.5">
-          <div ref={box} className="relative flex justify-center" onMouseLeave={() => setHover(null)}>
-            <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full max-w-[280px]" role="img" aria-label="Lead time by group process and process">
+        <div className="flex-1 grid grid-cols-[300px_minmax(0,1fr)] gap-8 items-center px-5 py-2">
+          {/* Donut on the left at a fixed size, legend fills the rest — no empty margins on a wide card */}
+          <div ref={box} className="relative" onMouseLeave={() => setHover(null)}>
+            <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-[300px] h-[300px]" role="img" aria-label="Lead time by group process and process">
               {inner.map((s) => (
                 <path key={s.key} d={arc(C, C, R_IN0, R_IN1, s.a0, s.a1)} fill={s.color} stroke="white" strokeWidth={1.5}
                   className={zoomed ? "cursor-pointer" : "cursor-zoom-in"}
@@ -173,7 +174,7 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
               </div>
             )}
             {/* Compact and scrollable, so a long group (WIP has ~22 processes) never grows the card */}
-            <div className="flex flex-col max-h-[220px] overflow-y-auto pr-1">
+            <div className="flex flex-col max-h-[280px] overflow-y-auto pr-1">
               {legendRows.map((r, i) => (
                 <button key={r.key} onClick={r.click} disabled={!r.click}
                   className={`flex items-center gap-2 py-1 text-left shrink-0 ${i > 0 ? "border-t border-slate-100" : ""} ${r.click ? "hover:bg-slate-50 cursor-zoom-in" : "cursor-default"}`}>
