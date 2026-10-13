@@ -45,7 +45,7 @@ app/
 ├── dashboard/
 │   ├── page.tsx                    # Strategic view — main KPI dashboard
 │   └── settings/page.tsx           # Settings page
-├── lead-time/page.tsx              # Lead Time page (3 views; Strategic KPI cards real, rest mock)
+├── lead-time/page.tsx              # Lead Time page: filter card + Analysis / Pareto / Ranking tabs (real data)
 ├── monitor/page.tsx                # Fullscreen monitor mode
 └── api/
     ├── auth/[...nextauth]/route.ts # NextAuth handler
@@ -108,6 +108,8 @@ lib/
 |---|---|---|---|---|
 | `/api/dashboard/kpi` | GET | Required | 1h | KPI card values (all 7 KPIs in one call) |
 | `/api/dashboard/trends` | GET | Required | 1h | Chart trend data per period; `grain=week\|month` |
+| `/api/lead-time/analysis` | GET | Required | 1h | Lead Time page Analysis tab: gross + nett stats per PO (avg, median, P25, P75, max, vs prior period), weekly series, composition, time per activity (gross span / nett). `scope=created\|released` + dimension filters |
+| `/api/lead-time/options` | GET | Required | 1h | Dropdown values for the Lead Time filters (period + plant) |
 | `/api/lead-time/trend` | GET | Required | 1h | Lead Time Trend (total + per POSITION) at `grain=week\|month` — used when the chart is switched to Monthly |
 | `/api/dashboard/plants` | GET | Required | — | List of plant names for dropdown |
 | `/api/dashboard/summary` | GET | Required | 5h | AI executive summary text |

@@ -19,7 +19,7 @@ import { OutputKPICard } from "@/components/dashboard/OutputKPICard";
 import { LeadTimeKPICard } from "@/components/dashboard/LeadTimeKPICard";
 import { RegularKPICard } from "@/components/dashboard/RegularKPICard";
 import { type StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
-import { type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
+import { type PlantBreakdown, type PlantActivity } from "@/components/dashboard/LeadTimePlantTable";
 import { TacticalView } from "@/components/dashboard/TacticalView";
 import { FitToScreen } from "@/components/ui/FitToScreen";
 import { formatThousands } from "@/lib/utils";
@@ -134,7 +134,7 @@ export default function DashboardPage() {
   const [refreshCount,  setRefreshCount]  = useState(0);
   const [stageStd,      setStageStd]      = useState<StageStdPoint[] | null>(null);
   const [stageLoading,  setStageLoading]  = useState(false);
-  const [plantLT,       setPlantLT]       = useState<{ plants: PlantBreakdown[]; targetDays: number } | null>(null);
+  const [plantLT,       setPlantLT]       = useState<{ plants: PlantBreakdown[]; targetDays: number; activities: PlantActivity[] } | null>(null);
   const [riskScores,      setRiskScores]      = useState<RiskPoResult[]>([]);
   const [riskLoading,     setRiskLoading]     = useState(true);
   const [riskModelMissing, setRiskModelMissing] = useState(false);
@@ -155,8 +155,8 @@ export default function DashboardPage() {
     const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, period: filters.period, basis: ltBasis });
     fetch(`/api/lead-time/stages?${params}`)
       .then((r) => r.json())
-      .then((d) => { if (!cancelled) { setStageStd(d.stages ?? []); setPlantLT({ plants: d.plants ?? [], targetDays: d.targetDays ?? 13 }); } })
-      .catch(() => { if (!cancelled) { setStageStd([]); setPlantLT({ plants: [], targetDays: 13 }); } })
+      .then((d) => { if (!cancelled) { setStageStd(d.stages ?? []); setPlantLT({ plants: d.plants ?? [], targetDays: d.targetDays ?? 13, activities: d.activities ?? [] }); } })
+      .catch(() => { if (!cancelled) { setStageStd([]); setPlantLT({ plants: [], targetDays: 13, activities: [] }); } })
       .finally(() => { if (!cancelled) setStageLoading(false); });
     return () => { cancelled = true; };
   }, [activeView, filters.plant, filters.startDate, filters.endDate, filters.period, ltBasis, refreshCount]);
@@ -329,8 +329,6 @@ export default function DashboardPage() {
             setActiveView(next);
             trackReportViewed(next === "tactical" ? "dashboard_tactical" : "dashboard_strategic");
           }}
-          ltBasis={activeView === "tactical" ? ltBasis : undefined}
-          onLtBasisChange={activeView === "tactical" ? (b) => { setLtBasis(b); trackFilterApplied("dashboard_tactical", "apply", { lt_basis: b }); } : undefined}
           onRefresh={handleRefresh}
           isLoading={loading}
           lastUpdated={lastUpdated}
@@ -348,6 +346,9 @@ export default function DashboardPage() {
               <button onClick={() => setFetchError(null)} className="text-red-400 hover:text-red-600 text-xs shrink-0">✕</button>
             </div>
           )}
+          {activeView === "strategic" && (<>
+
+          {/* AI Summary and the KPI alert bar belong to Overview Strategic only; the chat is on every page */}
           <AISummary kpi={kpi} filters={filters} ready={!loading && kpi !== null} />
 
           <AlertPanel
@@ -360,8 +361,6 @@ export default function DashboardPage() {
             riskScores={riskScores}
             riskLoading={riskLoading}
           />
-
-          {activeView === "strategic" && (<>
 
           {/* ── Row 1: Lead Time · Output · E2E Productivity (3 per row, compact regular cards) ── */}
           <div className="grid grid-cols-3 gap-3.5">
@@ -524,6 +523,7 @@ export default function DashboardPage() {
               stageStd={stageStd ?? []}
               stageLoading={stageLoading}
               ltBasis={ltBasis}
+              onLtBasisChange={(b) => { setLtBasis(b); trackFilterApplied("dashboard_tactical", "apply", { lt_basis: b }); }}
               tacticalFilters={{
                 plant:     filters.plant,
                 startDate: filters.startDate,

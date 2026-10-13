@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
+import { dimsFromParams, type LtDims } from "@/lib/leadTimeFilters";
 import { getLeadTimeScatterByDim, ScatterDimension } from "@/lib/queries";
 
 export const maxDuration = 60;
 
 const VALID_DIMS: ScatterDimension[] = ["brand", "variant", "su_group", "sku"];
 
-async function runQuery(plant: string, startDate: string, endDate: string, period: string | undefined, dimension: ScatterDimension) {
-  const rows = await getLeadTimeScatterByDim({ plant, startDate, endDate, period }, dimension);
+async function runQuery(plant: string, startDate: string, endDate: string, period: string | undefined, dimension: ScatterDimension, dims: string) {
+  const rows = await getLeadTimeScatterByDim({ plant, startDate, endDate, period, lt: JSON.parse(dims) as LtDims }, dimension);
   return rows.map((r) => ({
     label:   r.DIM_VALUE,
     poCount: Number(r.PO_COUNT ?? 0),
@@ -17,7 +18,7 @@ async function runQuery(plant: string, startDate: string, endDate: string, perio
   }));
 }
 
-const cached = unstable_cache(runQuery, ["lead-time-scatter-v3"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runQuery, ["lead-time-scatter-v5"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest) {
   if (!VALID_DIMS.includes(dim)) return NextResponse.json({ error: "Invalid dimension" }, { status: 400 });
 
   try {
-    return NextResponse.json(await cached(plant, startDate, endDate, period, dim));
+    return NextResponse.json(await cached(plant, startDate, endDate, period, dim, JSON.stringify(dimsFromParams(searchParams))));
   } catch (e) {
     console.error("Lead time scatter failed:", (e as Error).message);
     return NextResponse.json([], { status: 500 });

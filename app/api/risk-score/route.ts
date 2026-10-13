@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import { executeQuery } from "@/lib/db";
 import { loadModel, scoreActivePOs, type ActivePoRow } from "@/lib/riskScore";
+import { LT_TABLE } from "@/lib/queries"; // lead time rows with PLANT = the PO's last plant
 
 // Active POs released in the last 60 days that have not yet reached NDC (SEQ 45).
 const SQL = `
@@ -9,7 +10,7 @@ const SQL = `
     SELECT PROCESS_ORDER_FG,
            MAX(ACTIVITY_STOP)    AS RELEASED_AT,
            ANY_VALUE(PLANT)      AS PLANT
-    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+    FROM ${LT_TABLE}
     WHERE ACTIVITY = 'PO'
       AND ACTIVITY_STOP IS NOT NULL
       AND ACTIVITY_STOP >= DATEADD(day, -60, CURRENT_DATE())
@@ -17,7 +18,7 @@ const SQL = `
   ),
   received AS (
     SELECT DISTINCT PROCESS_ORDER_FG
-    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+    FROM ${LT_TABLE}
     WHERE ACTIVITY_SEQUENCE = 45
       AND ACTIVITY_STOP IS NOT NULL
   ),
@@ -38,7 +39,7 @@ const SQL = `
     ANY_VALUE(t.ACTIVITY)                            AS ACTIVITY,
     MIN(t.ACTIVITY_START)                            AS START_AT,
     MAX(t.ACTIVITY_STOP)                             AS STOP_AT
-  FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME t
+  FROM ${LT_TABLE} t
   JOIN active_po a USING (PROCESS_ORDER_FG)
   WHERE t.ACTIVITY <> 'ADJUST'
   GROUP BY t.PROCESS_ORDER_FG, t.ACTIVITY_SEQUENCE
@@ -54,7 +55,7 @@ const fetchAllScores = unstable_cache(
     const rows = await executeQuery<ActivePoRow>(SQL, []);
     return { scores: scoreActivePOs(model, rows), modelMissing: false as const, asOf: model.asOf };
   },
-  ["risk-score-v1"],
+  ["risk-score-v2"],
   { revalidate: 900 } // 15 min
 );
 

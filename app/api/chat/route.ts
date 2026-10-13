@@ -10,6 +10,7 @@ import { AI_KPI_TYPES, AI_TREND_TYPES } from "@/lib/aiScope";
 import { stageLabel } from "@/lib/leadTimeStages";
 import type OpenAI from "openai";
 import { LEAD_TIME_START_SQL, NDC_RECEIVED_AT_SQL } from "@/lib/leadTimeDefinition";
+import { LT_TABLE } from "@/lib/queries"; // lead time rows with PLANT = the PO's last plant
 
 // Allow up to 60 s on Vercel — tool calls to Snowflake + a streamed answer can exceed the default limit.
 export const maxDuration = 60;
@@ -110,7 +111,7 @@ async function executeGetKpiData(args: {
               DATEDIFF('minute', ${LEAD_TIME_START_SQL},
                 ${NDC_RECEIVED_AT_SQL}) AS gross_minutes,
               SUM(CASE WHEN ACTIVITY_TYPE='ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME ELSE 0 END) AS nett_minutes
-            FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+            FROM ${LT_TABLE}
             WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
             GROUP BY PROCESS_ORDER_FG
             HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
@@ -125,7 +126,7 @@ async function executeGetKpiData(args: {
           SELECT POSITION, AVG(pos_minutes)/1440.0 AS AVG_DAYS_PER_PO, COUNT(*) AS PO_COUNT
           FROM (
             SELECT PROCESS_ORDER_FG, POSITION, SUM(NET_LEADTIME) AS pos_minutes
-            FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+            FROM ${LT_TABLE}
             WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? AND POSITION IS NOT NULL ${pf}
             GROUP BY PROCESS_ORDER_FG, POSITION
           ) sub
@@ -158,7 +159,7 @@ async function executeGetKpiData(args: {
         rows = await executeQuery(`
           SELECT COUNT(CASE WHEN ACTIVITY<>'ADJUST' THEN 1 END)*100.0/NULLIF(COUNT(*),0) AS RFT_PCT,
             COUNT(*) AS TOTAL_ROWS
-          FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+          FROM ${LT_TABLE}
           WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
         `, withPlant);
         break;
@@ -274,7 +275,7 @@ async function executeGetWeeklyTrend(args: {
         SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
           DATEDIFF('minute', ${LEAD_TIME_START_SQL},
             ${NDC_RECEIVED_AT_SQL})/1440.0 AS po_days
-        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+        FROM ${LT_TABLE}
         WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
         GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
         HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
@@ -353,7 +354,7 @@ async function executeGetWeeklyTrend(args: {
     rft: `
       SELECT DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
         COUNT(CASE WHEN ACTIVITY<>'ADJUST' THEN 1 END)*100.0/NULLIF(COUNT(*),0) AS KPI_VALUE
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
       GROUP BY WEEK, PLANT ORDER BY WEEK`,
   };

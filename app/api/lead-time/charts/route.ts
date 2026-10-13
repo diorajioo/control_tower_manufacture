@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
+import { dimsFromParams, type LtDims } from "@/lib/leadTimeFilters";
 import { getLeadTimeWeekly, getLeadTimeWeeklyByPosition, getLeadTimeBySku, getLeadTimeByStageCategory, getLeadTimeTopSku } from "@/lib/queries";
 
 // Allow up to 60 s on Vercel — needed when Snowflake warehouse auto-resumes from suspension.
@@ -9,8 +10,9 @@ export const maxDuration = 60;
 
 // Charts on /lead-time (Strategic): weekly trend per POSITION + overall, lead time vs PO count per SKU,
 // lead time per stage × VA/NNVA/UNVA (Pareto), and top 10 SKU by lead time (composition / P10–P90 range).
-async function runChartQueries(plant: string, startDate: string, endDate: string, period?: string) {
-  const filters = { plant, startDate, endDate, period };
+async function runChartQueries(plant: string, startDate: string, endDate: string, period: string | undefined, dims: string) {
+  // dims = JSON of the Lead Time page filters (part of the cache key)
+  const filters = { plant, startDate, endDate, period, lt: JSON.parse(dims) as LtDims };
   const [totalRes, byPosRes, bySkuRes, byStageRes, topSkuRes] = await Promise.allSettled([
     getLeadTimeWeekly(filters),
     getLeadTimeWeeklyByPosition(filters),
@@ -44,6 +46,7 @@ async function runChartQueries(plant: string, startDate: string, endDate: string
       stage:      r.STAGE,
       activity:   r.ACTIVITY,
       activityId: Number(r.MIN_ACTIVITY_ID ?? 0),
+      sequence:   r.MIN_SEQUENCE == null ? null : Number(r.MIN_SEQUENCE),
       attached:   r.ATTACHED_STAGE,
       category:   r.CATEGORY as "VA" | "NNVA" | "UNVA",
       days:       Number((r.DAYS ?? 0).toFixed(3)),
@@ -69,7 +72,7 @@ async function runChartQueries(plant: string, startDate: string, endDate: string
   };
 }
 
-const cached = unstable_cache(runChartQueries, ["lead-time-charts-v8"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runChartQueries, ["lead-time-charts-v11"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -81,5 +84,5 @@ export async function GET(req: NextRequest) {
   const endDate   = searchParams.get("endDate")   ?? new Date().toISOString().split("T")[0];
   const period    = searchParams.get("period")    ?? undefined;
 
-  return NextResponse.json(await cached(plant, startDate, endDate, period));
+  return NextResponse.json(await cached(plant, startDate, endDate, period, JSON.stringify(dimsFromParams(searchParams))));
 }

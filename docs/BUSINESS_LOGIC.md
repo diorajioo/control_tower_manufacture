@@ -315,3 +315,15 @@ Status legend in StackedBarChart: "In Control" (emerald), "Above UCL" (red), "Be
 ## Lead Time On-Time % (Overview Tactical)
 
 Share of POs whose gross lead time (PO start → RECEIVE NDC stop) is ≤ 13 days, the Lead Time target used in the Tactical plant table. The start follows the Header basis toggle, which shows only in Tactical: PO Created (default) or PO Released (`basis` param on `/api/lead-time/stages`). The Overview Lead Time card is fixed to PO Created. Constant `LEAD_TIME_TARGET_DAYS` in `app/api/lead-time/stages/route.ts`; query `getLeadTimeByPlant()` in `lib/queries.ts`. Provisional: `CT_MANUF_LEADTIME` has no due-date column, so this is not a delivery on-time rate.
+
+
+## Plant of a PO (lead time)
+
+A PO belongs to its **last plant**: the `PLANT` of its `CT_MANUF_LEADTIME` row with the highest `ACTIVITY_SEQUENCE` (latest `ACTIVITY_STOP` on ties) — normally the plant that did RECEIVE NDC. Applies to every lead time figure per plant and to the plant filter (`LT_TABLE` in `lib/queries.ts`). Decided 2026-10-13; before that, ~145 POs made in one plant and packed in another dropped out of per-plant lead time.
+
+
+## Lead Time page filters and the process sunburst (2026-10-13)
+
+- **Dimension filters** (No. PO, Activity, Line category, Line, SKU group, SKU, Variant) select whole POs: a PO is kept when it has at least one `CT_MANUF_LEADTIME` row matching each set value; every figure is then computed on those POs with all their activities. Activity also limits the sunburst and the Pareto to that activity.
+- **Lead Time card**: average per PO — gross = Scope start (PO Created or Released) → RECEIVE NDC; nett = SUM(NET_LEADTIME) of ACTUAL rows with a LINE_CATEGORY. Median and P25–P75 over the same POs. Status: gross vs 13-day target (on track / ≤ +15% at risk / above); nett has no target → change vs prior period.
+- **Sunburst** (time per group process and process): per activity, SUM over POs ÷ all POs, so values add up. Gross = activity span (first start → last stop per PO); Nett = SUM(NET_LEADTIME). Groups = `PROCESS_GROUPS`; the PO group is left out for Scope = PO Released. The centre is the sum of the groups ("total time"); activities overlap, so it is larger than the lead time. Known data effect: an activity recorded on several overlapping rows can have nett > gross (e.g. Receive NDC YTD nett 3.07 d vs span 1.06 d).

@@ -28,31 +28,22 @@
 
 ## Lead Time Page (`/lead-time`)
 
-**Status: Implemented — static mock data (not connected to Snowflake)**
+**Status: Implemented — real data (rebuilt 2026-10-13)**
 
-### Three views (toggled via Header view pills)
+### Filters
+- Header filter bar (Period · Start / End date · Plant · Resolution · Apply) — no view toggle on this page.
+- **Lead Time filter card** (`components/leadtime/LeadTimeFilterCard.tsx`, applies at once): **Scope** PO Created / PO Released (start of gross lead time) · **Basis** Gross / Nett · **Unit** Days / Hours · **No. PO · Activity · Line category · Line · SKU group · SKU · Variant** (searchable dropdowns, lists from `/api/lead-time/options` for the period and plant) · "Clear n filters".
+- Dimension filters select **whole POs**: a PO is kept when it has at least one row matching every set value (`lib/leadTimeFilters.ts`, `ltWhere()` in `lib/queries.ts`); Activity additionally limits the sunburst and the Pareto to that activity.
 
-#### Strategic View (default)
-- 3 KPI hero cards: Gross Lead Time · UNVA % · Savings Potential
-- Stage Group chart: VA/NNVA/UNVA breakdown by stage group (Nivo bar)
-- Top 10 SKU by lead time — **real data** (`LeadTimeTopSkuChart`, toggle Composition / P10–P90 Range, SKUs with ≥5 POs)
-- ~~Top 5 / Bottom 5 SKU tables, On-Time PO Trend, Lead Time Pareto per SKU~~ — mock, removed from Strategic 2026-09-26 (components kept in `app/lead-time/page.tsx` for reuse)
-
-#### Tactical View
-- 4 KPI cards: Gross LT · Nett LT · UNVA Days · UNVA %
-- 20-stage breakdown bar chart (toggle: Gross / Nett / Pareto)
-- Trend line chart by stage
-- Color classification: VA = #1E4076, NNVA = #d97706, UNVA = #b91c1c
-
-#### Operational View
-- Batch exceptions panel (critical/warning batches, sorted by severity)
-- 6×6 stage heatmap (by day × stage)
-- Color: heat intensity based on delay severity
+### Tabs
+- **Analysis** — Lead Time card (average gross or nett per PO, change vs prior period, status vs the 13-day target for gross / vs prior period for nett, weekly sparkline, position bar 0 → max with Target and Current, median and P25–P75 note, PO count) · Lead time composition (VA / NNVA / UNVA (WIP), share of their sum) · **Group process and process** sunburst (inner ring 6 groups, outer ring processes; click a group to zoom, centre / "All groups" to go back; slices < 1.5% merge into "Others"; legend lists every process when zoomed; follows Scope, Basis, Unit; no PO group for PO Released) · Lead time trend (weekly / monthly).
+- **Pareto** — Pareto lead time (Group Process / Process, Par / Seq by `ACTIVITY_SEQUENCE`) · Lead time breakdown per plant (Group Process / Process views).
+- **Ranking** — Top 10 SKU by lead time (Composition / P10–P90) · Lead time vs PO count scatter (Brand / Variant / SKU group / SKU).
+- APIs: `/api/lead-time/analysis` (stats, weekly, composition, time per activity), `/api/lead-time/charts`, `/api/lead-time/stages`, `/api/lead-time/scatter`, `/api/lead-time/trend`, `/api/lead-time/options` — all take the dimension filters.
+- The old Strategic / Tactical / Operational views (Tactical and Operational were mock) were removed.
 
 ### User interactions
-- View toggle: Strategic / Tactical / Operational pills in header — Tactical and Operational are locked (still mock data)
-- Monitor button: navigates to `/monitor?page=lead-time`
-- Stage breakdown chart toggle (Tactical): Gross / Nett / Pareto
+- Monitor button: navigates to `/monitor?page=lead-time` (Lead Time Monitor unchanged)
 
 ---
 

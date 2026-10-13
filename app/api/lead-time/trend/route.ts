@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
+import { dimsFromParams, type LtDims } from "@/lib/leadTimeFilters";
 import { getLeadTimeWeekly, getLeadTimeWeeklyByPosition, type TrendGrain } from "@/lib/queries";
 
 export const maxDuration = 60;
 
 // Lead Time Trend at a chosen granularity (week | month) — same shape as `trend` in /api/lead-time/charts.
 // Used by LeadTimeTrendChart when the user switches to Monthly, so the other 4 charts are not re-queried.
-async function runTrend(plant: string, startDate: string, endDate: string, period: string | undefined, grain: TrendGrain) {
-  const filters = { plant, startDate, endDate, period };
+async function runTrend(plant: string, startDate: string, endDate: string, period: string | undefined, grain: TrendGrain, dims: string) {
+  const filters = { plant, startDate, endDate, period, lt: JSON.parse(dims) as LtDims };
   const [total, byPos] = await Promise.all([
     getLeadTimeWeekly(filters, grain),
     getLeadTimeWeeklyByPosition(filters, grain),
@@ -21,7 +22,7 @@ async function runTrend(plant: string, startDate: string, endDate: string, perio
   };
 }
 
-const cached = unstable_cache(runTrend, ["lead-time-trend-v1"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runTrend, ["lead-time-trend-v3"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
   const grain: TrendGrain = searchParams.get("grain") === "month" ? "month" : "week";
 
   try {
-    return NextResponse.json(await cached(plant, startDate, endDate, period, grain));
+    return NextResponse.json(await cached(plant, startDate, endDate, period, grain, JSON.stringify(dimsFromParams(searchParams))));
   } catch (err) {
     console.error("[lead-time/trend] query failed:", err);
     return NextResponse.json({ error: "Query failed" }, { status: 500 });

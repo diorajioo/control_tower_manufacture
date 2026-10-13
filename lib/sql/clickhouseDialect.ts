@@ -10,6 +10,7 @@
 //   IFF(c, a, b) → if(c, a, b)      CURRENT_DATE() → today()      CURRENT_TIMESTAMP() → now()
 //   PERCENTILE_CONT(p) WITHIN GROUP (ORDER BY x) → quantileExactInclusive(p)(x)  (exact + linear, same as Snowflake)
 //   REGEXP_REPLACE(s, re, r) → replaceRegexpOne(s, re, r)
+//   t.* EXCLUDE (c) → t.* EXCEPT (c)      FIRST_VALUE(x) OVER (…) is valid ClickHouse as written
 //   DB.SCHEMA.TABLE → <clickhouse database>.TABLE         ? binds → {p0:String}, {p1:String}, …
 // Anything Snowflake-specific that is not listed here makes assertNoSnowflakeLeft() throw,
 // so an untranslated query fails loudly instead of returning wrong numbers.
@@ -117,6 +118,8 @@ export function snowflakeToClickHouse(sql: string): string {
   out = rewriteCalls(out, "DAYOFWEEKISO", ([x]) => `toDayOfWeek(${x})`);
   out = rewriteCalls(out, "IFF", (a) => `if(${a.join(", ")})`);
   out = rewriteCalls(out, "REGEXP_REPLACE", (a) => `replaceRegexpOne(${a.join(", ")})`);
+  // SELECT t.* EXCLUDE (col) → SELECT t.* EXCEPT (col)   (lead time owner-plant source, lib/queries.ts LT_TABLE)
+  out = out.replace(/\*\s+EXCLUDE\s*\(/gi, "* EXCEPT (");
 
   return out;
 }
@@ -143,6 +146,6 @@ export function bindParams(sql: string, binds: unknown[]): { sql: string; params
 
 /** Throws if a Snowflake-only construct survived translation. */
 export function assertNoSnowflakeLeft(sql: string): void {
-  const left = sql.match(/::[A-Z]+|\b(DATEADD|DATE_TRUNC|IFF|DAYOFWEEKISO|PERCENTILE_CONT|CURRENT_DATE|CURRENT_TIMESTAMP|REGEXP_REPLACE|QUALIFY|ILIKE|GENERATOR|SEQ4|ANY_VALUE|TO_CHAR)\b/i);
+  const left = sql.match(/::[A-Z]+|\b(DATEADD|DATE_TRUNC|IFF|DAYOFWEEKISO|PERCENTILE_CONT|CURRENT_DATE|CURRENT_TIMESTAMP|REGEXP_REPLACE|QUALIFY|ILIKE|GENERATOR|SEQ4|ANY_VALUE|TO_CHAR|EXCLUDE)\b/i);
   if (left) throw new Error(`Untranslated Snowflake SQL for ClickHouse: "${left[0]}" — extend lib/sql/clickhouseDialect.ts`);
 }

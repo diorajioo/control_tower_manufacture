@@ -82,3 +82,17 @@ body {
     max-width: 400px;
   }
 }
+
+/* Sidebar hidden / shown (components/dashboard/SidebarToggle.tsx), state = html[data-sidebar="collapsed"].
+   The menu slides (width), and the top bar's left padding grows with the same duration and easing, so
+   sidebar width + padding stays constant: the top bar content never moves. The logo block is fixed. */
+.ct-sidebar { width: 14rem; transition: width 200ms ease-out; }
+html[data-sidebar="collapsed"] .ct-sidebar { width: 0; }
+.ct-topbar-row { padding-left: 1rem; transition: padding-left 200ms ease-out; }
+html[data-sidebar="collapsed"] .ct-topbar-row { padding-left: 15rem; }  /* 14rem logo block + 1rem */
+.ct-topbar-pad { padding-top: 0; transition: padding-top 200ms ease-out; }
+html[data-sidebar="collapsed"] .ct-topbar-pad { padding-top: 52px; }      /* pages without a top bar (Settings) */
+.ct-icon-open { display: none; }
+html[data-sidebar="collapsed"] .ct-icon-open { display: block; }
+html[data-sidebar="collapsed"] .ct-icon-close { display: none; }
+@media (prefers-reduced-motion: reduce) { .ct-sidebar, .ct-topbar-row, .ct-topbar-pad { transition: none; } }

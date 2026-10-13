@@ -10,6 +10,7 @@ import {
   Clock, AlertCircle, Lock, Shield,
 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
+import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { cn } from "@/lib/utils";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
@@ -203,6 +204,7 @@ export default function SettingsPage() {
       <Suspense fallback={null}>
         <SettingsShell />
       </Suspense>
+      <FloatingChat />
     </div>
   );
 }
@@ -273,7 +275,8 @@ function SettingsShell() {
     router.push(`/dashboard/settings?s=${s}`, { scroll: false });
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-100">
+    <div className="ct-topbar-pad flex-1 overflow-y-auto bg-slate-100">
+      {/* ct-topbar-pad: room for the fixed logo block while the sidebar is hidden (no Header on this page) */}
       {/* Page header + horizontal tabs */}
       <div className="bg-slate-100 border-b border-slate-200 px-8 pt-7 pb-0">
         <h1 className="text-[20px] font-bold text-slate-900 leading-tight">Settings</h1>

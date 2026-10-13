@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, LayoutGrid, Calendar, ChevronDown, Check, Loader2, X, Send, Monitor, Lock } from "lucide-react";
+import { Bell, ArrowRight, ChevronDown, Check, Loader2, X, Send, Monitor, Lock } from "lucide-react";
 
 const EN_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const EN_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -28,7 +28,7 @@ function useClock() {
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { PLANT_COLORS } from "@/lib/chartConfig";
+import { FIELD_LABEL, FIELD, FIELD_ON, FIELD_OFF, SEG, SEG_ITEM, SEG_PILL, MENU, MENU_ITEM, MENU_ITEM_ON, MENU_ITEM_OFF } from "@/components/ui/FilterField";
 import { useI18n } from "@/lib/i18n";
 import type { KPIAlert } from "@/lib/alerts";
 
@@ -70,6 +70,9 @@ const PERIOD_RESOLUTIONS: Record<string, string[]> = {
   LastWeek:   ["Daily"],
   Custom:     ["Daily", "Weekly", "Monthly"],
 };
+
+// Resolution (Daily / Weekly / Monthly) field in the filter bar — hidden for now, flip to show it again
+const SHOW_RESOLUTION = false;
 
 const DATA_LEVELS: { value: string; label: string }[] = [
   { value: "Daily",   label: "Daily"   },
@@ -237,7 +240,9 @@ export function Header({
     <header className="shrink-0">
 
       {/* ── Row 1: Paragon Blue topbar (joins the Sidebar logo block) ─────── */}
-      <div className="flex items-center gap-3 px-4 h-[52px] bg-[#1E4076]">
+      {/* ct-topbar-row: left padding grows while the sidebar collapses, so this row never moves (globals.css) */}
+      <div className="ct-topbar-row flex items-center gap-3 pr-4 h-[52px] bg-[#1E4076]">
+
 
         {/* Brand */}
         <span className="text-[13px] font-medium text-white/70 tracking-[0.07em] uppercase shrink-0">Manufacturing Control Tower</span>
@@ -366,31 +371,23 @@ export function Header({
         </div>
       </div>
 
-      {/* ── Row 2: Filter bar ──────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-5 py-2 bg-white border-b border-gray-100 flex-wrap shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+      {/* ── Row 2: Filter bar — labelled fields (PERIOD · START DATE · END DATE · PLANT · RESOLUTION) + Apply ── */}
+      <div className="flex items-end gap-2.5 px-5 pt-1.5 pb-2 bg-white border-b border-gray-100 flex-wrap shadow-[0_1px_0_rgba(0,0,0,0.03)]">
 
-        {/* Period dropdown */}
+        {/* Period */}
         <div className="relative shrink-0" ref={periodRef}>
-          <button onClick={() => setPeriodOpen((o) => !o)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-all",
-              period
-                ? "border-[#C3CEE3] bg-[#EEF4FB] text-[#16305C]"
-                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-            )}>
-            <Calendar size={10} className={period ? "text-[#1E4076]" : "text-gray-400"} />
-            {PERIOD_PRESETS.find((p) => p.key === period)?.label ?? "Select Period"}
-            <ChevronDown size={9} className={cn("text-gray-400 transition-transform duration-150", periodOpen && "rotate-180")} />
+          <span className={FIELD_LABEL}>Period</span>
+          <button onClick={() => setPeriodOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={periodOpen}
+            className={cn(FIELD, FIELD_ON, "w-[128px] justify-between")}>
+            <span className="truncate">{PERIOD_PRESETS.find((p) => p.key === period)?.label ?? "Select period"}</span>
+            <ChevronDown size={11} className={cn("text-slate-400 shrink-0 transition-transform duration-150", periodOpen && "rotate-180")} />
           </button>
           {periodOpen && (
-            <div className="absolute top-full mt-2 left-0 z-50 bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] border border-gray-100 py-2 min-w-[176px]">
+            <div className={cn(MENU, "min-w-[128px]")} role="listbox">
               {PERIOD_PRESETS.map((p) => (
-                <button key={p.key} onClick={() => handlePeriod(p.key)}
-                  className={cn(
-                    "w-full flex items-center justify-between gap-2 px-3.5 py-2 text-[11px] text-left transition-colors",
-                    period === p.key ? "bg-[#EEF4FB]/60 text-[#16305C]" : "text-gray-600 hover:bg-gray-50"
-                  )}>
-                  <span className="font-medium">{p.label}</span>
+                <button key={p.key} onClick={() => handlePeriod(p.key)} role="option" aria-selected={period === p.key}
+                  className={cn(MENU_ITEM, period === p.key ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
+                  <span>{p.label}</span>
                   {period === p.key && <Check size={10} className="text-[#1E4076] shrink-0" />}
                 </button>
               ))}
@@ -398,30 +395,34 @@ export function Header({
           )}
         </div>
 
-        {/* Plant dropdown */}
+        {/* Start / end date — editable for Custom Range, otherwise they show the preset's dates */}
+        <label className="shrink-0">
+          <span className={FIELD_LABEL}>Start date</span>
+          <input type="date" value={startDate} onChange={(e) => handleStart(e.target.value)}
+            disabled={period !== "Custom"}
+            className={cn(FIELD, period === "Custom" ? FIELD_ON : FIELD_OFF, "w-[118px] focus:outline-none focus:ring-2 focus:ring-[#1E4076]/30")} />
+        </label>
+        <label className="shrink-0">
+          <span className={FIELD_LABEL}>End date</span>
+          <input type="date" value={endDate} onChange={(e) => handleEnd(e.target.value)}
+            disabled={period !== "Custom"}
+            className={cn(FIELD, period === "Custom" ? FIELD_ON : FIELD_OFF, "w-[118px] focus:outline-none focus:ring-2 focus:ring-[#1E4076]/30")} />
+        </label>
+
+        {/* Plant */}
         <div className="relative shrink-0" ref={plantRef}>
-          <button onClick={() => setPlantOpen((o) => !o)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition-all",
-              plant !== "All Plant"
-                ? "border-[#C3CEE3] bg-[#EEF4FB] text-[#16305C]"
-                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-            )}>
-            <LayoutGrid size={10} className={plant !== "All Plant" ? "text-[#1E4076]" : "text-gray-400"} />
-            {plant}
-            <ChevronDown size={9} className={cn("text-gray-400 transition-transform duration-150", plantOpen && "rotate-180")} />
+          <span className={FIELD_LABEL}>Plant</span>
+          <button onClick={() => setPlantOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={plantOpen}
+            className={cn(FIELD, FIELD_ON, "w-[112px] justify-between")}>
+            <span className="truncate">{plant}</span>
+            <ChevronDown size={11} className={cn("text-slate-400 shrink-0 transition-transform duration-150", plantOpen && "rotate-180")} />
           </button>
           {plantOpen && (
-            <div className="absolute top-full mt-2 left-0 z-50 bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] border border-gray-100 py-2 min-w-[148px]">
-              {plants.map((p, i) => (
-                <button key={p} onClick={() => { handlePlant(p); setPlantOpen(false); }}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 py-1.5 text-[11px] text-left transition-colors",
-                    plant === p ? "bg-[#EEF4FB]/60 text-[#16305C]" : "text-gray-600 hover:bg-gray-50"
-                  )}>
-                  <span className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: PLANT_COLORS[i % PLANT_COLORS.length] }} />
-                  <span className="font-medium flex-1">{p}</span>
+            <div className={cn(MENU, "min-w-[112px]")} role="listbox">
+              {plants.map((p) => (
+                <button key={p} onClick={() => { handlePlant(p); setPlantOpen(false); }} role="option" aria-selected={plant === p}
+                  className={cn(MENU_ITEM, plant === p ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
+                  <span>{p}</span>
                   {plant === p && <Check size={10} className="text-[#1E4076] shrink-0" />}
                 </button>
               ))}
@@ -429,46 +430,28 @@ export function Header({
           )}
         </div>
 
-        {/* Date inputs — only shown for Custom Range */}
-        {period === "Custom" && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#C3CEE3] bg-[#EEF4FB] shrink-0">
-            <Calendar size={10} className="text-[#1E4076] shrink-0" />
-            <input type="date" value={startDate} onChange={(e) => handleStart(e.target.value)}
-              className="text-[11px] font-medium text-[#16305C] bg-transparent focus:outline-none w-[86px]" />
-            <span className="text-[#C3CEE3] text-xs">–</span>
-            <input type="date" value={endDate} onChange={(e) => handleEnd(e.target.value)}
-              className="text-[11px] font-medium text-[#16305C] bg-transparent focus:outline-none w-[86px]" />
-          </div>
-        )}
-
-        {/* Resolusi dropdown */}
-        {(() => {
+        {/* Resolution — hidden from the UI for now (2026-10-13); the data level state and logic stay */}
+        {SHOW_RESOLUTION && (() => {
           const allowed = PERIOD_RESOLUTIONS[period] ?? ["Daily", "Weekly", "Monthly"];
           const availableLevels = DATA_LEVELS.filter((l) => allowed.includes(l.value));
           const currentLabel = DATA_LEVELS.find((l) => l.value === dataLevel)?.label ?? "Daily";
-          if (availableLevels.length === 1) {
-            return (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 bg-gray-50 text-[11px] font-semibold text-gray-400 shrink-0 select-none">
-                {availableLevels[0].label}
-              </div>
-            );
-          }
+          const fixed = availableLevels.length === 1;
           return (
             <div className="relative shrink-0" ref={resolutionRef}>
-              <button onClick={() => setResolutionOpen((o) => !o)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-gray-200 bg-white text-[11px] font-semibold text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-all">
-                {currentLabel}
-                <ChevronDown size={9} className={cn("text-gray-400 transition-transform duration-150", resolutionOpen && "rotate-180")} />
+              <span className={FIELD_LABEL}>Resolution</span>
+              <button onClick={() => { if (!fixed) setResolutionOpen((o) => !o); }} disabled={fixed}
+                title={fixed ? "Only one resolution fits this period" : undefined}
+                aria-haspopup="listbox" aria-expanded={resolutionOpen}
+                className={cn(FIELD, fixed ? FIELD_OFF : FIELD_ON, "w-[92px] justify-between")}>
+                <span className="truncate">{fixed ? availableLevels[0].label : currentLabel}</span>
+                <ChevronDown size={11} className={cn("text-slate-400 shrink-0 transition-transform duration-150", resolutionOpen && "rotate-180")} />
               </button>
               {resolutionOpen && (
-                <div className="absolute top-full mt-2 left-0 z-50 bg-white rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] border border-gray-100 py-2 min-w-[128px]">
+                <div className={cn(MENU, "min-w-[92px]")} role="listbox">
                   {availableLevels.map(({ value, label }) => (
-                    <button key={value} onClick={() => handleDataLevel(value)}
-                      className={cn(
-                        "w-full flex items-center justify-between gap-2 px-3.5 py-2 text-[11px] text-left transition-colors",
-                        dataLevel === value ? "bg-[#EEF4FB]/60 text-[#16305C]" : "text-gray-600 hover:bg-gray-50"
-                      )}>
-                      <span className="font-medium">{label}</span>
+                    <button key={value} onClick={() => handleDataLevel(value)} role="option" aria-selected={dataLevel === value}
+                      className={cn(MENU_ITEM, dataLevel === value ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
+                      <span>{label}</span>
                       {dataLevel === value && <Check size={10} className="text-[#1E4076] shrink-0" />}
                     </button>
                   ))}
@@ -479,23 +462,24 @@ export function Header({
         })()}
 
         {/* Apply — filters only run after confirmation */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={applyFilters}
             disabled={!dirty || invalidRange}
             title={invalidRange ? "Start date must be on or before end date" : dirty ? undefined : "No filter changes to apply"}
             className={cn(
-              "px-3.5 py-1.5 rounded-full text-[11px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40",
+              "h-7 inline-flex items-center gap-1 px-3 rounded-md border text-[11px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40",
               dirty && !invalidRange
-                ? "bg-[#1E4076] text-white hover:bg-[#16305C]"
-                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                ? "border-[#1E4076] bg-[#1E4076] text-white hover:bg-[#16305C] hover:border-[#16305C]"
+                : "border-slate-200 bg-white text-slate-400 cursor-not-allowed"
             )}
           >
             Apply
+            <ArrowRight size={12} />
           </button>
           {dirty && (
             <button onClick={discardFilters}
-              className="px-2 py-1.5 rounded-full text-[11px] font-semibold text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40">
+              className="h-7 px-2 rounded-md text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40">
               Discard
             </button>
           )}
@@ -508,54 +492,44 @@ export function Header({
         )}
 
         {ltBasis && onLtBasisChange && (
-          <div className="flex items-center gap-0.5 bg-white rounded-full p-0.5 border border-gray-200 shrink-0">
-            {(["created", "released"] as const).map((b) => (
-              <button key={b} onClick={() => onLtBasisChange(b)}
-                className={cn(
-                  "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10",
-                  ltBasis === b ? "text-[#16305C]" : "text-gray-500 hover:text-gray-700"
-                )}>
-                {ltBasis === b && (
-                  <motion.span
-                    layoutId="lt-basis-pill"
-                    className="absolute inset-0 bg-[#EEF4FB] rounded-full"
-                    style={{ zIndex: -1 }}
-                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                  />
-                )}
-                {b === "created" ? "PO Created" : "PO Released"}
-              </button>
-            ))}
+          <div className="shrink-0">
+            <span className={FIELD_LABEL}>Lead time from</span>
+            <div className={SEG}>
+              {(["created", "released"] as const).map((b) => (
+                <button key={b} onClick={() => onLtBasisChange(b)} aria-pressed={ltBasis === b}
+                  className={cn(SEG_ITEM, ltBasis === b ? "text-[#16305C]" : "text-slate-500 hover:text-slate-700")}>
+                  {ltBasis === b && (
+                    <motion.span layoutId="lt-basis-pill" className={SEG_PILL} style={{ zIndex: -1 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }} />
+                  )}
+                  {b === "created" ? "PO Created" : "PO Released"}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
         {resolvedViews.length >= 2 && (
-          <>
-            {!!(ltBasis && onLtBasisChange) && <div className="w-px h-4 bg-gray-200 shrink-0 mx-0.5" />}
-            <div className="flex items-center gap-0.5 bg-white rounded-full p-0.5 border border-gray-200 shrink-0">
+          <div className="shrink-0">
+            <span className={FIELD_LABEL}>View</span>
+            <div className={SEG}>
               {resolvedViews.map(({ key, label, locked }) => (
                 <button key={key} onClick={() => { if (!locked) onViewChange(key); }}
-                  disabled={locked}
+                  disabled={locked} aria-pressed={activeView === key}
                   title={locked ? "Coming soon — data not connected yet" : undefined}
-                  className={cn(
-                    "relative px-3 py-1 rounded-full text-[11px] font-semibold transition-colors z-10 inline-flex items-center gap-1",
-                    locked ? "text-gray-300 cursor-not-allowed"
-                      : activeView === key ? "text-[#16305C]" : "text-gray-500 hover:text-gray-700"
-                  )}>
+                  className={cn(SEG_ITEM, "inline-flex items-center gap-1",
+                    locked ? "text-slate-300 cursor-not-allowed"
+                      : activeView === key ? "text-[#16305C]" : "text-slate-500 hover:text-slate-700")}>
                   {locked && <Lock size={9} strokeWidth={2} />}
                   {activeView === key && (
-                    <motion.span
-                      layoutId="view-pill"
-                      className="absolute inset-0 bg-[#EEF4FB] rounded-full"
-                      style={{ zIndex: -1 }}
-                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                    />
+                    <motion.span layoutId="view-pill" className={SEG_PILL} style={{ zIndex: -1 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }} />
                   )}
                   {label}
                 </button>
               ))}
             </div>
-          </>
+          </div>
         )}
 
       </div>

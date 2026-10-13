@@ -10,6 +10,7 @@ import {
 import { signOut } from "next-auth/react";
 import { trackUserLoggedOut } from "@/lib/analytics/events";
 import { cn } from "@/lib/utils";
+import { SidebarBrand } from "@/components/dashboard/SidebarToggle";
 import { computeAlerts } from "@/lib/alerts";
 
 const INACTIVITY_MS = 15 * 60 * 1000;
@@ -160,14 +161,16 @@ export function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-56 h-screen bg-white flex flex-col shrink-0 overflow-hidden">
+    // .ct-sidebar width animates to 0 while html[data-sidebar="collapsed"] (stays mounted, so the idle timer keeps running).
+    // Inner column keeps 224px, so the menu slides out instead of reflowing.
+    <aside className="ct-sidebar h-screen bg-white flex flex-col shrink-0 overflow-hidden">
+      <div className="w-56 h-full flex flex-col">
       {/* Logo */}
       {/* Same height and color as the Header top bar, so logo + top bar read as one Paragon Blue strip.
           The sidebar's right border starts below it (on nav + footer) so no line cuts through the strip. */}
-      <div className="shrink-0 px-4 h-[52px] flex items-center justify-center bg-[#1E4076]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/paragon-corp-white.e705509b.png" alt="Paragon Corp" className="w-36 h-auto" />
-      </div>
+      {/* Logo block is fixed top-left (SidebarBrand); this navy spacer keeps the column below it */}
+      <SidebarBrand />
+      <div className="shrink-0 h-[52px] bg-[#1E4076]" />
 
       <nav className="px-2.5 pt-3 flex flex-col flex-1 overflow-y-auto border-r border-slate-200">
         {NAV_GROUPS.map((group, i) => (
@@ -192,6 +195,7 @@ export function Sidebar() {
           <LogOut size={15} strokeWidth={1.6} className="shrink-0" />
           <span className="text-[13px] leading-none">Sign Out</span>
         </button>
+      </div>
       </div>
     </aside>
   );

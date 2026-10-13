@@ -1,0 +1,81 @@
+"use client";
+
+// Lead Time page filters below the global filter bar: Scope · Basis · Unit, then PO-level filters
+// (No. PO · Activity · Line category · Line · SKU group · SKU · Variant — lib/leadTimeFilters.ts).
+// Changes apply at once (the global period / plant still go through Apply in the Header).
+
+import { useEffect, useState } from "react";
+import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { FIELD_LABEL, SelectField, type FieldOption } from "@/components/ui/FilterField";
+import { LT_DIM_COLUMNS, type LtDims } from "@/lib/leadTimeFilters";
+
+export type LtScope = "created" | "released";
+export type LtBasis = "gross" | "nett";
+export type LtUnit = "days" | "hours";
+
+type Options = Record<keyof LtDims, FieldOption[]>;
+
+const ALL_LABEL: Record<keyof LtDims, string> = {
+  po: "All POs", activity: "All activities", lineCategory: "All line categories", line: "All lines",
+  skuGroup: "All SKU groups", sku: "All SKUs", variant: "All variants",
+};
+const WIDTH: Record<keyof LtDims, number> = { po: 128, activity: 150, lineCategory: 150, line: 150, skuGroup: 160, sku: 170, variant: 150 };
+
+export function LeadTimeFilterCard({ base, scope, onScope, basis, onBasis, unit, onUnit, dims, onDims }: {
+  /** period / plant from the Header — the dropdown lists follow them */
+  base: { plant: string; startDate: string; endDate: string; period?: string };
+  scope: LtScope; onScope: (v: LtScope) => void;
+  basis: LtBasis; onBasis: (v: LtBasis) => void;
+  unit: LtUnit; onUnit: (v: LtUnit) => void;
+  dims: LtDims; onDims: (d: LtDims) => void;
+}) {
+  const [options, setOptions] = useState<Options | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setOptions(null);
+    const params = new URLSearchParams({ plant: base.plant, startDate: base.startDate, endDate: base.endDate });
+    if (base.period) params.set("period", base.period);
+    fetch(`/api/lead-time/options?${params}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d && !d.error) setOptions(d); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [base.plant, base.startDate, base.endDate, base.period]);
+
+  const active = LT_DIM_COLUMNS.filter(({ key }) => dims[key]).length;
+
+  return (
+    <div className="rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5 flex items-end gap-2.5 flex-wrap">
+      <div className="shrink-0">
+        <span className={FIELD_LABEL}>Scope</span>
+        <SegmentedToggle<LtScope> ariaLabel="Lead time start"
+          options={[{ key: "created", label: "PO Created" }, { key: "released", label: "PO Released" }]}
+          value={scope} onChange={onScope} />
+      </div>
+      <div className="shrink-0">
+        <span className={FIELD_LABEL}>Basis</span>
+        <SegmentedToggle<LtBasis> ariaLabel="Gross or nett"
+          options={[{ key: "gross", label: "Gross" }, { key: "nett", label: "Nett" }]}
+          value={basis} onChange={onBasis} />
+      </div>
+      <SelectField label="Unit" value={unit} width={84}
+        options={[{ value: "days", label: "Days" }, { value: "hours", label: "Hours" }]}
+        onChange={(v) => onUnit(v as LtUnit)} />
+
+      <div className="w-px self-stretch bg-slate-100 mx-0.5" />
+
+      {LT_DIM_COLUMNS.map(({ key, label }) => (
+        <SelectField key={key} label={label} value={dims[key] ?? ""} width={WIDTH[key]}
+          options={options?.[key] ?? []} loading={!options} allLabel={ALL_LABEL[key]}
+          onChange={(v) => onDims({ ...dims, [key]: v || undefined })} />
+      ))}
+
+      {active > 0 && (
+        <button onClick={() => onDims({})}
+          className="h-7 px-2 rounded-md text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40">
+          Clear {active} filter{active > 1 ? "s" : ""}
+        </button>
+      )}
+    </div>
+  );
+}

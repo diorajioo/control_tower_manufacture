@@ -1,4 +1,5 @@
 import { executeQuery } from "@/lib/db";
+import { activeDims, type LtDims } from "@/lib/leadTimeFilters";
 import { LEAD_TIME_START_SQL, NDC_RECEIVED_AT_SQL, PO_CREATED_AT_SQL, PO_RELEASED_AT_SQL, LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 interface QueryFilters {
@@ -8,13 +9,39 @@ interface QueryFilters {
   period?: string;       // "YTD" | "30D" | "90D" | "6M" | "Today" | "This Week" | "Last Week" | "This Month" | "Last Month" | "Custom"
   leadTimeType?: string; // "Gross Time" | "Nett Time"
   timeUnit?: string;     // "Daily" | "Hourly"
+  /** Lead Time page filters (PO-level) — only read by lead time queries via ltWhere() / ltBinds() */
+  lt?: LtDims;
 }
+
+// Lead time rows with PLANT = the PO's LAST plant (the row with the highest ACTIVITY_SEQUENCE, latest stop on ties).
+// ~145 POs run bulk in one plant and pack in another; read per (plant, PO) they have no start or no end and drop out.
+// Every lead time query reads this instead of the table, so the plant filter and per-plant groupings attribute
+// each PO to one plant (decided 2026-10-13: last plant). Small table (~0.8M rows) — the window costs ~0.3 s.
+export const LT_TABLE = `(
+  SELECT t.* EXCLUDE (PLANT),
+    FIRST_VALUE(t.PLANT) OVER (PARTITION BY t.PROCESS_ORDER_FG ORDER BY t.ACTIVITY_SEQUENCE DESC NULLS LAST, t.ACTIVITY_STOP DESC NULLS LAST) AS PLANT
+  FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME t
+)`;
 
 // Plant filter as a parameterized predicate: plantWhere() gives the SQL (with ?),
 // plantBinds() the matching values — append them after the date binds.
 const hasPlant = (plant?: string): plant is string => !!plant && plant !== "All Plant";
 const plantWhere = (plant?: string, col = "PLANT") => (hasPlant(plant) ? `AND ${col} = ?` : "");
 const plantBinds = (plant?: string): unknown[] => (hasPlant(plant) ? [plant] : []);
+
+// Lead time queries: plant filter + the Lead Time page filters (lib/leadTimeFilters.ts). A dimension filter keeps
+// whole POs that have at least one row matching each value; it reads the raw table (these attributes do not depend
+// on the owner plant). Use ltWhere()/ltBinds() exactly where plantWhere()/plantBinds() would go.
+const ltWhere = (f: QueryFilters) => {
+  const dims = activeDims(f.lt);
+  return plantWhere(f.plant) + (dims.length === 0 ? "" : `
+    AND PROCESS_ORDER_FG IN (
+      SELECT PROCESS_ORDER_FG FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      GROUP BY PROCESS_ORDER_FG
+      HAVING ${dims.map((d) => `MAX(IFF(${d.column} = ?, 1, 0)) = 1`).join(" AND ")}
+    )`);
+};
+const ltBinds = (f: QueryFilters): unknown[] => [...plantBinds(f.plant), ...activeDims(f.lt).map((d) => d.value)];
 
 // Trend granularity for line charts. Only these two literals are ever put into DATE_TRUNC.
 export type TrendGrain = "week" | "month";
@@ -65,14 +92,14 @@ export async function getLeadTimeReleasedGross(filters: QueryFilters) {
       SELECT
         PROCESS_ORDER_FG,
         DATEDIFF('minute', ${PO_RELEASED_AT_SQL}, ${NDC_RECEIVED_AT_SQL}) AS gross_minutes
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
       HAVING ${PO_RELEASED_AT_SQL} IS NOT NULL
         AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
     ) sub
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
   return rows[0];
 }
 
@@ -81,7 +108,7 @@ export async function getLeadTimeReleasedGross(filters: QueryFilters) {
 // Nett:  SUM(NET_LEADTIME) for ACTUAL rows where LINE_CATEGORY IS NOT NULL per PO
 export async function getLeadTimeKPI(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
-  const plantFilter = plantWhere(filters.plant);
+  const plantFilter = ltWhere(filters);
 
   const [grossRows, nettRows] = await Promise.all([
     executeQuery<{ AVG_GROSS: number }>(`
@@ -93,26 +120,26 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
             ${LEAD_TIME_START_SQL},
             ${NDC_RECEIVED_AT_SQL}
           ) AS gross_minutes
-        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+        FROM ${LT_TABLE}
         WHERE ${datePred}
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG
         HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
           AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
       ) sub
-    `, [...dateBinds, ...plantBinds(filters.plant)]),
+    `, [...dateBinds, ...ltBinds(filters)]),
     executeQuery<{ AVG_NETT: number }>(`
       SELECT AVG(nett_minutes) / 1440.0 AS AVG_NETT
       FROM (
         SELECT PROCESS_ORDER_FG, SUM(NET_LEADTIME) AS nett_minutes
-        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+        FROM ${LT_TABLE}
         WHERE ${datePred}
           AND ACTIVITY_TYPE = 'ACTUAL'
           AND LINE_CATEGORY IS NOT NULL
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG
       ) sub
-    `, [...dateBinds, ...plantBinds(filters.plant)]),
+    `, [...dateBinds, ...ltBinds(filters)]),
   ]);
 
   return {
@@ -141,12 +168,12 @@ export async function getLeadTimeComposition(filters: QueryFilters) {
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN NET_LEADTIME ELSE 0 END) AS nnva_min,
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN NET_LEADTIME ELSE 0 END) AS unva_min,
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' AND ACTIVITY_TYPE = 'WIP' THEN NET_LEADTIME ELSE 0 END) AS wip_min
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
     ) sub
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
   return {
     va:   rows[0]?.VA   ?? 0,
     nnva: rows[0]?.NNVA ?? 0,
@@ -174,14 +201,14 @@ export async function getLeadTimeCompositionWeekly(filters: QueryFilters) {
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN NET_LEADTIME ELSE 0 END) AS nnva_min,
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN NET_LEADTIME ELSE 0 END) AS unva_min,
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' AND ACTIVITY_TYPE = 'WIP' THEN NET_LEADTIME ELSE 0 END) AS wip_min
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
     ) sub
     GROUP BY WEEK
     ORDER BY WEEK
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 // Same per-PO logic as getLeadTimeComposition(), grouped by month of PO_FG_DONE_DATE.
@@ -202,14 +229,14 @@ export async function getLeadTimeCompositionMonthly(filters: QueryFilters) {
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN NET_LEADTIME ELSE 0 END) AS nnva_min,
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN NET_LEADTIME ELSE 0 END) AS unva_min,
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' AND ACTIVITY_TYPE = 'WIP' THEN NET_LEADTIME ELSE 0 END) AS wip_min
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
     ) sub
     GROUP BY MONTH
     ORDER BY MONTH
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 // Lead Time trend per POSITION → weekly line chart on /lead-time
@@ -225,15 +252,15 @@ export async function getLeadTimeWeeklyByPosition(filters: QueryFilters, grain?:
         PROCESS_ORDER_FG,
         POSITION,
         SUM(NET_LEADTIME) AS pos_minutes
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
         AND POSITION IS NOT NULL
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG, POSITION
     ) sub
     GROUP BY WEEK, POSITION
     ORDER BY WEEK, POSITION
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 // Lead Time vs PO count per SKU → scatter plot on /lead-time
@@ -245,13 +272,15 @@ export async function getLeadTimeWeeklyByPosition(filters: QueryFilters, grain?:
 // so the chart can show WIP either as its own bar or folded into the stage it follows.
 export async function getLeadTimeByStageCategory(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
-  return executeQuery<{ STAGE: string; ACTIVITY: string; MIN_ACTIVITY_ID: number; ATTACHED_STAGE: string; CATEGORY: string; DAYS: number }>(`
+  // ACTIVITY_SEQUENCE = process flow order 1–45 (PO 1 → WIP AFTER PO 2 → WEIGHING 3 … RECEIVE NDC 45), one per activity.
+  // ACTIVITY_ID is not an order (every WIP activity has 99).
+  return executeQuery<{ STAGE: string; ACTIVITY: string; MIN_ACTIVITY_ID: number; MIN_SEQUENCE: number | null; ATTACHED_STAGE: string; CATEGORY: string; DAYS: number }>(`
     WITH base AS (
-      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_ID, ACTIVITY_CATEGORY, NET_LEADTIME
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_ID, ACTIVITY_SEQUENCE, ACTIVITY_CATEGORY, NET_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
         AND POSITION IS NOT NULL
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
     ),
     act_pos AS (
       SELECT ACTIVITY, MAX(POSITION) AS POSITION
@@ -264,6 +293,7 @@ export async function getLeadTimeByStageCategory(filters: QueryFilters) {
       b.POSITION  AS STAGE,
       b.ACTIVITY  AS ACTIVITY,
       MIN(b.ACTIVITY_ID) AS MIN_ACTIVITY_ID,
+      MIN(b.ACTIVITY_SEQUENCE) AS MIN_SEQUENCE,
       CASE WHEN b.POSITION = 'WIP' THEN COALESCE(ap.POSITION, 'WIP') ELSE b.POSITION END AS ATTACHED_STAGE,
       b.ACTIVITY_CATEGORY AS CATEGORY,
       SUM(b.NET_LEADTIME) / 1440.0 / NULLIF(MAX(po.N), 0) AS DAYS
@@ -273,7 +303,7 @@ export async function getLeadTimeByStageCategory(filters: QueryFilters) {
     CROSS JOIN po
     WHERE b.ACTIVITY_CATEGORY IN ('VA', 'NNVA', 'UNVA')
     GROUP BY b.POSITION, b.ACTIVITY, ATTACHED_STAGE, b.ACTIVITY_CATEGORY
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 // Lead time per stage (POSITION): actual vs standard → Overview Tactical view
@@ -284,10 +314,10 @@ export async function getLeadTimeStageVsStd(filters: QueryFilters) {
   return executeQuery<{ STAGE: string; ACTUAL_DAYS: number; STD_DAYS: number }>(`
     WITH base AS (
       SELECT PROCESS_ORDER_FG, POSITION, NET_LEADTIME, ACTIVITY_LEADTIME_STD
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
         AND POSITION IS NOT NULL
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
     ),
     po AS (SELECT COUNT(DISTINCT PROCESS_ORDER_FG) AS N FROM base)
     SELECT
@@ -297,7 +327,7 @@ export async function getLeadTimeStageVsStd(filters: QueryFilters) {
     FROM base b
     CROSS JOIN po
     GROUP BY 1
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 // Lead time breakdown per plant → Overview Tactical table. Network row = GROUPING(PLANT) = 1.
@@ -308,12 +338,12 @@ export async function getLeadTimeStageVsStd(filters: QueryFilters) {
 export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: number, basis: "created" | "released" = "created") {
   const startSql = basis === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
-  const binds = [...dateBinds, ...plantBinds(filters.plant)];
+  const binds = [...dateBinds, ...ltBinds(filters)];
   const base = `
-    SELECT PLANT, PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_TYPE, LINE_CATEGORY, ACTIVITY_START, ACTIVITY_STOP, NET_LEADTIME
-    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+    SELECT PLANT, PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_SEQUENCE, ACTIVITY_TYPE, LINE_CATEGORY, ACTIVITY_START, ACTIVITY_STOP, NET_LEADTIME
+    FROM ${LT_TABLE}
     WHERE ${datePred}
-      ${plantWhere(filters.plant)}`;
+      ${ltWhere(filters)}`;
 
   const [plantRows, stageRows] = await Promise.all([
     executeQuery<{ IS_NETWORK: number; PLANT: string | null; PO_COUNT: number; GROSS_DAYS: number; NETT_DAYS: number; ONTIME_PCT: number | null }>(`
@@ -363,11 +393,12 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
         COUNT_IF(gross_minutes <= ? * 1440) * 100.0 / NULLIF(COUNT(gross_minutes), 0) AS ONTIME_PCT
       FROM po_network
     `, [...binds, targetDays, targetDays]),
-    executeQuery<{ PLANT: string; STAGE: string; MINUTES: number }>(`
-      SELECT PLANT, POSITION AS STAGE, SUM(NET_LEADTIME) AS MINUTES
+    // Per activity (Process view of the plant table); the route also sums them per POSITION
+    executeQuery<{ PLANT: string; STAGE: string; ACTIVITY: string; SEQ: number | null; MINUTES: number }>(`
+      SELECT PLANT, POSITION AS STAGE, ACTIVITY, MIN(ACTIVITY_SEQUENCE) AS SEQ, SUM(NET_LEADTIME) AS MINUTES
       FROM (${base}) b
       WHERE POSITION IS NOT NULL
-      GROUP BY 1, 2
+      GROUP BY 1, 2, 3
     `, binds),
   ]);
 
@@ -391,9 +422,9 @@ export async function getLeadTimeBySku(filters: QueryFilters) {
           ${LEAD_TIME_START_SQL},
           ${NDC_RECEIVED_AT_SQL}
         ) AS gross_minutes
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
       HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
         AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
@@ -401,7 +432,7 @@ export async function getLeadTimeBySku(filters: QueryFilters) {
     WHERE PRODUCT_CODE IS NOT NULL
     GROUP BY PRODUCT_CODE
     HAVING COUNT(DISTINCT PROCESS_ORDER_FG) < 100
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 export type ScatterDimension = "brand" | "variant" | "su_group" | "sku";
@@ -432,9 +463,9 @@ export async function getLeadTimeScatterByDim(filters: QueryFilters, dimension: 
           ${LEAD_TIME_START_SQL},
           ${NDC_RECEIVED_AT_SQL}
         ) AS gross_minutes
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
       HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
         AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
@@ -442,7 +473,7 @@ export async function getLeadTimeScatterByDim(filters: QueryFilters, dimension: 
     ${nullFilter}
     GROUP BY ${nullLabel}
     ${dimension === "sku" ? "HAVING COUNT(DISTINCT PROCESS_ORDER_FG) < 100" : ""}
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 // Top 10 SKU by lead time → composition / range chart on /lead-time
@@ -466,9 +497,9 @@ export async function getLeadTimeTopSku(filters: QueryFilters) {
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'VA'   THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS va_days,
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS nnva_days,
         SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS unva_days
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
       HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
         AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
@@ -489,19 +520,19 @@ export async function getLeadTimeTopSku(filters: QueryFilters) {
     HAVING COUNT(*) >= 5
     ORDER BY AVG_DAYS DESC
     LIMIT 10
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 export async function getLeadTimeByPosition(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
-  const plantFilter = plantWhere(filters.plant);
+  const plantFilter = ltWhere(filters);
 
   const [nettRows, grossRows] = await Promise.all([
     executeQuery<{ POSITION: string; AVG_HOURS: number }>(`
       SELECT POSITION, AVG(pos_minutes) / 60.0 AS AVG_HOURS
       FROM (
         SELECT PROCESS_ORDER_FG, POSITION, SUM(NET_LEADTIME) AS pos_minutes
-        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+        FROM ${LT_TABLE}
         WHERE ${datePred}
           AND ACTIVITY_TYPE = 'ACTUAL'
           ${plantFilter}
@@ -510,13 +541,13 @@ export async function getLeadTimeByPosition(filters: QueryFilters) {
       GROUP BY POSITION
       ORDER BY AVG_HOURS DESC
       LIMIT 10
-    `, [...dateBinds, ...plantBinds(filters.plant)]),
+    `, [...dateBinds, ...ltBinds(filters)]),
     executeQuery<{ POSITION: string; AVG_HOURS: number }>(`
       SELECT POSITION, AVG(pos_minutes) / 60.0 AS AVG_HOURS
       FROM (
         SELECT PROCESS_ORDER_FG, POSITION,
           DATEDIFF('minute', MIN(ACTIVITY_START), MAX(ACTIVITY_STOP)) AS pos_minutes
-        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+        FROM ${LT_TABLE}
         WHERE ${datePred}
           ${plantFilter}
         GROUP BY PROCESS_ORDER_FG, POSITION
@@ -524,7 +555,7 @@ export async function getLeadTimeByPosition(filters: QueryFilters) {
       GROUP BY POSITION
       ORDER BY AVG_HOURS DESC
       LIMIT 10
-    `, [...dateBinds, ...plantBinds(filters.plant)]),
+    `, [...dateBinds, ...ltBinds(filters)]),
   ]);
 
   return { nett: nettRows, gross: grossRows };
@@ -536,7 +567,7 @@ export async function getLeadTimeTrend(filters: QueryFilters) {
       DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK,
       PLANT,
       DATEDIFF('minute', MIN(PO_CREATED), MIN(PO_FG_DONE_DATE)) / 1440.0 AS AVG_LEADTIME_DAYS
-    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+    FROM ${LT_TABLE}
     WHERE PO_FG_DONE_DATE::DATE BETWEEN ?::DATE AND ?::DATE
       AND LINE_CATEGORY IS NOT NULL
     ${plantWhere(filters.plant)}
@@ -553,7 +584,7 @@ export async function getRightFirstTime(filters: QueryFilters) {
     SELECT
       COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) * 100.0
         / NULLIF(COUNT(ACTIVITY), 0) AS RFT_PCT
-    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+    FROM ${LT_TABLE}
     WHERE ${datePred}
     ${plantWhere(filters.plant)}
   `, [...dateBinds, ...plantBinds(filters.plant)]);
@@ -856,16 +887,16 @@ export async function getLeadTimeWeekly(filters: QueryFilters, grain?: TrendGrai
           ${LEAD_TIME_START_SQL},
           ${NDC_RECEIVED_AT_SQL}
         ) / 1440.0 AS DAYS
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY 1, PROCESS_ORDER_FG
       HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
         AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
     )
     GROUP BY 1
     ORDER BY 1
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 // Output FG weekly series → sparkline for dashboard card
@@ -918,7 +949,7 @@ export async function getRFTWeekly(filters: QueryFilters) {
       DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK,
       COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) * 100.0
         / NULLIF(COUNT(*), 0) AS RFT_PCT
-    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+    FROM ${LT_TABLE}
     WHERE ${datePred}
       ${plantWhere(filters.plant)}
     GROUP BY 1
@@ -978,7 +1009,7 @@ export async function getTrendKPIByPlant(
         WITH base AS (
           SELECT PROCESS_ORDER_FG, PLANT, ACTIVITY, ACTIVITY_START, ACTIVITY_STOP,
             DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK
-          FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+          FROM ${LT_TABLE}
           WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
             ${pf}
         ),
@@ -1138,7 +1169,7 @@ export async function getTrendKPIByPlant(
             / NULLIF(COUNT(*), 0) AS KPI_VALUE,
           COUNT(*) AS N,
           COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) AS LATE
-        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+        FROM ${LT_TABLE}
         WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
           ${pf}
         GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
@@ -1187,7 +1218,7 @@ export async function getPlantList() {
 export async function getEtlTimestamp(): Promise<string | null> {
   const rows = await executeQuery<{ LAST_ETL: string | null }>(`
     SELECT MAX(LOAD_TIMESTAMP) AS LAST_ETL
-    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+    FROM ${LT_TABLE}
   `);
   return rows[0]?.LAST_ETL ?? null;
 }
@@ -1200,54 +1231,61 @@ export async function getLeadTimeGroupProcess(filters: QueryFilters) {
     FROM (
       SELECT PROCESS_ORDER_FG, ACTIVITY,
              SUM(NET_LEADTIME) / 1440.0 AS net_lt
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE ACTIVITY_TYPE = 'ACTUAL'
         AND PO_FG_DONE_DATE IS NOT NULL
         AND ACTIVITY <> 'ADJUST'
         AND ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG, ACTIVITY
     ) sub
     GROUP BY ACTIVITY
     ORDER BY AVG_DAYS DESC
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 // Tactical Overview histogram (Lead Time tab): 2-day bins up to >38d, with mean/median/stddev/total.
-export async function getLeadTimeDistributionBins(filters: QueryFilters, basis: "created" | "released" = "created") {
+// gross = start (basis) → RECEIVE NDC; nett = SUM(NET_LEADTIME) of ACTUAL rows with a LINE_CATEGORY (same as getLeadTimeKPI),
+// which does not depend on the basis.
+export async function getLeadTimeDistributionBins(filters: QueryFilters, basis: "created" | "released" = "created", metric: "gross" | "nett" = "gross") {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const startSql = basis === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
-  return executeQuery<{ BIN_START: number; CNT: number; MEAN_DAYS: number; MEDIAN_DAYS: number; STDDEV_DAYS: number; TOTAL_POS: number }>(`
-    WITH per_po AS (
-      SELECT PROCESS_ORDER_FG,
-        DATEDIFF('minute',
-          ${startSql},
-          ${NDC_RECEIVED_AT_SQL}
-        ) / 1440.0 AS gross_lt_days
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+  const grossMinutes = `DATEDIFF('minute', ${startSql}, ${NDC_RECEIVED_AT_SQL})`;
+  const nettMinutes = "SUM(CASE WHEN LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END)";
+  const perPo = metric === "nett"
+    ? `SELECT PROCESS_ORDER_FG, ${nettMinutes} / 1440.0 AS lt_days
+      FROM ${LT_TABLE}
       WHERE PO_FG_DONE_DATE IS NOT NULL
         AND ACTIVITY_TYPE = 'ACTUAL'
         AND ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
+      GROUP BY PROCESS_ORDER_FG
+      HAVING ${nettMinutes} IS NOT NULL AND ${nettMinutes} >= 0`
+    : `SELECT PROCESS_ORDER_FG, ${grossMinutes} / 1440.0 AS lt_days
+      FROM ${LT_TABLE}
+      WHERE PO_FG_DONE_DATE IS NOT NULL
+        AND ACTIVITY_TYPE = 'ACTUAL'
+        AND ${datePred}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
       HAVING ${startSql} IS NOT NULL
         AND  ${NDC_RECEIVED_AT_SQL} IS NOT NULL
-        AND  DATEDIFF('minute',
-               ${startSql},
-               ${NDC_RECEIVED_AT_SQL}
-             ) >= 0
+        AND  ${grossMinutes} >= 0`;
+  return executeQuery<{ BIN_START: number; CNT: number; MEAN_DAYS: number; MEDIAN_DAYS: number; STDDEV_DAYS: number; TOTAL_POS: number }>(`
+    WITH per_po AS (
+      ${perPo}
     ),
     stats AS (
-      SELECT AVG(gross_lt_days)    AS mean_days,
-             MEDIAN(gross_lt_days) AS median_days,
-             STDDEV(gross_lt_days) AS stddev_days,
-             COUNT(*)              AS total_pos
+      SELECT AVG(lt_days)    AS mean_days,
+             MEDIAN(lt_days) AS median_days,
+             STDDEV(lt_days) AS stddev_days,
+             COUNT(*)        AS total_pos
       FROM per_po
     ),
     bins AS (
-      SELECT FLOOR(LEAST(gross_lt_days, 38) / 2) * 2 AS bin_start, COUNT(*) AS cnt
+      SELECT FLOOR(LEAST(lt_days, 38) / 2) * 2 AS bin_start, COUNT(*) AS cnt
       FROM per_po
-      GROUP BY FLOOR(LEAST(gross_lt_days, 38) / 2) * 2
+      GROUP BY FLOOR(LEAST(lt_days, 38) / 2) * 2
     )
     SELECT
       b.bin_start   AS BIN_START,
@@ -1258,7 +1296,7 @@ export async function getLeadTimeDistributionBins(filters: QueryFilters, basis: 
       s.total_pos   AS TOTAL_POS
     FROM bins b CROSS JOIN stats s
     ORDER BY b.bin_start
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
 }
 
 // Tactical Overview gauge stats (Lead Time tab): max gross LT (gauge right end), avg PO-stage days, PO count.
@@ -1272,11 +1310,11 @@ export async function getLeadTimeTacticalStats(filters: QueryFilters) {
           MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END)
         ) / 1440.0 AS gross_lt_days,
         SUM(CASE WHEN ACTIVITY = 'PO' THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS po_stage_days
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
+      FROM ${LT_TABLE}
       WHERE PO_FG_DONE_DATE IS NOT NULL
         AND ACTIVITY_TYPE = 'ACTUAL'
         AND ${datePred}
-        ${plantWhere(filters.plant)}
+        ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
       HAVING MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END) IS NOT NULL
         AND  MAX(CASE WHEN ACTIVITY_SEQUENCE = 45 THEN ACTIVITY_STOP END) IS NOT NULL
@@ -1293,6 +1331,119 @@ export async function getLeadTimeTacticalStats(filters: QueryFilters) {
       SUM(CASE WHEN gross_lt_days > 13 AND gross_lt_days <= 13 * 1.15 THEN 1 ELSE 0 END) AS AT_RISK_COUNT,
       SUM(CASE WHEN gross_lt_days > 13 * 1.15 THEN 1 ELSE 0 END)                         AS LATE_COUNT
     FROM per_po
-  `, [...dateBinds, ...plantBinds(filters.plant)]);
+  `, [...dateBinds, ...ltBinds(filters)]);
   return rows[0] ?? { MAX_GROSS_DAYS: null, AVG_PO_STAGE_DAYS: null, PO_COUNT: 0, ON_TIME_COUNT: 0, AT_RISK_COUNT: 0, LATE_COUNT: 0 };
+}
+
+// ── Lead Time page (Analysis tab) ─────────────────────────────────────────────
+// Per PO: gross = start (scope: PO Created / Released) → RECEIVE NDC; nett = SUM(NET_LEADTIME) of ACTUAL rows with a
+// LINE_CATEGORY (same as getLeadTimeKPI). Stats are over POs that have the value.
+export async function getLeadTimeAnalysisStats(filters: QueryFilters, scope: "created" | "released" = "created") {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const startSql = scope === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
+  const rows = await executeQuery<{
+    GROSS_AVG: number | null; GROSS_MEDIAN: number | null; GROSS_P25: number | null; GROSS_P75: number | null; GROSS_MAX: number | null; GROSS_N: number;
+    NETT_AVG: number | null; NETT_MEDIAN: number | null; NETT_P25: number | null; NETT_P75: number | null; NETT_MAX: number | null; NETT_N: number;
+    ONTIME: number; AT_RISK: number; LATE: number;
+  }>(`
+    WITH per_po AS (
+      SELECT PROCESS_ORDER_FG,
+        DATEDIFF('minute', ${startSql}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 AS gross,
+        SUM(CASE WHEN ACTIVITY_TYPE = 'ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END) / 1440.0 AS nett
+      FROM ${LT_TABLE}
+      WHERE ${datePred}
+        ${ltWhere(filters)}
+      GROUP BY PROCESS_ORDER_FG
+    )
+    SELECT
+      AVG(gross) AS GROSS_AVG, MEDIAN(gross) AS GROSS_MEDIAN,
+      PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY gross) AS GROSS_P25,
+      PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY gross) AS GROSS_P75,
+      MAX(gross) AS GROSS_MAX, COUNT(gross) AS GROSS_N,
+      AVG(nett) AS NETT_AVG, MEDIAN(nett) AS NETT_MEDIAN,
+      PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY nett) AS NETT_P25,
+      PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY nett) AS NETT_P75,
+      MAX(nett) AS NETT_MAX, COUNT(nett) AS NETT_N,
+      -- Same buckets as the Tactical gauge (getLeadTimeTacticalStats): on time ≤ target, at risk ≤ +15%, late above
+      COUNT_IF(gross <= ?) AS ONTIME,
+      COUNT_IF(gross > ? AND gross <= ? * 1.15) AS AT_RISK,
+      COUNT_IF(gross > ? * 1.15) AS LATE
+    FROM per_po
+  `, [...dateBinds, ...ltBinds(filters), LEAD_TIME_TARGET_DAYS, LEAD_TIME_TARGET_DAYS, LEAD_TIME_TARGET_DAYS, LEAD_TIME_TARGET_DAYS]);
+  return rows[0];
+}
+
+/** Weekly average gross (scope) and nett per PO — sparkline of the Lead Time card. */
+export async function getLeadTimeAnalysisWeekly(filters: QueryFilters, scope: "created" | "released" = "created") {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const startSql = scope === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
+  return executeQuery<{ WEEK: string; GROSS: number | null; NETT: number | null }>(`
+    SELECT WEEK, AVG(gross) AS GROSS, AVG(nett) AS NETT
+    FROM (
+      SELECT PROCESS_ORDER_FG,
+        DATE_TRUNC('week', MAX(PO_FG_DONE_DATE)::DATE) AS WEEK,
+        DATEDIFF('minute', ${startSql}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 AS gross,
+        SUM(CASE WHEN ACTIVITY_TYPE = 'ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END) / 1440.0 AS nett
+      FROM ${LT_TABLE}
+      WHERE ${datePred}
+        ${ltWhere(filters)}
+      GROUP BY PROCESS_ORDER_FG
+    ) sub
+    GROUP BY WEEK
+    ORDER BY WEEK
+  `, [...dateBinds, ...ltBinds(filters)]);
+}
+
+/**
+ * Time per activity per PO (Group Process and Process sunburst). Values are summed over POs ÷ all POs, so they add up.
+ * Gross = span of the activity (first start → last stop) per PO; Nett = SUM(NET_LEADTIME).
+ */
+export async function getLeadTimeProcessBreakdown(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{ STAGE: string; ACTIVITY: string; SEQ: number | null; GROSS_DAYS: number; NETT_DAYS: number }>(`
+    WITH lt_rows AS (
+      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_SEQUENCE, ACTIVITY_START, ACTIVITY_STOP, NET_LEADTIME
+      FROM ${LT_TABLE}
+      WHERE ${datePred}
+        ${ltWhere(filters)}
+    ),
+    n AS (SELECT COUNT(DISTINCT PROCESS_ORDER_FG) AS N FROM lt_rows),
+    act AS (
+      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY, MIN(ACTIVITY_SEQUENCE) AS SEQ,
+        DATEDIFF('minute', MIN(ACTIVITY_START), MAX(ACTIVITY_STOP)) AS span_min,
+        SUM(NET_LEADTIME) AS net_min
+      FROM lt_rows
+      WHERE POSITION IS NOT NULL
+      GROUP BY PROCESS_ORDER_FG, POSITION, ACTIVITY
+    )
+    SELECT a.POSITION AS STAGE, a.ACTIVITY AS ACTIVITY, MIN(a.SEQ) AS SEQ,
+      SUM(GREATEST(COALESCE(a.span_min, 0), 0)) / 1440.0 / NULLIF(MAX(n.N), 0) AS GROSS_DAYS,
+      SUM(COALESCE(a.net_min, 0)) / 1440.0 / NULLIF(MAX(n.N), 0) AS NETT_DAYS
+    FROM act a CROSS JOIN n
+    GROUP BY a.POSITION, a.ACTIVITY
+  `, [...dateBinds, ...ltBinds(filters)]);
+}
+
+/** Dropdown values for the Lead Time page filters, for the current period and plant (other filters ignored). */
+export async function getLeadTimeFilterOptions(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const binds = [...dateBinds, ...plantBinds(filters.plant)];
+  const where = `WHERE ${datePred} ${plantWhere(filters.plant)}`;
+  const list = (col: string, extra = "") => executeQuery<{ V: string; L: string | null; S: number | null }>(`
+    SELECT ${col} AS V, ${extra || "NULL"} AS L, MIN(ACTIVITY_SEQUENCE) AS S
+    FROM ${LT_TABLE} ${where} AND ${col} IS NOT NULL
+    GROUP BY ${col}
+    ORDER BY ${col}
+    LIMIT 30000
+  `, binds);
+  const [po, activity, lineCategory, line, skuGroup, sku, variant] = await Promise.all([
+    list("PROCESS_ORDER_FG"),
+    list("ACTIVITY"),
+    list("LINE_CATEGORY"),
+    list("LINE_NAME"),
+    list("SKU_GROUP"),
+    list("PRODUCT_CODE", "MAX(PRODUCT_NAME)"),
+    list("PRODUCT_VARIANT"),
+  ]);
+  return { po, activity, lineCategory, line, skuGroup, sku, variant };
 }

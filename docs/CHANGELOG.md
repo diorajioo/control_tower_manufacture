@@ -4,6 +4,22 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-10-13
+
+### Changed
+- **Resolution (Daily / Weekly / Monthly) hidden** from the filter bar (`SHOW_RESOLUTION = false` in `Header.tsx`; state and logic kept).
+- **InfoTooltip**: labelled `rows` format (label column + text) for long rules; opens below the icon when it would not fit above (measured before showing) — all info tooltips.
+- **Lead Time card gauge = Overview Tactical gauge** (`LeadTimeGaugeBar`: POs on time / at risk / late, gross only, follows Scope) + "N PO completed" and "PO & approval" lines; position bar removed. Sunburst card: less padding, compact scrollable legend (max 220 px) so zooming into WIP keeps the card size.
+- **Lead Time page rebuilt** (user design): title · Lead Time filter card (Scope · Basis · Unit · No. PO · Activity · Line category · Line · SKU group · SKU · Variant) · tabs Analysis (Lead Time card with position bar, composition, Group process and process sunburst, trend) / Pareto (Pareto lead time + breakdown per plant) / Ranking (Top 10 SKU + scatter). Old Strategic / Tactical / Operational views and their mock data removed. New: `lib/leadTimeFilters.ts`, `ltWhere()` / `ltBinds()` in all 17 lead time queries, `/api/lead-time/analysis`, `/api/lead-time/options`, `components/leadtime/*`, `components/ui/FilterField.tsx` (shared filter field styles + searchable `SelectField`; Header now imports them), `PROCESS_GROUPS` in `lib/leadTimeStages.ts`. Existing lead time routes take the dimension filters (caches bumped).
+- **Cross-plant POs belong to their last plant** (user decision): all lead time SQL reads `LT_TABLE` (`PLANT` = plant of the highest `ACTIVITY_SEQUENCE`), incl. `/api/chat` and `/api/risk-score`. Plant rows now add up to the network and the plant filter keeps whole POs. ClickHouse translator: `* EXCLUDE (…)` → `* EXCEPT (…)`. All lead time caches bumped (kpi v13, trends v7, stages v6, distribution v5, charts v10, scatter v4, trend v2, risk-score v2).
+- **Lead time breakdown per plant: Group Process / Process views** — columns Plant · Gross LT · Nett LT · process · On-time (Plant, Gross, Nett sticky on horizontal scroll). Group Process = 6 groups: PO · Weighing (TIMBANG) · Mixing (OLAH + CUCI OLAH) · Filpac (KEMAS 1 + KEMAS 2 + CUCI KEMAS) · Receive NDC · WIP. Process = one column per activity under its group, `ACTIVITY_SEQUENCE` order; WIP = 5 largest (network) + "Others (n processes)"; "N of M processes" picker hides columns. Cell = activity net time ÷ plant POs; red tint vs network kept; headers stay navy / light blue. `getLeadTimeByPlant` stage rows are per activity (+ sequence); `/api/lead-time/stages` returns `plants[].activities` and `activities` meta (cache v5). `activityLabel()` in `lib/leadTimeStages.ts`. Duplicate "Lead Time by Plant" wrapper title removed.
+- **Tactical Pareto Lead Time**: Seq now follows `ACTIVITY_SEQUENCE` (process flow 1–45, each WIP right after its activity; was `MIN(ACTIVITY_ID)`, which put every WIP at the end — all WIP have id 99). Process mode rotates the x-axis names −35° so all show; axis names gray `#667085`. `getLeadTimeByStageCategory` returns `MIN_SEQUENCE`, `/api/lead-time/charts` `sequence` (cache v9).
+- **Overview Tactical section tab bar is minimal** — text tabs on the page background, navy underline on the active tab, locked tab = muted text + "Soon"; Tactical content now lines up with the filter fields (no double side padding).
+- **AI Summary and the KPI alert bar show only on Overview Strategic** (not Tactical); the chat is on every page, now also Settings. Teams auto-send of critical alerts is unchanged.
+- **Sidebar menu can be hidden** — button left of the logo; the logo block stays in the top-left corner (moves into the Header top bar / Settings corner while hidden), so the top bar is unchanged; remembered across pages (`ct-sidebar-collapsed`).
+- **Filter bar = labelled fields** (Overview + Lead Time): PERIOD · START DATE · END DATE · PLANT · RESOLUTION + Apply →; dates always visible, editable only for Custom Range.
+- **Overview Tactical: Lead Time toggles next to the section title** — PO Created / Released (moved out of the Header), new Days / Hours (all Lead Time visuals) and Gross / Nett (card + histogram). `getLeadTimeDistributionBins(…, metric)` + `metric` param on `/api/lead-time/distribution` (cache v4); nett histogram mean = KPI nett (YTD 5.02 d).
+
 ## 2026-10-12
 
 ### Fixed

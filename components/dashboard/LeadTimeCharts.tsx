@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
+import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 import { ResponsiveScatterPlotCanvas } from "@nivo/scatterplot";
 import { Info } from "lucide-react";
 import { LINE_THEME, LineTooltip } from "@/components/charts/StandardLine";
@@ -76,6 +77,8 @@ interface ScatterFilters {
   startDate?: string;
   endDate?: string;
   period?: string;
+  /** Lead Time page filters (lib/leadTimeFilters.ts) */
+  lt?: LtDims;
 }
 
 interface ScatterPoint { label: string; poCount: number; days: number }
@@ -100,12 +103,14 @@ function useScatterData(filters: ScatterFilters, dim: ScatterDim) {
       dim,
     });
     if (filters.period) params.set("period", filters.period);
+    dimsToParams(filters.lt, params);
 
     fetch(`/api/lead-time/scatter?${params}`)
       .then((r) => r.json())
       .then((rows: ScatterPoint[]) => { setData(rows); setLoading(false); })
       .catch(() => { setData([]); setLoading(false); });
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period, dim]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, dim, dimsKey(filters.lt)]);
 
   return { data, loading };
 }

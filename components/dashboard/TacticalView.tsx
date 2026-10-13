@@ -2,11 +2,10 @@
 
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { Fade } from "@/components/ui/Fade";
-import { Lock } from "lucide-react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { LeadTimePlantTable, type PlantBreakdown } from "@/components/dashboard/LeadTimePlantTable";
+import { LeadTimePlantTable, type PlantBreakdown, type PlantActivity } from "@/components/dashboard/LeadTimePlantTable";
 import type { StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { LINE_THEME, LineTooltip, TOOLTIP_COLORS } from "@/components/charts/StandardLine";
@@ -14,6 +13,7 @@ import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 import { LeadTimeGaugeBar } from "@/components/ui/LeadTimeGaugeBar";
 import { ResponsiveBar, type BarCustomLayerProps, type BarDatum } from "@nivo/bar";
 import { STAGE_ORDER, stageLabel } from "@/lib/leadTimeStages";
+import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -54,17 +54,27 @@ interface TacticalFilters {
   startDate: string;
   endDate: string;
   period?: string;
+  /** Lead Time page filters (lib/leadTimeFilters.ts) — the Lead Time page reuses TacticalParetoChart */
+  lt?: LtDims;
 }
 
 interface TacticalViewProps {
   kpi: KPI | null;
   loading: boolean;
-  plantLT: { plants: PlantBreakdown[]; targetDays: number } | null;
+  plantLT: { plants: PlantBreakdown[]; targetDays: number; activities: PlantActivity[] } | null;
   stageStd: StageStdPoint[];
   stageLoading: boolean;
   ltBasis: "created" | "released";
+  onLtBasisChange: (b: "created" | "released") => void;
   tacticalFilters: TacticalFilters;
 }
+
+// Lead Time section toggles (next to the section title): unit and gross / nett.
+type LtUnit = "days" | "hours";
+type LtMeasure = "gross" | "nett";
+const ltFactor = (u: LtUnit) => (u === "hours" ? 24 : 1);
+/** Value in the chosen unit: days with 2 decimals, hours with 1. */
+const fmtLt = (days: number, u: LtUnit) => (days * ltFactor(u)).toFixed(u === "hours" ? 1 : 2);
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 
@@ -152,12 +162,14 @@ interface TKpiCardProps {
   gaugeCounts?: { onTime: number; atRisk: number; late: number } | null;
   gaugePoCount?: number;
   gaugePoStageLabel?: string;
+  /** Unit of the target delta / sub-label when ltDays is set */
+  ltUnit?: LtUnit;
 }
 
 function TKpiCard({
   label, value, unit, trend = null, inverse = false,
   sparkline, sparkUnit, ltDays, deltaAbsValue, deltaUnit, subLabel, footerLeft, noData = false,
-  gaugeCounts, gaugePoCount, gaugePoStageLabel,
+  gaugeCounts, gaugePoCount, gaugePoStageLabel, ltUnit = "days",
 }: TKpiCardProps) {
   const resolvedKey: ToneKey =
     noData || value === null ? "neutral" :
@@ -213,7 +225,7 @@ function TKpiCard({
                 const over = d > 0;
                 return (
                   <span style={{ fontSize: 11.5, fontWeight: 700, color: over ? "#d92d20" : "#067647", fontVariantNumeric: "tabular-nums" }}>
-                    {over ? "↗ +" : "↘ −"}{Math.abs(d).toFixed(2)} days
+                    {over ? "↗ +" : "↘ −"}{fmtLt(Math.abs(d), ltUnit)} {ltUnit}
                   </span>
                 );
               })() : !noData && deltaAbsValue != null ? (() => {
@@ -232,7 +244,7 @@ function TKpiCard({
 
             <div style={{ fontSize: 11, color: "#98a2b3" }}>
               {subLabel ?? (ltDays !== undefined
-                ? `vs ${LEAD_TIME_TARGET_DAYS}-day target`
+                ? `vs ${LEAD_TIME_TARGET_DAYS * ltFactor(ltUnit)}-${ltUnit === "hours" ? "hour" : "day"} target`
                 : deltaAbsValue != null || trend !== null ? "vs prior period" : "")}
             </div>
 
@@ -384,8 +396,8 @@ function PieChart({ segments, size = 120 }: { segments: DonutSegment[]; size?: n
 }
 
 function DonutCard({
-  title, segments, footer, loading,
-}: { title: string; segments: DonutSegment[]; footer?: string; loading?: boolean }) {
+  title, segments, footer, loading, unitSuffix = "d",
+}: { title: string; segments: DonutSegment[]; footer?: string; loading?: boolean; unitSuffix?: string }) {
   const total = segments.reduce((s, seg) => s + Math.max(0, seg.value), 0);
   return (
     <div style={{
@@ -422,7 +434,7 @@ function DonutCard({
                     {seg.label}
                   </span>
                   <span style={{ color: "#101828", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                    {seg.value.toFixed(2)}d
+                    {seg.value.toFixed(unitSuffix === "h" ? 1 : 2)}{unitSuffix}
                   </span>
                   <span style={{ color: "#98a2b3", fontVariantNumeric: "tabular-nums", width: 40, textAlign: "right" }}>
                     {pct.toFixed(0)}%
@@ -456,9 +468,11 @@ interface DistResponse {
   total: number;
 }
 
-function binLabel(start: number) {
-  if (start >= 38) return "> 38";
-  return `${start}-${start + 2}`;
+/** 2-day bin label in the chosen unit (48-hour bins in hours). */
+function binLabel(start: number, u: LtUnit = "days") {
+  const f = ltFactor(u);
+  if (start >= 38) return `> ${38 * f}`;
+  return `${start * f}-${(start + 2) * f}`;
 }
 
 interface HistoRow extends BarDatum {
@@ -467,7 +481,7 @@ interface HistoRow extends BarDatum {
   count: number;
 }
 
-function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis: "created" | "released" }) {
+function LeadTimeHistogram({ filters, basis, metric, unit }: { filters: TacticalFilters; basis: "created" | "released"; metric: LtMeasure; unit: LtUnit }) {
   const [data, setData] = useState<DistResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -477,6 +491,7 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
     params.set("startDate", filters.startDate);
     params.set("endDate", filters.endDate);
     params.set("basis", basis);
+    params.set("metric", metric);
     if (filters.period) params.set("period", filters.period);
     setLoading(true);
     fetch(`/api/lead-time/distribution?${params.toString()}`)
@@ -484,7 +499,7 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
       .then((d: DistResponse) => setData(d))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period, basis]);
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, basis, metric]);
 
   const { rows, cumByBin, maxBin, maxBinCount } = useMemo(() => {
     if (!data || data.bins.length === 0) {
@@ -497,7 +512,7 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
     const rr: HistoRow[] = sorted.map((b) => {
       cum += b.count;
       cumMap.set(b.binStart, total > 0 ? (cum / total) * 100 : 0);
-      return { bin: binLabel(b.binStart), binStart: b.binStart, count: b.count };
+      return { bin: binLabel(b.binStart, unit), binStart: b.binStart, count: b.count };
     });
     let maxB = sorted[0]?.binStart ?? 0;
     let maxC = 0;
@@ -505,7 +520,8 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
       if (b.count > maxC) { maxC = b.count; maxB = b.binStart; }
     }
     return { rows: rr, cumByBin: cumMap, maxBin: maxB, maxBinCount: maxC };
-  }, [data]);
+  }, [data, unit]);
+  const suffix = unit === "hours" ? "h" : "d";
 
   const mean = data?.mean ?? 0;
   const stddev = data?.stddev ?? 0;
@@ -568,7 +584,7 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
         <line x1={xHigh} x2={xHigh} y1={14} y2={innerHeight} stroke="#d92d20" strokeWidth={1} strokeDasharray="4 3" />
 
         {/* Mean */}
-        <text x={xMean} y={2} textAnchor="middle" style={labelStyle}>x̄ {mean.toFixed(1)}</text>
+        <text x={xMean} y={2} textAnchor="middle" style={labelStyle}>x̄ {(mean * ltFactor(unit)).toFixed(1)}</text>
         <line x1={xMean} x2={xMean} y1={14} y2={innerHeight} stroke="#d92d20" strokeWidth={1.5} />
 
         <path d={curvePath} fill="none" stroke="#1E4076" strokeWidth={1.5} opacity={0.85} />
@@ -582,7 +598,9 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
         <div className="flex items-center gap-2">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead Time Distribution per PO</p>
           <InfoTooltip
-            text="Only POs completed within the selected period (PO FG Done Date is not null)."
+            text={metric === "nett"
+              ? "Only POs completed within the selected period. Nett = time in active production activities per PO; it does not depend on PO Created / Released."
+              : "Only POs completed within the selected period (PO FG Done Date is not null). Gross = start (PO Created or Released) to RECEIVE NDC."}
             size={13}
             width={240}
           />
@@ -616,7 +634,7 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
               }}
               axisBottom={{
                 tickSize: 0, tickPadding: 6,
-                legend: "End-to-end gross lead time (days)", legendPosition: "middle", legendOffset: 32,
+                legend: `End-to-end ${metric} lead time (${unit})`, legendPosition: "middle", legendOffset: 32,
               }}
               gridYValues={5}
               theme={{
@@ -630,7 +648,8 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
               tooltip={({ data: d }) => {
                 const cum = cumByBin.get(d.binStart) ?? 0;
                 const pct = total > 0 ? (d.count / total) * 100 : 0;
-                const binLabel = d.binStart >= 38 ? "> 38 days" : `${d.binStart}–${d.binStart + 2} days`;
+                const f = ltFactor(unit);
+                const binLabel = d.binStart >= 38 ? `> ${38 * f} ${unit}` : `${d.binStart * f}–${(d.binStart + 2) * f} ${unit}`;
                 return (
                   <LineTooltip
                     title={binLabel}
@@ -647,11 +666,11 @@ function LeadTimeHistogram({ filters, basis }: { filters: TacticalFilters; basis
           </div>
           <div className="flex flex-col gap-2 border-l border-[#EBEBEB] pl-4 text-[11px]">
             <StatRow label="PO count" value={total.toLocaleString()} />
-            <StatRow label="Mean (x̄)" value={`${mean.toFixed(2)}d`} />
-            <StatRow label="Median" value={`${median.toFixed(2)}d`} />
-            <StatRow label="Std dev (σ)" value={`${stddev.toFixed(2)}d`} />
+            <StatRow label="Mean (x̄)" value={`${fmtLt(mean, unit)}${suffix}`} />
+            <StatRow label="Median" value={`${fmtLt(median, unit)}${suffix}`} />
+            <StatRow label="Std dev (σ)" value={`${fmtLt(stddev, unit)}${suffix}`} />
             <div className="border-t border-[#EBEBEB] my-1" />
-            <StatRow label="Peak bin" value={binLabel(maxBin)} />
+            <StatRow label="Peak bin" value={binLabel(maxBin, unit)} />
             <StatRow label="PO in peak" value={maxBinCount.toLocaleString()} />
             <div className="border-t border-[#EBEBEB] my-1" />
             <div className="flex items-center gap-2 text-[10.5px] text-slate-500">
@@ -685,7 +704,7 @@ function StatRow({ label, value }: { label: string; value: string }) {
 // Toggle 1: Group Process (POSITION/attached) vs Process (individual activity/stage).
 // Toggle 2: Pareto (desc by total) vs Sequence (STAGE_ORDER).
 
-type ParetoStageData = { stage: string; activity: string; activityId: number; attached: string; category: "VA" | "NNVA" | "UNVA"; days: number };
+type ParetoStageData = { stage: string; activity: string; activityId: number; sequence: number | null; attached: string; category: "VA" | "NNVA" | "UNVA"; days: number };
 
 interface ParetoRow extends BarDatum {
   stage: string;
@@ -699,6 +718,9 @@ const PARETO_CAT_COLORS = { VA: "#067647", NNVA: "#f59e0b", UNVA: "#d92d20" } as
 const PARETO_CUMUL_COLOR = "#16305C";
 const PARETO_STD_COLOR = "#101828";
 const PARETO_MARGIN = { top: 10, right: 48, bottom: 40, left: 40 };
+// Process mode has ~40 bars: names are rotated −35° so every one shows (extra bottom / left room for the slant)
+const PARETO_MARGIN_PROCESS = { top: 10, right: 48, bottom: 96, left: 56 };
+const PARETO_TICK_FILL = "#667085";
 
 const paretoSeq = (stage: string) => {
   if (stage === "WIP") return STAGE_ORDER.length + 1;
@@ -706,9 +728,15 @@ const paretoSeq = (stage: string) => {
   return i === -1 ? STAGE_ORDER.length : i;
 };
 
-function TacticalParetoChart({
-  filters, stageStd, stageLoading,
-}: { filters: TacticalFilters; stageStd: StageStdPoint[]; stageLoading: boolean }) {
+export function TacticalParetoChart({
+  filters, stageStd, stageLoading, unit = "days", onlyActivity, detailHref = "/lead-time",
+}: {
+  filters: TacticalFilters; stageStd: StageStdPoint[]; stageLoading: boolean; unit?: LtUnit;
+  /** Show only this ACTIVITY (Lead Time page Activity filter) */
+  onlyActivity?: string;
+  /** "Open detail →" link; null hides it (already on the detail page) */
+  detailHref?: string | null;
+}) {
   const [rawStages, setRawStages] = useState<ParetoStageData[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<"pareto" | "sequence">("pareto");
@@ -718,24 +746,29 @@ function TacticalParetoChart({
   useEffect(() => {
     const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate });
     if (filters.period) params.set("period", filters.period);
+    dimsToParams(filters.lt, params);
     setLoading(true);
     fetch(`/api/lead-time/charts?${params}`)
       .then(r => r.json())
       .then(d => setRawStages(d.stages ?? null))
       .catch(() => setRawStages(null))
       .finally(() => setLoading(false));
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, dimsKey(filters.lt)]);
 
-  const stdMap = useMemo(() => new Map(stageStd.map(s => [s.stage, s.std])), [stageStd]);
+  const f = ltFactor(unit);
+  const stdMap = useMemo(() => new Map(stageStd.map(s => [s.stage, s.std * f])), [stageStd, f]);
 
   const rows = useMemo((): ParetoRow[] => {
-    const src = rawStages ?? [];
+    const src = (rawStages ?? []).filter((r) => !onlyActivity || r.activity === onlyActivity);
 
-    // MIN ACTIVITY_ID per activity code — used as sequence key in Process+Seq mode
-    const activitySeq = new Map<string, number>();
+    // Seq = process flow: lowest ACTIVITY_SEQUENCE per bar (activity in Process mode, attached stage in Group mode).
+    // Each WIP activity sits right after the activity it follows.
+    const seqOf = new Map<string, number>();
     for (const r of src) {
-      const cur = activitySeq.get(r.activity) ?? Infinity;
-      if (r.activityId < cur) activitySeq.set(r.activity, r.activityId);
+      const key = group === "group" ? r.attached : r.activity;
+      const seq = r.sequence ?? Infinity;
+      if (seq < (seqOf.get(key) ?? Infinity)) seqOf.set(key, seq);
     }
 
     const byKey = new Map<string, Record<"VA" | "NNVA" | "UNVA", number>>();
@@ -747,22 +780,22 @@ function TacticalParetoChart({
     const list: ParetoRow[] = Array.from(byKey.entries())
       .map(([stage, v]) => ({
         stage, label: stageLabel(stage),
-        VA: v.VA, NNVA: v.NNVA, UNVA: v.UNVA,
-        total: v.VA + v.NNVA + v.UNVA, cumPct: 0,
+        VA: v.VA * f, NNVA: v.NNVA * f, UNVA: v.UNVA * f,
+        total: (v.VA + v.NNVA + v.UNVA) * f, cumPct: 0,
       }))
-      .filter(r => r.total > 0.005);
+      .filter(r => r.total > 0.005 * f);
 
     list.sort(sort === "pareto"
       ? (a, b) => b.total - a.total
-      : group === "group"
-        ? (a, b) => paretoSeq(a.stage) - paretoSeq(b.stage)
-        : (a, b) => (activitySeq.get(a.stage) ?? 9999) - (activitySeq.get(b.stage) ?? 9999));
+      // Fallback for rows without ACTIVITY_SEQUENCE: STAGE_ORDER (group) / end of the axis (process)
+      : (a, b) => (seqOf.get(a.stage) ?? (group === "group" ? 1000 + paretoSeq(a.stage) : 9999))
+                - (seqOf.get(b.stage) ?? (group === "group" ? 1000 + paretoSeq(b.stage) : 9999)));
 
     const grand = list.reduce((s, r) => s + r.total, 0);
     let run = 0;
     for (const r of list) { run += r.total; r.cumPct = grand > 0 ? (run / grand) * 100 : 0; }
     return list;
-  }, [rawStages, group, sort]);
+  }, [rawStages, group, sort, f, onlyActivity]);
 
   const CumulativeLayer = useCallback(({ bars, innerWidth, innerHeight }: BarCustomLayerProps<ParetoRow>) => {
     const centers = new Map<string, number>();
@@ -815,6 +848,7 @@ function TacticalParetoChart({
   }, [stdMap]);
 
   const isLoading = loading || stageLoading;
+  const margin = group === "process" ? PARETO_MARGIN_PROCESS : PARETO_MARGIN;
   const maxTotal = rows.reduce((m, r) => Math.max(m, r.total), 0);
   const yTicks = [0, 0.5, 1, 2, 5, 10, 20, 50, 100].filter(t => t <= maxTotal * 1.1);
   const hasStd = stageStd.some(s => s.std > 0);
@@ -824,7 +858,7 @@ function TacticalParetoChart({
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Pareto Lead Time</p>
-          <a href="/lead-time" className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">Buka detail →</a>
+          {detailHref && <a href={detailHref} className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">Open detail →</a>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <SegmentedToggle<"group" | "process">
@@ -846,13 +880,13 @@ function TacticalParetoChart({
         <div className="h-[280px] flex items-center justify-center text-[11px] text-gray-400">No data for selected period</div>
       ) : (
         <Fade depKey={rows[0]?.stage}>
-        <div style={{ height: 280, position: "relative" }}>
+        <div style={{ height: group === "process" ? 336 : 280, position: "relative" }}>
           <ResponsiveBar<ParetoRow>
             data={rows}
             keys={["VA", "NNVA", "UNVA"]}
             indexBy="label"
             theme={LINE_THEME}
-            margin={PARETO_MARGIN}
+            margin={margin}
             padding={0.32}
             groupMode="stacked"
             colors={({ id }) => PARETO_CAT_COLORS[id as keyof typeof PARETO_CAT_COLORS]}
@@ -864,10 +898,17 @@ function TacticalParetoChart({
             axisLeft={{ tickSize: 0, tickPadding: 8, tickValues: yTicks, format: (v) => Number(v).toFixed(1) }}
             axisBottom={{
               tickSize: 0,
-              renderTick: (t) => (
+              renderTick: (t) => group === "process" ? (
+                <g transform={`translate(${t.x},${t.y + 8})`}>
+                  <text textAnchor="end" dominantBaseline="middle" transform="rotate(-35)"
+                    style={{ fontSize: 9.5, fill: PARETO_TICK_FILL, fontFamily: "inherit" }}>
+                    {String(t.value)}
+                  </text>
+                </g>
+              ) : (
                 <g transform={`translate(${t.x},${t.y + 14})`}>
                   <text textAnchor="middle" dominantBaseline="middle"
-                    style={{ fontSize: 10.5, fill: "#101828", fontFamily: "inherit" }}>
+                    style={{ fontSize: 10.5, fill: PARETO_TICK_FILL, fontFamily: "inherit" }}>
                     {String(t.value)}
                   </text>
                 </g>
@@ -881,12 +922,12 @@ function TacticalParetoChart({
                   title={d.label}
                   subtitle={d.stage}
                   rows={[
-                    { label: "VA",   color: PARETO_CAT_COLORS.VA,   value: Number(d.VA).toFixed(2),   unit: "days", strong: id === "VA"   },
-                    { label: "NNVA", color: PARETO_CAT_COLORS.NNVA, value: Number(d.NNVA).toFixed(2), unit: "days", strong: id === "NNVA" },
-                    { label: "UNVA", color: PARETO_CAT_COLORS.UNVA, value: Number(d.UNVA).toFixed(2), unit: "days", strong: id === "UNVA" },
-                    ...(std > 0 ? [{ label: "Standard", color: PARETO_STD_COLOR, value: std.toFixed(2), unit: "days" }] : []),
+                    { label: "VA",   color: PARETO_CAT_COLORS.VA,   value: Number(d.VA).toFixed(2),   unit, strong: id === "VA"   },
+                    { label: "NNVA", color: PARETO_CAT_COLORS.NNVA, value: Number(d.NNVA).toFixed(2), unit, strong: id === "NNVA" },
+                    { label: "UNVA", color: PARETO_CAT_COLORS.UNVA, value: Number(d.UNVA).toFixed(2), unit, strong: id === "UNVA" },
+                    ...(std > 0 ? [{ label: "Standard", color: PARETO_STD_COLOR, value: std.toFixed(2), unit }] : []),
                   ]}
-                  footer={{ label: "Total · cumulative", value: `${d.total.toFixed(2)} days · ${Math.round(d.cumPct)}%` }}
+                  footer={{ label: "Total · cumulative", value: `${d.total.toFixed(2)} ${unit} · ${Math.round(d.cumPct)}%` }}
                 />
               );
             }}
@@ -897,8 +938,8 @@ function TacticalParetoChart({
           {cumHover && (
             <div style={{
               position: "absolute", pointerEvents: "none", zIndex: 10,
-              left: PARETO_MARGIN.left + cumHover.x,
-              top: PARETO_MARGIN.top + cumHover.y,
+              left: margin.left + cumHover.x,
+              top: margin.top + cumHover.y,
               transform: "translate(-50%, calc(-100% - 12px))",
             }}>
               <LineTooltip
@@ -906,7 +947,7 @@ function TacticalParetoChart({
                 subtitle={cumHover.row.stage}
                 rows={[
                   { label: "Cumulative", color: PARETO_CUMUL_COLOR, value: `${Math.round(cumHover.row.cumPct)}%` },
-                  { label: "Total", value: cumHover.row.total.toFixed(2), unit: "days" },
+                  { label: "Total", value: cumHover.row.total.toFixed(2), unit },
                 ]}
               />
             </div>
@@ -953,8 +994,13 @@ function ChartPlaceholder({ title, subtitle, height = 220 }: { title: string; su
   );
 }
 
-function SectionHeading({ title }: { title: string }) {
-  return <h2 className="text-[17px] font-bold text-gray-800">{title}</h2>;
+function SectionHeading({ title, right }: { title: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <h2 className="text-[17px] font-bold text-gray-800">{title}</h2>
+      {right && <div className="flex items-center gap-2 flex-wrap">{right}</div>}
+    </div>
+  );
 }
 
 function SkeletonCard() {
@@ -978,11 +1024,18 @@ const GROUP_PROCESS_PALETTE = [
   "#8b5cf6", "#ec4899", "#64748b",
 ];
 
-function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasis, tacticalFilters }: TacticalViewProps) {
+function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasis, onLtBasisChange, tacticalFilters }: TacticalViewProps) {
+  // Toggles next to the title — they apply to this section only (unit everywhere, gross/nett on the card and histogram)
+  const [unit, setUnit] = useState<LtUnit>("days");
+  const [measure, setMeasure] = useState<LtMeasure>("gross");
+  const f = ltFactor(unit);
+  const sfx = unit === "hours" ? "h" : "d";
+
   const c = kpi?.leadTime.composition;
-  // Use basis-aware network gross from plantLT (already computed with ltBasis in getLeadTimeByPlant)
-  const networkGross = plantLT?.plants.find((p) => p.plant === null)?.gross ?? null;
-  const gross = networkGross ?? kpi?.leadTime.grossDays;
+  // Network values from plantLT (getLeadTimeByPlant, per PO, gross follows ltBasis); nett does not depend on the basis
+  const networkRow = plantLT?.plants.find((p) => p.plant === null);
+  const gross = networkRow?.gross ?? kpi?.leadTime.grossDays;
+  const nett = networkRow?.nett ?? kpi?.leadTime.nettDays;
   const maxGross = kpi?.leadTime.maxGrossDays ?? 0;
   const poCount = kpi?.leadTime.poCount ?? 0;
   const avgPoStage = kpi?.leadTime.avgPoStageDays ?? 0;
@@ -990,9 +1043,9 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
   const groupProcess = kpi?.leadTime.groupProcess ?? [];
 
   const vanaSegments: DonutSegment[] = c ? [
-    { color: "#067647", label: "VA",   value: c.vaDays },
-    { color: "#f59e0b", label: "NNVA", value: c.nnvaDays },
-    { color: "#d92d20", label: "UNVA", value: c.unvaDays },
+    { color: "#067647", label: "VA",   value: c.vaDays * f },
+    { color: "#f59e0b", label: "NNVA", value: c.nnvaDays * f },
+    { color: "#d92d20", label: "UNVA", value: c.unvaDays * f },
   ] : [];
   const vanaTotal = vanaSegments.reduce((s, seg) => s + seg.value, 0);
   const vaPct = vanaTotal > 0 && c ? (c.vaDays   / vanaTotal) * 100 : 0;
@@ -1010,7 +1063,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
   const groupSegments: DonutSegment[] = groupTop.map((g, i) => ({
     color: GROUP_PROCESS_PALETTE[i] ?? "#98a2b3",
     label: g.activity === "Other" ? "Other" : stageLabel(g.activity),
-    value: g.avgDays,
+    value: g.avgDays * f,
   }));
   const groupTotal = groupSegments.reduce((s, seg) => s + seg.value, 0);
   const groupLargest = groupSegments[0];
@@ -1020,66 +1073,102 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
     ? `Largest NNVA: ${nnPct.toFixed(0)}%; UNVA ${unPct.toFixed(0)}%, VA ${vaPct.toFixed(0)}%`
     : "";
   const groupFooter = groupLargest
-    ? `${groupLargest.label} largest: ${groupLargest.value.toFixed(2)} days (${groupLargestPct.toFixed(0)}%)`
+    ? `${groupLargest.label} largest: ${groupLargest.value.toFixed(unit === "hours" ? 1 : 2)} ${unit} (${groupLargestPct.toFixed(0)}%)`
     : "";
 
   return (
     <div className="flex flex-col gap-4">
-      <SectionHeading title="Lead Time" />
+      <SectionHeading
+        title="Lead Time"
+        right={<>
+          <SegmentedToggle<"created" | "released">
+            ariaLabel="Lead time start"
+            options={[{ key: "created", label: "PO Created" }, { key: "released", label: "PO Released" }]}
+            value={ltBasis}
+            onChange={onLtBasisChange}
+          />
+          <SegmentedToggle<LtUnit>
+            ariaLabel="Lead time unit"
+            options={[{ key: "days", label: "Days" }, { key: "hours", label: "Hours" }]}
+            value={unit}
+            onChange={setUnit}
+          />
+          <SegmentedToggle<LtMeasure>
+            ariaLabel="Gross or nett lead time"
+            options={[{ key: "gross", label: "Gross" }, { key: "nett", label: "Nett" }]}
+            value={measure}
+            onChange={setMeasure}
+          />
+        </>}
+      />
 
       <div className="grid grid-cols-3 gap-3">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
-            <TKpiCard
-              label="Lead Time"
-              value={gross != null ? gross.toFixed(2) : null}
-              unit="days"
-              trend={kpi?.leadTime.grossTrend ?? null}
-              inverse
-              sparkline={kpi?.leadTime.sparkline}
-              sparkUnit="weeks"
-              ltDays={gross ?? undefined}
-              footerLeft="End-to-end gross"
-              noData={!kpi}
-              gaugeCounts={kpi && poCount > 0 ? { onTime: kpi.leadTime.onTimeCount ?? 0, atRisk: kpi.leadTime.atRiskCount ?? 0, late: kpi.leadTime.lateCount ?? 0 } : null}
-              gaugePoCount={poCount}
-              gaugePoStageLabel={avgPoStage > 0
-                ? `PO & approval ${avgPoStage.toFixed(2)} days · ${poStagePct.toFixed(0)}% of gross`
-                : undefined}
-            />
+            {measure === "gross" ? (
+              <TKpiCard
+                label="Lead Time"
+                value={gross != null ? fmtLt(gross, unit) : null}
+                unit={unit}
+                ltUnit={unit}
+                trend={kpi?.leadTime.grossTrend ?? null}
+                inverse
+                sparkline={kpi?.leadTime.sparkline?.map((v) => v * f)}
+                sparkUnit="weeks"
+                ltDays={gross ?? undefined}
+                footerLeft={`End-to-end gross · ${ltBasis === "released" ? "PO Released" : "PO Created"} → Receive NDC`}
+                noData={!kpi}
+                gaugeCounts={kpi && poCount > 0 ? { onTime: kpi.leadTime.onTimeCount ?? 0, atRisk: kpi.leadTime.atRiskCount ?? 0, late: kpi.leadTime.lateCount ?? 0 } : null}
+                gaugePoCount={poCount}
+                gaugePoStageLabel={avgPoStage > 0
+                  ? `PO & approval ${fmtLt(avgPoStage, unit)} ${unit} · ${poStagePct.toFixed(0)}% of gross`
+                  : undefined}
+              />
+            ) : (
+              // Nett has no target (13 days is defined on gross) and no weekly series → value vs prior period only
+              <TKpiCard
+                label="Lead Time"
+                value={nett != null ? fmtLt(nett, unit) : null}
+                unit={unit}
+                trend={kpi?.leadTime.nettTrend ?? null}
+                inverse
+                footerLeft="End-to-end nett · time in active production activities"
+                noData={!kpi}
+              />
+            )}
             <DonutCard
               title="VA · NNVA · UNVA"
               segments={vanaSegments}
               footer={nnvaFooter}
               loading={!kpi}
+              unitSuffix={sfx}
             />
             <DonutCard
               title="Group Process"
               segments={groupSegments}
               footer={groupFooter}
               loading={!kpi}
+              unitSuffix={sfx}
             />
           </>
         )}
       </div>
 
-      <LeadTimeHistogram filters={tacticalFilters} basis={ltBasis} />
+      <LeadTimeHistogram filters={tacticalFilters} basis={ltBasis} metric={measure} unit={unit} />
 
-      <TacticalParetoChart filters={tacticalFilters} stageStd={stageStd} stageLoading={stageLoading} />
+      <TacticalParetoChart filters={tacticalFilters} stageStd={stageStd} stageLoading={stageLoading} unit={unit} />
 
-      <div className="rounded-lg border border-[#EBEBEB] bg-white overflow-hidden">
-        <div className="px-4 pt-3 pb-1">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead Time by Plant</p>
-        </div>
-        <LeadTimePlantTable
-          data={plantLT?.plants ?? null}
-          targetDays={plantLT?.targetDays ?? 13}
-          loading={stageLoading}
-          basis={ltBasis}
-        />
-      </div>
+      {/* The table is its own card (ChartCard) with the Group Process / Process toggle */}
+      <LeadTimePlantTable
+        data={plantLT?.plants ?? null}
+        activities={plantLT?.activities ?? []}
+        targetDays={plantLT?.targetDays ?? 13}
+        loading={stageLoading}
+        basis={ltBasis}
+        unit={unit}
+      />
     </div>
   );
 }
@@ -1267,32 +1356,31 @@ export function TacticalView(props: TacticalViewProps) {
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* ── Sticky tab bar ── */}
-      <div className="sticky top-0 z-20 bg-white border-b border-gray-100 shrink-0">
-        <div className="flex items-center px-5 overflow-x-auto">
+      {/* ── Sticky tab bar — minimal: text tabs on the page background, navy underline on the active one ── */}
+      <div className="sticky top-0 z-20 bg-[#F7F8FA] border-b border-slate-200 shrink-0">
+        <div className="flex items-center gap-5 overflow-x-auto">
           {TABS.map((tab) => { const locked = "locked" in tab && tab.locked; return (
             <button
               key={tab.id}
               onClick={() => { if (!locked) scrollTo(tab.id); }}
               disabled={!!locked}
+              aria-current={!locked && activeTab === tab.id ? "true" : undefined}
+              title={locked ? "Coming soon — data not connected yet" : undefined}
               className={cn(
-                "relative flex items-center gap-1.5 px-4 py-3 text-[12px] font-semibold whitespace-nowrap transition-colors shrink-0",
+                "relative flex items-center gap-1.5 py-2 text-[12px] whitespace-nowrap transition-colors shrink-0 focus:outline-none focus-visible:text-[#1E4076]",
                 locked
-                  ? "text-gray-300 cursor-not-allowed"
+                  ? "text-slate-300 cursor-not-allowed"
                   : activeTab === tab.id
-                    ? "text-[#1E4076]"
-                    : "text-gray-500 hover:text-gray-700"
+                    ? "text-slate-900 font-semibold"
+                    : "text-slate-500 hover:text-slate-800"
               )}
             >
-              {locked && <Lock size={9} strokeWidth={2} />}
               {tab.label}
               {locked && (
-                <span className="text-[9px] font-bold bg-gray-100 text-gray-300 px-1 py-0.5 rounded uppercase tracking-wide">
-                  Soon
-                </span>
+                <span className="text-[8.5px] font-bold uppercase tracking-[0.1em] text-slate-300">Soon</span>
               )}
               {!locked && activeTab === tab.id && (
-                <span className="absolute bottom-0 left-4 right-4 h-[2px] bg-[#1E4076] rounded-t" />
+                <span className="absolute -bottom-px left-0 right-0 h-[2px] bg-[#1E4076] rounded-full" />
               )}
             </button>
           );})}
@@ -1301,7 +1389,8 @@ export function TacticalView(props: TacticalViewProps) {
 
       {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-8 px-5 py-5">
+        {/* No side padding: <main> already has px-5, so tabs, section titles and the filter fields line up (as on Strategic) */}
+        <div className="flex flex-col gap-8 py-4">
           <section ref={setRef("leadtime")}>
             <LeadTimeSection {...props} />
           </section>
