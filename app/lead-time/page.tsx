@@ -25,6 +25,7 @@ import { LeadTimeFilterCard, type LtBasis, type LtScope, type LtUnit } from "@/c
 import { LeadTimeSummaryCard, LeadTimeCompositionCard, type LtStats } from "@/components/leadtime/LeadTimeSummaryCards";
 import { ProcessSunburst, type ActivityTime } from "@/components/leadtime/ProcessSunburst";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
+import { PROCESS_GROUPS } from "@/lib/leadTimeStages";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 import { trackFilterApplied } from "@/lib/analytics/events";
 import { cn } from "@/lib/utils";
@@ -120,6 +121,17 @@ export default function LeadTimePage() {
 
   const a = analysis.data;
   const stats = a ? (basis === "gross" ? a.gross : a.nett) : null;
+  // Largest group process on the current basis (same values as the sunburst; PO group left out for PO Released)
+  const largestBlock = (() => {
+    if (!a) return null;
+    const groups = PROCESS_GROUPS.filter((g) => !(scope === "released" && g.id === "po")).map((g) => ({
+      label: g.label,
+      days: a.activities.filter((x) => (g.stages as readonly string[]).includes(x.stage)).reduce((t, x) => t + Math.max(0, basis === "gross" ? x.gross : x.nett), 0),
+    }));
+    const total = groups.reduce((t, g) => t + g.days, 0);
+    const top = [...groups].sort((x, y) => y.days - x.days)[0];
+    return top && total > 0 ? { ...top, share: (top.days / total) * 100 } : null;
+  })();
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#F7F8FA]">
@@ -179,6 +191,7 @@ export default function LeadTimePage() {
                       targetDays={a?.targetDays ?? LEAD_TIME_TARGET_DAYS}
                       loading={analysis.loading}
                       poStageDays={a ? a.activities.filter((x) => x.stage === "PO").reduce((t, x) => t + x.nett, 0) : null}
+                      largest={largestBlock}
                     />
                   </KpiHighlightTarget>
                   <KpiHighlightTarget id="composition">

@@ -615,7 +615,8 @@ function LeadTimeHistogram({ filters, basis, metric, unit }: { filters: Tactical
       ) : rows.length === 0 ? (
         <div className="h-[280px] flex items-center justify-center text-[11px] text-gray-400">No data for selected period</div>
       ) : (
-        <Fade depKey={data?.mean}>
+        <Fade depKey={`${data?.mean}|${data?.total}|${unit}`}>
+        {/* Fades on new data and on a Days / Hours switch */}
         <div className="grid grid-cols-[1fr_180px] gap-4">
           <div style={{ height: 280 }}>
             <ResponsiveBar<HistoRow>
@@ -879,7 +880,8 @@ export function TacticalParetoChart({
       ) : rows.length === 0 ? (
         <div className="h-[280px] flex items-center justify-center text-[11px] text-gray-400">No data for selected period</div>
       ) : (
-        <Fade depKey={rows[0]?.stage}>
+        <Fade depKey={`${group}|${sort}|${unit}|${rows.length}|${rows[0]?.stage}`}>
+        {/* Fades on Group Process / Process, Par / Seq, unit and new data */}
         <div style={{ height: group === "process" ? 336 : 280, position: "relative" }}>
           <ResponsiveBar<ParetoRow>
             data={rows}
@@ -1120,7 +1122,8 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
                 ltDays={gross ?? undefined}
                 footerLeft={`End-to-end gross · ${ltBasis === "released" ? "PO Released" : "PO Created"} → Receive NDC`}
                 noData={!kpi}
-                gaugeCounts={kpi && poCount > 0 ? { onTime: kpi.leadTime.onTimeCount ?? 0, atRisk: kpi.leadTime.atRiskCount ?? 0, late: kpi.leadTime.lateCount ?? 0 } : null}
+                // Gauge follows the PO Created / Released toggle (network row of /api/lead-time/stages); KPI snapshot is Released-only
+                gaugeCounts={networkRow?.gauge ?? (kpi && poCount > 0 ? { onTime: kpi.leadTime.onTimeCount ?? 0, atRisk: kpi.leadTime.atRiskCount ?? 0, late: kpi.leadTime.lateCount ?? 0 } : null)}
                 gaugePoCount={poCount}
                 gaugePoStageLabel={avgPoStage > 0
                   ? `PO & approval ${fmtLt(avgPoStage, unit)} ${unit} · ${poStagePct.toFixed(0)}% of gross`

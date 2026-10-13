@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ResponsiveLine } from "@nivo/line";
+import { LineDraw } from "@/components/charts/LineDraw";
 import { SERIES_OVERFLOW_COLOR, SERIES_TOTAL_COLOR } from "@/lib/chartConfig";
 import {
   LINE_DEFAULTS, LineChartCard, LineLegend, LineTooltip,
@@ -48,6 +49,8 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const activeXRef = useRef<string | null>(null);
+  // Series under the cursor — the hover point is drawn on that line only
+  const activeSerieRef = useRef<string | null>(null);
   const [grain, setGrain] = useState<TrendGrain>("week");
   // Monthly data cached per filter set, so switching back and forth does not re-fetch
   const [monthly, setMonthly] = useState<{ key: string; trend: Trend } | null>(null);
@@ -68,8 +71,8 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grain, filterKey, monthlyReady]);
 
-  // While monthly data loads, keep drawing the weekly lines so Nivo animates into the new shape
-  // (same as Monthly → Weekly) instead of unmounting the chart.
+  // While monthly data loads, keep showing the weekly lines (dimmed) instead of unmounting the chart;
+  // the monthly lines then draw in from the left.
   const showMonthly = grain === "month" && monthlyReady !== null;
   const trend: Trend | null = showMonthly ? monthlyReady : data?.trend ?? null;
   const isLoading = grain === "month" ? monthlyLoading : loading;
@@ -94,7 +97,7 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
     ];
   }, [trend, showMonthly]);
 
-  const ActivePointsLayer = useMemo(() => makeActivePointsLayer(series, () => activeXRef.current), [series]);
+  const ActivePointsLayer = useMemo(() => makeActivePointsLayer(series, () => activeXRef.current, undefined, () => activeSerieRef.current), [series]);
   const ActiveLineLayer   = useMemo(() => makeActiveLineLayer(series, hovered), [series, hovered]);
 
   const xs      = series[0]?.data.map((d) => d.x) ?? [];
@@ -113,23 +116,26 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
       empty={isEmpty}
       emptyText="No data for the selected filters"
     >
-      <ResponsiveLine
-        {...LINE_DEFAULTS}
-        data={series}
-        axisBottom={{ tickSize: 0, tickPadding: 8, tickValues: showMonthly ? xs : evenWeekTicks(xs) }}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onMouseMove={(point: any) => { activeXRef.current = String(point.data.x); }}
-        onMouseLeave={() => { activeXRef.current = null; }}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        colors={(serie: any) => isolatedColor(String(serie.color), String(serie.id), hovered)}
-        layers={["grid", "markers", "axes", "lines", "crosshair", ActivePointsLayer, ActiveLineLayer, "mesh"]}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tooltip={({ point }: any) => {
-          const x = String(point.data.x);
-          const rows = rowsAtX(series, x, "days").sort((a, b) => Number(b.value) - Number(a.value));
-          return <LineTooltip title={`${x} · average per PO`} rows={rows} />;
-        }}
-      />
+      {/* While Monthly / Weekly data loads the current lines stay, dimmed; then the new lines draw in (LineDraw) */}
+      <LineDraw drawKey={trend} style={{ opacity: isLoading && trend ? 0.45 : 1, transition: "opacity 0.18s ease" }}>
+        <ResponsiveLine
+          {...LINE_DEFAULTS}
+          data={series}
+          axisBottom={{ tickSize: 0, tickPadding: 8, tickValues: showMonthly ? xs : evenWeekTicks(xs) }}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onMouseMove={(point: any) => { activeXRef.current = String(point.data.x); activeSerieRef.current = point.seriesId != null ? String(point.seriesId) : null; }}
+          onMouseLeave={() => { activeXRef.current = null; activeSerieRef.current = null; }}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          colors={(serie: any) => isolatedColor(String(serie.color), String(serie.id), hovered)}
+          layers={["grid", "markers", "axes", "lines", "crosshair", ActivePointsLayer, ActiveLineLayer, "mesh"]}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          tooltip={({ point }: any) => {
+            const x = String(point.data.x);
+            const rows = rowsAtX(series, x, "days").sort((a, b) => Number(b.value) - Number(a.value));
+            return <LineTooltip title={`${x} · average per PO`} rows={rows} />;
+          }}
+        />
+      </LineDraw>
     </LineChartCard>
   );
 }

@@ -3,10 +3,13 @@
 // Lead Time page → Analysis tab: Lead Time card and Lead time composition card.
 // Data: /api/lead-time/analysis (gross / nett stats per PO, weekly series, composition). Values arrive in days.
 
+import { useEffect, useState } from "react";
 import { ResponsiveLine } from "@nivo/line";
+import { LineDraw } from "@/components/charts/LineDraw";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { LeadTimeGaugeBar } from "@/components/ui/LeadTimeGaugeBar";
+import { AiTag } from "@/components/ui/KpiOneLiner";
 import type { LtBasis, LtScope, LtUnit } from "@/components/leadtime/LeadTimeFilterCard";
 
 export interface LtStats {
@@ -37,21 +40,25 @@ function Spark({ data }: { data: number[] }) {
   if (data.length < 2) return null;
   return (
     <div style={{ width: 150, height: 42 }}>
-      <ResponsiveLine
-        data={[{ id: "lt", data: data.map((y, i) => ({ x: i, y })) }]}
-        margin={{ top: 4, right: 4, bottom: 4, left: 4 }}
-        xScale={{ type: "point" }} yScale={{ type: "linear", min: "auto", max: "auto" }}
-        colors={["#1E4076"]} lineWidth={1.6} enablePoints={false} enableGridX={false} enableGridY={false}
-        axisLeft={null} axisBottom={null} isInteractive={false} animate={false} curve="monotoneX"
-      />
+      <LineDraw drawKey={data.join(",")} duration={600}>
+        <ResponsiveLine
+          data={[{ id: "lt", data: data.map((y, i) => ({ x: i, y })) }]}
+          margin={{ top: 4, right: 4, bottom: 4, left: 4 }}
+          xScale={{ type: "point" }} yScale={{ type: "linear", min: "auto", max: "auto" }}
+          colors={["#1E4076"]} lineWidth={1.6} enablePoints={false} enableGridX={false} enableGridY={false}
+          axisLeft={null} axisBottom={null} isInteractive={false} animate={false} curve="linear"
+        />
+      </LineDraw>
     </div>
   );
 }
 
-export function LeadTimeSummaryCard({ stats, weekly, basis, scope, unit, targetDays, loading, poStageDays }: {
+export function LeadTimeSummaryCard({ stats, weekly, basis, scope, unit, targetDays, loading, poStageDays, largest }: {
   stats: LtStats | null; weekly: number[]; basis: LtBasis; scope: LtScope; unit: LtUnit; targetDays: number; loading: boolean;
   /** Nett time of the PO stage per PO (PO & approval) — shown under the gauge for Scope = PO Created */
   poStageDays?: number | null;
+  /** Largest group process (sunburst values, same basis) — main driver in the AI draft note */
+  largest?: { label: string; days: number; share: number } | null;
 }) {
   const avg = stats?.avg ?? null;
   const gross = basis === "gross";
@@ -62,6 +69,31 @@ export function LeadTimeSummaryCard({ stats, weekly, basis, scope, unit, targetD
   const trend = stats?.trend ?? null;
   const gap = gross && avg != null ? avg - targetDays : null;
   const start = scope === "released" ? "PO Released" : "PO Created";
+
+  // AI draft note: the browser sends the variables it shows; /api/lead-time/note returns a sentence whose numbers
+  // all come from them, or null → the code-written note below stays.
+  const [aiNote, setAiNote] = useState<string | null>(null);
+  const factsKey = stats && avg != null && stats.median != null ? JSON.stringify({
+    basis, scope, unit,
+    avg: fmtLt(avg, unit), median: fmtLt(stats.median, unit), p25: fmtLt(stats.p25, unit), p75: fmtLt(stats.p75, unit),
+    max: fmtLt(stats.max, unit), poCount: stats.poCount.toLocaleString("en-US"),
+    ...(gross ? {
+      target: fmtLt(targetDays, unit), gap: `${gap! > 0 ? "+" : "-"}${fmtLt(Math.abs(gap!), unit)}`,
+      onTime: (stats.onTimeCount ?? 0).toLocaleString("en-US"), atRisk: (stats.atRiskCount ?? 0).toLocaleString("en-US"), late: (stats.lateCount ?? 0).toLocaleString("en-US"),
+    } : {}),
+    ...(trend != null ? { trendPct: `${trend > 0 ? "+" : ""}${trend.toFixed(1)}` } : {}),
+    ...(largest ? { largest: { label: largest.label, value: fmtLt(largest.days, unit), share: largest.share.toFixed(0) } } : {}),
+  }) : null;
+  useEffect(() => {
+    setAiNote(null);
+    if (!factsKey) return;
+    let cancelled = false;
+    fetch("/api/lead-time/note", { method: "POST", headers: { "Content-Type": "application/json" }, body: factsKey })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && typeof d?.note === "string") setAiNote(d.note); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [factsKey]);
 
   return (
     <div className={CARD}>
@@ -108,7 +140,13 @@ export function LeadTimeSummaryCard({ stats, weekly, basis, scope, unit, targetD
           </div>
         )}
 
-        {stats?.median != null && (
+        {stats?.median != null && aiNote && (
+          <p className="rounded-md bg-[#EEF4FB] px-3 py-2 text-[11px] text-[#16305C] leading-relaxed">
+            <span className="mr-1.5"><AiTag /></span>
+            {aiNote}
+          </p>
+        )}
+        {stats?.median != null && !aiNote && (
           <p className="rounded-md bg-slate-50 px-3 py-2 text-[11px] text-slate-500 leading-relaxed">
             Median of all POs <b className="text-slate-700">{fmtLt(stats.median, unit)} {unit}</b>, half of them between{" "}
             <b className="text-slate-700">{fmtLt(stats.p25, unit)}</b> and <b className="text-slate-700">{fmtLt(stats.p75, unit)} {unit}</b>.

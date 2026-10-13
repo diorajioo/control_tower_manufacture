@@ -26,6 +26,8 @@ export interface PlantBreakdown {
   gross: number | null;
   nett: number | null;
   onTimePct: number | null;
+  /** POs on time / at risk / late vs the target, on the selected basis (gauge on the Tactical Lead Time card) */
+  gauge?: { onTime: number; atRisk: number; late: number };
   /** days per PO per POSITION */
   stages: Record<string, number>;
   /** days per PO per ACTIVITY */
@@ -154,6 +156,7 @@ export function LeadTimePlantTable({ data, activities = [], targetDays, loading,
       subtitle={`${unit === "hours" ? "Hours" : "Days"} per PO per ${view === "group" ? "group process" : "process"}. Red cell = above the network value for that column (darker = further above).`}
       info={`Cell = net time of the process ÷ POs of that plant (POs completed in the period). Group Process: Mixing = Processing + Processing Cleaning, Filpac = Packing 1 + Packing 2 + Packing Cleaning, WIP = all waiting. Process: one column per activity in process order; WIP shows the ${WIP_TOP} largest + the rest as Others. Red compares each plant with the network row, not with a standard. Gross LT and On-time follow the PO Created / PO Released toggle (now ${basisLabel}). On-time = share of POs with gross lead time ≤ ${targetDays} days; there is no due-date column yet.`}
       actions={actions}
+      fadeKey={`${view}|${unit}|${hidden.size}|${network?.poCount ?? 0}|${network?.gross ?? ""}`}
     >
       {!network ? (
         <div style={{ height: 160 }}><EmptyState loading={loading} /></div>

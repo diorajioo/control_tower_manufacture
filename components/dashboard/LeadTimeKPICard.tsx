@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ResponsiveLine } from "@nivo/line";
+import { LineDraw } from "@/components/charts/LineDraw";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
@@ -223,22 +224,24 @@ export function LeadTimeKPICard({
 
               {hasSparkline ? (
                 <div style={{ width: z(150), height: z(42) }}>
-                  <ResponsiveLine
-                    data={sparkData}
-                    margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
-                    xScale={{ type: "point" }}
-                    yScale={{ type: "linear", min: "auto", max: "auto" }}
-                    enableArea={false}
-                    colors={["#1E4076"]}
-                    lineWidth={1.6}
-                    enablePoints={false}
-                    enableGridX={false}
-                    enableGridY={false}
-                    axisLeft={null}
-                    axisBottom={null}
-                    isInteractive={false}
-                    animate={false}
-                  />
+                  <LineDraw drawKey={JSON.stringify(sparkData)} duration={600}>
+                    <ResponsiveLine
+                      data={sparkData}
+                      margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
+                      xScale={{ type: "point" }}
+                      yScale={{ type: "linear", min: "auto", max: "auto" }}
+                      enableArea={false}
+                      colors={["#1E4076"]}
+                      lineWidth={1.6}
+                      enablePoints={false}
+                      enableGridX={false}
+                      enableGridY={false}
+                      axisLeft={null}
+                      axisBottom={null}
+                      isInteractive={false}
+                      animate={false}
+                    />
+                  </LineDraw>
                 </div>
               ) : (
                 <div style={{ width: z(150), height: z(42), display: "flex", alignItems: "center", justifyContent: "center" }}>

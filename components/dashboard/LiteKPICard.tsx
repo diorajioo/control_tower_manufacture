@@ -2,6 +2,7 @@
 
 import React from "react";
 import { ResponsiveLine } from "@nivo/line";
+import { LineDraw } from "@/components/charts/LineDraw";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { LeadTimeGaugeBar, type GaugeCounts } from "@/components/ui/LeadTimeGaugeBar";
 
@@ -203,21 +204,23 @@ export function LiteKPICard({
             {/* 6. Sparkline */}
             {nivoData.length > 0 && (
               <div style={{ height: 28, borderTop: "1px solid #f2f3f6", paddingTop: 4 }}>
-                <ResponsiveLine
-                  data={nivoData}
-                  margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
-                  curve="linear"
-                  enableArea={false}
-                  colors={["#1E4076"]}
-                  lineWidth={1.4}
-                  enablePoints={false}
-                  enableGridX={false}
-                  enableGridY={false}
-                  axisLeft={null}
-                  axisBottom={null}
-                  yScale={{ type: "linear", min: "auto", max: "auto" }}
-                  isInteractive={false}
-                />
+                <LineDraw drawKey={JSON.stringify(nivoData)} duration={600}>
+                  <ResponsiveLine
+                    data={nivoData}
+                    margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
+                    curve="linear"
+                    enableArea={false}
+                    colors={["#1E4076"]}
+                    lineWidth={1.4}
+                    enablePoints={false}
+                    enableGridX={false}
+                    enableGridY={false}
+                    axisLeft={null}
+                    axisBottom={null}
+                    yScale={{ type: "linear", min: "auto", max: "auto" }}
+                    isInteractive={false}
+                  />
+                </LineDraw>
               </div>
             )}
           </>

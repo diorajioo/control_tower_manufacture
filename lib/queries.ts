@@ -346,7 +346,7 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
       ${ltWhere(filters)}`;
 
   const [plantRows, stageRows] = await Promise.all([
-    executeQuery<{ IS_NETWORK: number; PLANT: string | null; PO_COUNT: number; GROSS_DAYS: number; NETT_DAYS: number; ONTIME_PCT: number | null }>(`
+    executeQuery<{ IS_NETWORK: number; PLANT: string | null; PO_COUNT: number; GROSS_DAYS: number; NETT_DAYS: number; ONTIME_PCT: number | null; ONTIME_N: number; ATRISK_N: number; LATE_N: number }>(`
       WITH base AS (${base}),
       -- Plant rows: per (plant, PO). Network row: per PO over all its rows — a PO made in one plant and
       -- packed in another has no start or no end inside either plant, so a per-plant split would drop it
@@ -380,7 +380,11 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
         COUNT(*) AS PO_COUNT,
         AVG(gross_minutes) / 1440.0 AS GROSS_DAYS,
         AVG(nett_minutes) / 1440.0 AS NETT_DAYS,
-        COUNT_IF(gross_minutes <= ? * 1440) * 100.0 / NULLIF(COUNT(gross_minutes), 0) AS ONTIME_PCT
+        COUNT_IF(gross_minutes <= ? * 1440) * 100.0 / NULLIF(COUNT(gross_minutes), 0) AS ONTIME_PCT,
+        -- Gauge buckets (same as the Tactical gauge): on time ≤ target, at risk ≤ +15%, late above — follow the basis
+        COUNT_IF(gross_minutes <= ? * 1440) AS ONTIME_N,
+        COUNT_IF(gross_minutes > ? * 1440 AND gross_minutes <= ? * 1440 * 1.15) AS ATRISK_N,
+        COUNT_IF(gross_minutes > ? * 1440 * 1.15) AS LATE_N
       FROM po
       GROUP BY PLANT
       UNION ALL
@@ -390,9 +394,13 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
         COUNT(*) AS PO_COUNT,
         AVG(gross_minutes) / 1440.0 AS GROSS_DAYS,
         AVG(nett_minutes) / 1440.0 AS NETT_DAYS,
-        COUNT_IF(gross_minutes <= ? * 1440) * 100.0 / NULLIF(COUNT(gross_minutes), 0) AS ONTIME_PCT
+        COUNT_IF(gross_minutes <= ? * 1440) * 100.0 / NULLIF(COUNT(gross_minutes), 0) AS ONTIME_PCT,
+        -- Gauge buckets (same as the Tactical gauge): on time ≤ target, at risk ≤ +15%, late above — follow the basis
+        COUNT_IF(gross_minutes <= ? * 1440) AS ONTIME_N,
+        COUNT_IF(gross_minutes > ? * 1440 AND gross_minutes <= ? * 1440 * 1.15) AS ATRISK_N,
+        COUNT_IF(gross_minutes > ? * 1440 * 1.15) AS LATE_N
       FROM po_network
-    `, [...binds, targetDays, targetDays]),
+    `, [...binds, ...Array(5).fill(targetDays), ...Array(5).fill(targetDays)]),
     // Per activity (Process view of the plant table); the route also sums them per POSITION
     executeQuery<{ PLANT: string; STAGE: string; ACTIVITY: string; SEQ: number | null; MINUTES: number }>(`
       SELECT PLANT, POSITION AS STAGE, ACTIVITY, MIN(ACTIVITY_SEQUENCE) AS SEQ, SUM(NET_LEADTIME) AS MINUTES

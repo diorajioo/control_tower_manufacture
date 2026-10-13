@@ -50,6 +50,7 @@ async function runStageQuery(plant: string, startDate: string, endDate: string, 
         const key = p.IS_NETWORK ? "" : String(p.PLANT);
         return {
           plant: p.IS_NETWORK ? null : p.PLANT, poCount: Number(p.PO_COUNT), gross: d2(p.GROSS_DAYS), nett: d2(p.NETT_DAYS), onTimePct: d2(p.ONTIME_PCT),
+          gauge: { onTime: Number(p.ONTIME_N ?? 0), atRisk: Number(p.ATRISK_N ?? 0), late: Number(p.LATE_N ?? 0) },
           stages: round3(stageDays.get(key)), activities: round3(activityDays.get(key)),
         };
       })
@@ -63,7 +64,7 @@ async function runStageQuery(plant: string, startDate: string, endDate: string, 
   };
 }
 
-const cached = unstable_cache(runStageQuery, ["lead-time-stages-v7"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runStageQuery, ["lead-time-stages-v8"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);

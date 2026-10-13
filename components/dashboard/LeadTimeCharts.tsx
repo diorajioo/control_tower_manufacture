@@ -34,7 +34,12 @@ const scatterTheme = {
   },
 };
 
-export function ChartCard({ title, subtitle, info, actions, children }: { title: string; subtitle: string; info?: string; actions?: React.ReactNode; children: React.ReactNode }) {
+export function ChartCard({ title, subtitle, info, actions, fadeKey, children }: {
+  title: string; subtitle: string; info?: string; actions?: React.ReactNode;
+  /** Content fades in when this changes (view toggle, unit, new data); default = every new content */
+  fadeKey?: unknown;
+  children: React.ReactNode;
+}) {
   return (
     <div className="bg-white rounded-lg p-3 border border-[#EBEBEB] hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200 flex flex-col min-w-0 relative">
       {actions && <div className="absolute top-3 right-3 flex items-center gap-2">{actions}</div>}
@@ -53,7 +58,7 @@ export function ChartCard({ title, subtitle, info, actions, children }: { title:
         )}
       </div>
       <p className="text-[11px] text-slate-400 mt-1 mb-2">{subtitle}</p>
-      <Fade depKey={children}>
+      <Fade depKey={fadeKey ?? children}>
         {children}
       </Fade>
     </div>

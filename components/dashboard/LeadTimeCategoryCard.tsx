@@ -2,6 +2,7 @@
 
 import React from "react";
 import { ResponsiveLine } from "@nivo/line";
+import { LineDraw } from "@/components/charts/LineDraw";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,22 +115,24 @@ export function LeadTimeCategoryCard({
         {nivoData.length > 0 && (
           <div style={{ marginTop: "auto" }}>
             <div style={{ height: 30, borderTop: "1px solid #f2f3f6", paddingTop: 4 }}>
-              <ResponsiveLine
-                data={nivoData}
-                margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
-                curve="linear"
-                enableArea={false}
-                colors={[color]}
-                lineWidth={1.4}
-                enablePoints={false}
-                enableGridX={false}
-                enableGridY={false}
-                axisLeft={null}
-                axisBottom={null}
-                yScale={{ type: "linear", min: "auto", max: "auto" }}
-                isInteractive={false}
-                animate={false}
-              />
+              <LineDraw drawKey={JSON.stringify(nivoData)} duration={600}>
+                <ResponsiveLine
+                  data={nivoData}
+                  margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
+                  curve="linear"
+                  enableArea={false}
+                  colors={[color]}
+                  lineWidth={1.4}
+                  enablePoints={false}
+                  enableGridX={false}
+                  enableGridY={false}
+                  axisLeft={null}
+                  axisBottom={null}
+                  yScale={{ type: "linear", min: "auto", max: "auto" }}
+                  isInteractive={false}
+                  animate={false}
+                />
+              </LineDraw>
             </div>
             <div style={{ fontSize: 10, color: "#a3a8b5", textAlign: "right", marginTop: 2 }}>
               {series.length} months · monthly average

@@ -109,6 +109,7 @@ lib/
 | `/api/dashboard/kpi` | GET | Required | 1h | KPI card values (all 7 KPIs in one call) |
 | `/api/dashboard/trends` | GET | Required | 1h | Chart trend data per period; `grain=week\|month` |
 | `/api/lead-time/analysis` | GET | Required | 1h | Lead Time page Analysis tab: gross + nett stats per PO (avg, median, P25, P75, max, vs prior period), weekly series, composition, time per activity (gross span / nett). `scope=created\|released` + dimension filters |
+| `/api/lead-time/note` | POST | Required | 1h | AI draft of the Lead Time card note from the variables the page shows; null unless every number in it is one of them (`lib/leadTimeNote.ts`) |
 | `/api/lead-time/options` | GET | Required | 1h | Dropdown values for the Lead Time filters (period + plant) |
 | `/api/lead-time/trend` | GET | Required | 1h | Lead Time Trend (total + per POSITION) at `grain=week\|month` — used when the chart is switched to Monthly |
 | `/api/dashboard/plants` | GET | Required | — | List of plant names for dropdown |

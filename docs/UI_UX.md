@@ -194,42 +194,86 @@ Legacy, not rendered anywhere: `components/dashboard/KPICard.tsx` (5px accent ba
 - Warning row: `bg-[#FFFBE4] border-l-4 border-l-[#D1A400]`
 - Dismiss with undo (5s countdown)
 
-### Standard Line Chart (`components/charts/StandardLine.tsx`)
+### Standard Line Chart (`components/charts/StandardLine.tsx`) — the line chart standard
 
-**Every Nivo line chart uses this module** — same role as the TONES object for KPI cards. Reference implementation: Overview `TrendChart`. Cleanest full example: `components/dashboard/LeadTimeTrendChart.tsx` (Lead Time page).
+**Every line chart — trend charts and KPI-card sparklines — follows this spec** (same role as TONES for KPI cards). Code wins over this text if they ever differ; update this section with the code. Reference implementations: `components/dashboard/LeadTimeTrendChart.tsx` (cleanest full example), Overview `components/dashboard/TrendChart.tsx` (adds SPC).
 
+#### 1. Building blocks (never re-implement)
+| Piece | Module | Role |
+|---|---|---|
+| `LineChartCard` | `StandardLine.tsx` | Card shell: label, loading spinner, `actions` slot, unit pill, plot area, legend slot, empty state |
+| `LINE_DEFAULTS` / `LINE_THEME` | `StandardLine.tsx` | Spread first into every `<ResponsiveLine>`; chart-specific props after |
+| `seriesColor()` · `SERIES_TOTAL_COLOR` · `SERIES_OVERFLOW_COLOR` | `StandardLine.tsx`, `lib/chartConfig.ts` | Series colours |
+| `isolatedColor()` · `makeActiveLineLayer()` | `StandardLine.tsx` | Legend-hover isolation |
+| `makeActivePointsLayer()` | `StandardLine.tsx` | The single hover point |
+| `LineTooltip` · `rowsAtX()` · `TOOLTIP_COLORS` | `StandardLine.tsx` | Tooltip — for every chart type |
+| `LineLegend` | `StandardLine.tsx` | Legend below the plot |
+| `GRAIN_OPTIONS` · `evenWeekTicks()` · `monthLabel()` | `StandardLine.tsx` | Weekly / Monthly axis |
+| `LineDraw` | `components/charts/LineDraw.tsx` | Draw-in motion |
+| SPC helpers (`laneyPLimits`, `xmrLimits`, `makePChartLayer`, `outOfLimitColor`, `LimitsSub`) | `StandardLine.tsx` | Control charts only |
+
+#### 2. Look
 | Aspect | Standard |
 |---|---|
-| Granularity | Trend charts have a Weekly / Monthly `SegmentedToggle` (`GRAIN_OPTIONS`) in the card header, left of the unit pill (`LineChartCard` `actions` slot). Weekly axis = even ISO weeks (`W2, W4…`); Monthly axis = every month (`Jan`, or `Jan 25` when the range spans years). Data is re-queried with `grain=month` (`/api/dashboard/trends`, `/api/lead-time/trend`) |
-| Series colors | `SERIES_COLORS` (`lib/chartConfig.ts`) in fixed entity order, never by rank: `#3b82f6` `#f59e0b` `#ef4444` `#10b981` `#8b5cf6` `#f97316` `#06b6d4` `#db2777` (validated for CVD + normal-vision separation). 9th+ series → `SERIES_OVERFLOW_COLOR` `#98a2b3`. Aggregate series ("Total") → `SERIES_TOTAL_COLOR` Paragon Blue `#1E4076` (validated against every slot). `PLANT_COLORS` = first 6. |
-| Look | Minimal-modern: no axis lines, dashed horizontal hairline grid only (`#eef0f3`, 3 4), no vertical grid |
-| Line | `curve="monotoneX"`, 2px, round caps, no resting points (`LINE_DEFAULTS`) |
-| Theme | `LINE_THEME`: tick text `#a0a6b1` 10px tabular, 4 y-ticks as integers, crosshair hairline `#c4c9d2` |
-| Axes | point x-scale, auto y-scale, no axis titles |
-| Hover | mesh + x-crosshair; `makeActivePointsLayer` draws solid 4px points in the series color with a 2px white ring on every series at the hovered x |
-| Tooltip | `LineTooltip` — **standard for every chart tooltip** (line, bar, scatter): translucent slate card (`TOOLTIP_COLORS`: bg `rgba(42,61,74,0.82)` + 4px backdrop blur, 8% white border, radius 8), title 11px bold white, optional `subtitle` 9.5px `#94a3b8`, rows 11.5px = 6px dot (optional) · name `#cbd5e1` · value white bold tabular · unit 10.5px `#94a3b8`; optional sub-line 9.5px `#94a3b8`, `white-space: nowrap`; optional `footer` row above a hairline divider. UCL/LCL accents `#f5a39a`. Never define a local tooltip |
-| Legend | `LineLegend`: **below the plot**, centered, 9.5px — 6px dot · name `slate-500` · last value bold; hover isolates (other lines 12%, legend items 40%; hovered line redrawn on top, same curve) |
-| Card shell | `LineChartCard`: white `rounded-lg p-3 border-[#EBEBEB]`, hover shadow, uppercase 11.5px `slate-400` label + loading spinner, unit pill `bg-[#EEF4FB] text-[#16305C]` on the right, 300px plot, legend row below the plot, "No data available" empty state |
-| Week axis | `evenWeekTicks()`: even ISO weeks only, every 4th when > 26 even weeks |
-| SPC | `limitsOf()` mean ± 3σ (LCL ≥ 0); `controlMarkers()` hairline dashed UCL/LCL `#f3b4ae` + Mean `#d0d5dd` with small labels at the right; tooltip sub-line `LimitsSub`. No shaded band. **Optional — Overview TrendChart only**; Lead Time trend has no SPC. **All Overview TrendChart metrics are control charts** with this same rendering and the Overall / By plant toggle: Laney P′ (`laneyPLimits()`) for Lead Time (% PO > 13 d) and RFT (% RFT), XmR (`xmrLimits()`, center label "Mean", straight limits, % metrics clamped 0–100, Output labels compact e.g. 8.29M) for Output, OEE, OPE, Yield Loss; Yield Loss By plant is `locked`. Overview Lead Time is a **Laney P′ chart** of % PO > 13 days: `laneyPLimits()` (see `docs/BUSINESS_LOGIC.md` → SPC) and `makePChartLayer()`: no resting points; on hover (`makeActivePointsLayer` + `outOfLimitColor()`) points outside their own limits are red `#d92d20` instead of the series color, view toggle Overall (default, one `#1E4076` "All plants" line) / By plant; step lines UCL/LCL 1.5px dash `5 3` + p̄ 1px dotted with 9.5px bold labels (white halo, pushed ≥ 11px apart) at the right end — UCL/LCL `#e07a70`, p̄ `#98a2b3`. Only one band is drawn: Overall view = its own limits; By plant = the All plants limits (label prefix "All plants"), swapped to the hovered plant's limits (prefix = plant) on legend hover; red hover points always use each plant's own limits; tooltip sub-line `p̄ · UCL · LCL · late/n POs`; unit pill `% PO > 13 d`; caption below the legend. |
+| Style | Minimal: no axis domain lines, no axis titles, no vertical grid; dashed horizontal hairline grid `#eef0f3` (`3 4`), 4 y-ticks |
+| Line | `curve="linear"`, 2px, no resting points (`LINE_DEFAULTS`). Trend charts and sparklines both use linear |
+| Ticks | `#a0a6b1` 10px tabular; y-ticks integers (compact, e.g. `8.29M`, for large values); point x-scale, auto y-scale (% metrics clamped 0–100) |
+| Colours | `SERIES_COLORS` (`lib/chartConfig.ts`) in **fixed entity order, never by rank**: `#3b82f6` `#f59e0b` `#ef4444` `#10b981` `#8b5cf6` `#f97316` `#06b6d4` `#db2777`; 9th+ series → `SERIES_OVERFLOW_COLOR` `#98a2b3`; aggregate ("Total", "All plants") → Paragon Blue `#1E4076` (never black). `PLANT_COLORS` = first 6 |
+| Weekly / Monthly | `SegmentedToggle` with `GRAIN_OPTIONS` in the card header, left of the unit pill. Weekly axis = even ISO weeks (`evenWeekTicks()`: `W2, W4…`, every 4th when > 26); Monthly axis = every month (`Jan`, or `Jan 25` when the range spans years). Monthly is **re-queried** with `grain=month` (`DATE_TRUNC('month')` in SQL) — never averaged from weekly points |
 
-**Building a new line chart — checklist**
-1. Wrap it in `LineChartCard` (label, unit pill, loading, empty state, legend slot).
-2. Build `StandardSeries[]`; colors via `seriesColor(fixedIndex)` per entity (never by rank), aggregate via `SERIES_TOTAL_COLOR`.
-3. `<ResponsiveLine {...LINE_DEFAULTS} … />`, `colors` via `isolatedColor()`, `onMouseMove`/`onMouseLeave` setting an active-x ref.
-4. Layers: `["grid", "markers", "axes", "lines", "crosshair", ActivePointsLayer, ActiveLineLayer, "mesh"]` with `makeActivePointsLayer` / `makeActiveLineLayer`.
-5. Tooltip: `<LineTooltip title rows={rowsAtX(series, x, unit)} />` — bar and scatter charts use `LineTooltip` too.
-6. Legend: `<LineLegend series hovered onHover />` below the plot.
-7. Weekly axis: `evenWeekTicks()`.
+#### 3. Card
+`LineChartCard`: white `rounded-lg p-3 border-[#EBEBEB]`, hover shadow; label 11.5px bold uppercase `slate-500` + spinner while loading; header right = `actions` (toggles) then unit pill `bg-[#EEF4FB] text-[#16305C]` (e.g. "Lead Time · days"); plot 300px; legend row below; empty state "No data available" (or a specific sentence).
 
-**Anti-patterns — do not repeat**
-- Local Nivo theme, tooltip or legend in a chart file (use the module). **All chart tooltips — line, bar, scatter, pie, gauge — must use `LineTooltip` + `TOOLTIP_COLORS` from `StandardLine.tsx`.** Custom inline tooltip divs are banned. For `position: fixed` tooltips (e.g. SVG-rendered pie/donut charts) use `TOOLTIP_COLORS` tokens directly but match the same structure: bg `rgba(42,61,74,0.82)`, `backdropFilter: blur(4px)`, `border-radius: 8`, `1px solid rgba(255,255,255,0.08)`, `box-shadow: 0 6px 20px -6px rgba(16,24,40,0.28)`, `animation: chart-tooltip-in 0.15s ease-out`.
-- Dark tooltip panel, thick (2.5px+) straight lines, resting points on every data point.
-- Vertical grid lines, axis domain lines, axis titles.
-- Black (`#101828`) for a "Total" series; colors assigned by rank/sort order.
-- Legend above/beside the plot or at 11px+; wrapping tooltip sub-lines.
-- SPC shaded band; UCL/LCL on charts that have no control-limit calculation.
-- A 9th categorical hue — fold to `SERIES_OVERFLOW_COLOR`.
+#### 4. Interaction
+| Aspect | Standard |
+|---|---|
+| Hover | `useMesh` + x-crosshair hairline `#c4c9d2`. **One** solid 4px point (series colour, 2px white ring) at the hovered x, **on the line under the cursor only**. `makeActivePointsLayer` reads Nivo's `currentPoint` custom-layer prop (same render as the crosshair) — never a ref set in `onMouseMove` (that missed renders) |
+| Tooltip | `LineTooltip`: translucent slate card (`TOOLTIP_COLORS`: bg `rgba(42,61,74,0.82)`, 4px blur, 8% white border, radius 8); title 11px bold white (weekly "Week of 24 Aug 2026", monthly "August 2026"); optional `subtitle` 9.5px; rows 11.5px = 6px dot · name `#cbd5e1` · value white bold tabular · unit 10.5px; optional sub-line 9.5px `nowrap`; optional `footer`. Lists **every series** at that x (`rowsAtX`). Used by line, bar, scatter and SVG charts alike |
+| Legend | `LineLegend` **below the plot**, centred, 9.5px: 6px dot · name `slate-500` · last value bold. Hover isolates: other lines 12% (`isolatedColor`), other legend items 40%, the hovered line redrawn on top (`makeActiveLineLayer`) |
+| Layers | `["grid", "markers", "axes", "lines", <SPC layer>, "crosshair", ActivePointsLayer, ActiveLineLayer, "mesh"]` — mesh last |
+
+#### 5. Motion and loading
+| Aspect | Standard |
+|---|---|
+| Draw-in | Wrap every `<ResponsiveLine>` in `<LineDraw drawKey>`: solid lines draw left → right (`stroke-dashoffset`, 800 ms, `cubic-bezier(0.22, 1, 0.36, 1)`; sparklines 600 ms); dashed limit lines fade in near the end so the dash pattern is kept; reduced motion → none |
+| Replay | Only when `drawKey` changes — the data shown (each fetch: filters, metric, grain) or the view. Never on hover. Use a `useMemo(() => ({}), [data, view])` key or a value string for sparklines |
+| No morph | `animate: false` (in `LINE_DEFAULTS`). Nivo's spring morph bent lines between data sets with different point counts (weekly ↔ monthly) |
+| Refetch | Keep the current chart at **45% opacity** while the new data loads (spinner in the label); then the axes switch at once and the new lines draw in. Never unmount the chart to a blank box during a refetch |
+
+#### 6. Sparklines (KPI cards)
+150 × 42 px (scaled by `compact`), Paragon Blue `#1E4076`, 1.6px (1.4px in the Lead Time page category cards, which use their category colour), `curve="linear"`, no points, no grid, no axes, `isInteractive={false}`, `animate={false}`, wrapped in `<LineDraw duration={600}>`; caption below "N weeks · unit" 10px `#a3a8b5`.
+
+#### 7. Control charts (SPC) — only where the calculation exists
+Overview `TrendChart` only (all its metrics): **Laney P′** (`laneyPLimits()`) for count proportions — Lead Time (% PO > 13 days), RFT; **XmR** (`xmrLimits()`, mean ± 2.66 × average moving range, straight limits) for Output, Productivity, OEE, OPE, Yield Loss. `makePChartLayer()`: UCL / LCL step lines 1.5px dash `5 3` `#e07a70`, centre (p̄ or Mean) 1px dotted `#98a2b3`, 9.5px bold labels with a white halo at the right end (≥ 11px apart); no shaded band. View toggle Overall (default, one "All plants" line) / By plant; one band drawn — Overall = its limits, By plant = All plants limits, swapped to the plant's own on legend hover. On hover, a point outside its own limits is red `#d92d20` (`outOfLimitColor()`); tooltip sub-line `LimitsSub` (p̄ · UCL · LCL · late/n). Caption under the legend explains the chart type. Lead Time page trend has no SPC.
+
+#### 8. Checklist — new line chart
+1. `LineChartCard` with label, unit pill, `loading`, `empty`, legend slot; Weekly / Monthly toggle in `actions` when it is a trend.
+2. `StandardSeries[]` with `seriesColor(fixedIndex)` per entity, aggregate `SERIES_TOTAL_COLOR`.
+3. `<LineDraw drawKey={…}>` around `<ResponsiveLine {...LINE_DEFAULTS} data colors={isolatedColor(…)} layers={…} tooltip={LineTooltip…} />`.
+4. `makeActivePointsLayer(series, getX)` + `makeActiveLineLayer(series, hovered)`; hover point comes from `currentPoint`.
+5. Tooltip `LineTooltip` + `rowsAtX`; legend `LineLegend` below the plot.
+6. Refetch keeps the old chart at 45% opacity; monthly data from SQL.
+7. SPC only if the limits are actually calculated.
+
+#### 9. Anti-patterns — do not repeat
+- A local Nivo theme, tooltip or legend in a chart file; custom inline tooltip divs (SVG charts with `position: fixed` tooltips use `TOOLTIP_COLORS` tokens with the same structure).
+- `curve="monotoneX"` or other smoothing; lines 2.5px+; resting points on every data point.
+- Points on every series at the hovered x; hover state read from a ref set in `onMouseMove`.
+- Nivo spring animation (`animate` true); blanking the chart during a refetch; replaying the draw-in on hover.
+- Vertical grid, axis domain lines, axis titles; legend above / beside the plot or at 11px+; wrapping tooltip sub-lines.
+- Black for a "Total" series; colours by rank or sort order; a 9th categorical hue (fold to `SERIES_OVERFLOW_COLOR`).
+- Monthly values averaged from weekly points; SPC band shading; UCL/LCL without a control-limit calculation.
+
+### Chart transitions — every change animates, simply (2026-10-13)
+
+Any change of what a chart shows (toggle, drill-down, unit, new data) has a short, simple transition — never an instant swap, never bouncy:
+| Chart | Transition |
+|---|---|
+| Line charts, sparklines | `LineDraw` draw-in (see Standard Line Chart → Motion) |
+| Bar charts, histogram, tables, scatter | `Fade` (`components/ui/Fade.tsx`, `ui-fade-in` 220 ms: opacity + 3px rise). Its `depKey` must include every toggle that changes the content (view, unit, sort, basis) — e.g. Pareto `group|sort|unit|rows`, histogram `mean|total|unit`; `ChartCard` takes `fadeKey` for the same purpose |
+| Sunburst (Lead Time, Group process and process) | Drill-down / back: slice angles tween 450 ms ease-in-out — the clicked group opens to the full circle, the others close up; new slices grow from zero width; legend and centre label fade in |
+| Composition / progress bars | `width` transition 300 ms ease-out |
+Reduced motion → no animation. Hover never triggers these.
 
 ### TrendChart + StackedBarChart
 Both charts share a KPI selector — changing selection in one updates the other. This is a deliberate design decision (Tableau parity).

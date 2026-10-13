@@ -35,8 +35,20 @@ export function KpiOneLiner({ id, z = (n: number) => n }: { id?: string; z?: (n:
         minWidth: 0,
       }}
     >
-      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", color: "#1E4076", flexShrink: 0 }}>AI</span>
+      <AiTag />
       <span style={{ fontSize: 11, color: "#16305C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{text}</span>
     </div>
+  );
+}
+
+/** "AI" label for AI-written text on cards: white on Paragon Blue box. One look everywhere (KPI one-liners, Lead Time note). */
+export function AiTag() {
+  return (
+    <span style={{
+      display: "inline-block", flexShrink: 0, background: "#1E4076", color: "#fff", borderRadius: 3,
+      padding: "1px 4px", fontSize: 8.5, fontWeight: 700, letterSpacing: "0.06em", lineHeight: "12px", verticalAlign: "1px",
+    }}>
+      AI
+    </span>
   );
 }

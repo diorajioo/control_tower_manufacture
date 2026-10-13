@@ -14,7 +14,7 @@
  */
 
 import type { KPIAlert } from "@/lib/alerts";
-import { GROQ_MODEL_PRIORITY, isAIModelUnavailable, getClientForModel } from "@/lib/ai-provider";
+import { complete } from "@/lib/aiComplete";
 import { KPI_RELATIONSHIPS, NARRATIVE_RULES, buildKpiContext, cardCause } from "@/lib/kpiNarrative";
 import { LEAD_TIME_TARGET_DAYS, LEAD_TIME_BASIS_LABEL } from "@/lib/leadTimeDefinition";
 
@@ -182,32 +182,6 @@ ${buildKpiContext(kpi)}
 Write the 2 sentences:`;
 
   return complete(NARRATIVE_PROMPT, user);
-}
-
-/** One non-streamed completion with model fallback; undefined on failure (the card goes out without it). */
-async function complete(system: string, user: string): Promise<string | undefined> {
-  if (!process.env.DEEPSEEK_API_KEY && !process.env.GROQ_API_KEY) return undefined;
-  for (const modelId of GROQ_MODEL_PRIORITY) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const res = await (getClientForModel(modelId) as any).chat.completions.create({
-        model: modelId,
-        max_tokens: 500,
-        temperature: 0.3,
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
-      });
-      const text = String(res.choices?.[0]?.message?.content ?? "")
-        .replace(/<think>[\s\S]*?<\/think>/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
-      return text || undefined;
-    } catch (err) {
-      if (isAIModelUnavailable(err)) continue;
-      console.error("[teams] AI narrative failed:", err);
-      return undefined;
-    }
-  }
-  return undefined;
 }
 
 // ── Summary (scheduled daily / weekly) ──────────────────────────────────────

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import { ResponsiveLine } from "@nivo/line";
+import { LineDraw } from "@/components/charts/LineDraw";
 import { format, parseISO, getISOWeek } from "date-fns";
 import { PLANT_COLORS, TREND_KPI_OPTIONS } from "@/lib/chartConfig";
 import { Lock } from "lucide-react";
@@ -57,6 +58,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
   const hovered = onPlantHover ? hoveredPlant : localHover;
   const setHovered = onPlantHover ?? setLocalHover;
   const activeXRef = useRef<string | null>(null);
+  // Series under the cursor — the hover point is drawn on that line only
+  const activeSerieRef = useRef<string | null>(null);
   const { t } = useI18n();
 
   const [chartOpacity, setChartOpacity] = useState(1);
@@ -131,6 +134,10 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
     return () => { stale = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.plant, filters.startDate, filters.endDate, kpiType, grain]);
+
+  // Replays the line draw-in when the shown data changes (every fetch: metric, grain, filters) or the view — not on hover
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const drawKey = useMemo(() => ({}), [data, displayedPView]);
 
   const parseAnyDate = (s: string): Date => {
     const iso = parseISO(s);
@@ -211,7 +218,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
 
   // Red only on hover: out-of-limit points (each series' own limits) turn red at the crosshair
   const ActivePointsLayer = useMemo(
-    () => makeActivePointsLayer(nivoData, () => activeXRef.current, outOfLimitColor(limits)),
+    () => makeActivePointsLayer(nivoData, () => activeXRef.current, outOfLimitColor(limits), () => activeSerieRef.current),
     [nivoData, limits]
   );
 
@@ -290,46 +297,49 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       )}
 
       {/* Chart */}
-      <div className={fillHeight ? "flex-1 min-h-0" : ""} style={{ ...(fillHeight ? undefined : { height: chartHeight }), opacity: chartOpacity, transition: "opacity 0.18s ease" }}>
+      {/* While new data loads (e.g. Weekly ↔ Monthly) the current chart stays, dimmed; the new lines then draw in */}
+      <div className={fillHeight ? "flex-1 min-h-0" : ""} style={{ ...(fillHeight ? undefined : { height: chartHeight }), opacity: loading && data.length > 0 ? Math.min(chartOpacity, 0.45) : chartOpacity, transition: "opacity 0.18s ease" }}>
         {isEmpty ? (
           <div className="h-full flex items-center justify-center text-[11px] text-gray-300">No data available</div>
         ) : (
-          <ResponsiveLine
-            {...LINE_DEFAULTS}
-            data={nivoData}
-            yScale={{ ...LINE_DEFAULTS.yScale, ...yScaleBounds }}
-            axisLeft={isPct ? LINE_DEFAULTS.axisLeft : { ...LINE_DEFAULTS.axisLeft, format: (v: string | number | Date) => formatCompact(Number(v)) }}
-            axisBottom={{
-              format: (v) => formatTick(String(v)),
-              tickSize: 0,
-              tickPadding: 8,
-              tickValues: axisTicks,
-            }}
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            onMouseMove={(point: any) => { activeXRef.current = String(point.data.x); }}
-            onMouseLeave={() => { activeXRef.current = null; }}
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            colors={(serie: any) => isolatedColor(String(serie.color), String(serie.id), hovered)}
-            layers={["grid", "axes", "lines", ControlLayer, "crosshair", ActivePointsLayer, ActiveLineLayer, "mesh"]}
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            tooltip={({ point }: any) => {
-              const x = String(point.data.x);
-              const dateLabel = (() => {
-                try {
-                  const d = parseAnyDate(x);
-                  if (isNaN(d.getTime())) return x;
-                  return grain === "month" ? format(d, "MMMM yyyy") : `Week of ${format(d, "dd MMM yyyy")}`;
-                } catch { return x; }
-              })();
-              const rows = rowsAtX(nivoData, x, isPct ? "%" : selectedKpi.unit).map((r) => {
-                const lim = limits[r.label]?.[x];
-                if (!lim) return r;
-                const st = pointStats?.[x]?.[r.label];
-                return { ...r, sub: <>{pointStats ? "p̄" : "Mean"} {fmtValue(lim.mean)} · UCL <span style={{ color: "#f5a39a" }}>{fmtValue(lim.ucl)}</span> · LCL <span style={{ color: "#f5a39a" }}>{fmtValue(lim.lcl)}</span>{st ? ` · ${st.late.toLocaleString("en-US")}/${st.n.toLocaleString("en-US")} ${countLabel}` : ""}</> };
-              });
-              return <LineTooltip title={dateLabel} rows={rows} />;
-            }}
-          />
+          <LineDraw drawKey={drawKey}>
+            <ResponsiveLine
+              {...LINE_DEFAULTS}
+              data={nivoData}
+              yScale={{ ...LINE_DEFAULTS.yScale, ...yScaleBounds }}
+              axisLeft={isPct ? LINE_DEFAULTS.axisLeft : { ...LINE_DEFAULTS.axisLeft, format: (v: string | number | Date) => formatCompact(Number(v)) }}
+              axisBottom={{
+                format: (v) => formatTick(String(v)),
+                tickSize: 0,
+                tickPadding: 8,
+                tickValues: axisTicks,
+              }}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              onMouseMove={(point: any) => { activeXRef.current = String(point.data.x); activeSerieRef.current = point.seriesId != null ? String(point.seriesId) : null; }}
+              onMouseLeave={() => { activeXRef.current = null; activeSerieRef.current = null; }}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              colors={(serie: any) => isolatedColor(String(serie.color), String(serie.id), hovered)}
+              layers={["grid", "axes", "lines", ControlLayer, "crosshair", ActivePointsLayer, ActiveLineLayer, "mesh"]}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              tooltip={({ point }: any) => {
+                const x = String(point.data.x);
+                const dateLabel = (() => {
+                  try {
+                    const d = parseAnyDate(x);
+                    if (isNaN(d.getTime())) return x;
+                    return grain === "month" ? format(d, "MMMM yyyy") : `Week of ${format(d, "dd MMM yyyy")}`;
+                  } catch { return x; }
+                })();
+                const rows = rowsAtX(nivoData, x, isPct ? "%" : selectedKpi.unit).map((r) => {
+                  const lim = limits[r.label]?.[x];
+                  if (!lim) return r;
+                  const st = pointStats?.[x]?.[r.label];
+                  return { ...r, sub: <>{pointStats ? "p̄" : "Mean"} {fmtValue(lim.mean)} · UCL <span style={{ color: "#f5a39a" }}>{fmtValue(lim.ucl)}</span> · LCL <span style={{ color: "#f5a39a" }}>{fmtValue(lim.lcl)}</span>{st ? ` · ${st.late.toLocaleString("en-US")}/${st.n.toLocaleString("en-US")} ${countLabel}` : ""}</> };
+                });
+                return <LineTooltip title={dateLabel} rows={rows} />;
+              }}
+            />
+          </LineDraw>
         )}
       </div>
 

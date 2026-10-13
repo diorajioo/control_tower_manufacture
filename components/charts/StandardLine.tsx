@@ -2,15 +2,17 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Standard line chart style — the single source for every Nivo line chart (same role as TONES for KPI cards).
-// Spec, checklist and anti-patterns: docs/UI_UX.md → Standard Line Chart.
-// Implementations: Overview TrendChart · Lead Time LeadTimeTrendChart (cleanest full example).
+// Full standard, checklist and anti-patterns: docs/UI_UX.md → Standard Line Chart.
+// Implementations: Lead Time LeadTimeTrendChart (cleanest full example) · Overview TrendChart (adds SPC).
 //
 //   Style    minimal: no axis lines, dashed horizontal hairline grid only, muted 10px ticks
 //   Colors   SERIES_COLORS in fixed entity order (lib/chartConfig.ts); aggregate = SERIES_TOTAL_COLOR
-//   Lines    smooth (monotoneX), 2px, round caps, no resting points
-//   Hover    hairline crosshair + solid 4px points with a white ring on every series at that x
-//   Tooltip  light card: x label, then dot · series · value (right-aligned, tabular); sub-lines 9.5px, never wrap
+//   Lines    linear, 2px, no resting points; animate:false (no spring morph) + LineDraw draw-in
+//   Hover    hairline crosshair + ONE solid 4px point with a white ring, on the line under the cursor
+//            (makeActivePointsLayer reads Nivo's currentPoint)
+//   Tooltip  translucent slate card: x label, then dot · series · value for every series; sub-lines 9.5px, never wrap
 //   Legend   below the plot, centered, 9.5px: dot · name · last value; hover isolates (other lines 12%, legend 40%)
+//   Refetch  old chart at 45% opacity while loading, then the new lines draw in
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { ReactNode } from "react";
@@ -54,6 +56,8 @@ export const LINE_DEFAULTS = {
   gridYValues:   4,
   useMesh:       true,
   crosshairType: "x" as const,
+  // No spring morph between data sets (weekly ↔ monthly have different point counts); LineDraw draws lines in instead
+  animate:       false,
   axisLeft: {
     tickSize: 0,
     tickPadding: 10,
@@ -79,19 +83,28 @@ export function isolatedColor(color: string, id: string, hovered: string | null)
 
 // ── Layers ───────────────────────────────────────────────────────────────────
 
-/** Solid points with a white ring on every series at the active x (set from onMouseMove). */
+/**
+ * Hover point: one solid point with a white ring at the hovered x, on the series under the cursor.
+ * Source = Nivo's `currentPoint` (custom-layer prop, always in sync with the crosshair); `getActiveX` /
+ * `getActiveSerie` are fallbacks. With no series known, every series gets a point at that x.
+ */
 export function makeActivePointsLayer(
   series: StandardSeries[],
   getActiveX: () => string | null,
   pointColor?: (id: string, x: string, y: number) => string | null,
+  getActiveSerie?: () => string | null,
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return function ActivePointsLayer(props: any) {
-    const x = getActiveX();
+    // Nivo passes the hovered point to every custom layer (props.currentPoint, set by the mesh) — read it first,
+    // so the point is drawn in the same render as the crosshair. The getters are only a fallback.
+    const cp = props.currentPoint;
+    const x = cp ? String(cp.data?.x) : getActiveX();
     if (!x || !props.xScale || !props.yScale) return null;
+    const only = cp?.seriesId != null ? String(cp.seriesId) : getActiveSerie?.() ?? null;
     return (
       <g style={{ pointerEvents: "none" }}>
-        {series.map((serie) => {
+        {series.filter((serie) => !only || serie.id === only).map((serie) => {
           const pt = serie.data.find((d) => d.x === x);
           if (!pt || pt.y == null) return null;
           return (

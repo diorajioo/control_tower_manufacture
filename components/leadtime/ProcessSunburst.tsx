@@ -9,7 +9,7 @@
 //   Scope        — follows Scope, Basis and Unit above. The PO group is left out when Scope = PO Released.
 // Gross = span of the activity (first start → last stop); Nett = SUM(NET_LEADTIME). Data: /api/lead-time/analysis.
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { LineTooltip } from "@/components/charts/StandardLine";
 import { activityLabel, PROCESS_GROUPS, type ProcessGroupId } from "@/lib/leadTimeStages";
@@ -32,9 +32,10 @@ function tint(hex: string, t: number) {
 }
 
 function arc(cx: number, cy: number, r0: number, r1: number, a0: number, a1: number): string {
-  // Full circle needs two halves
-  if (a1 - a0 >= Math.PI * 2 - 1e-6) {
-    return `${arc(cx, cy, r0, r1, a0, a0 + Math.PI)} ${arc(cx, cy, r0, r1, a0 + Math.PI, a1)}`;
+  // A (near-)full circle is drawn as two halves: an SVG arc whose start and end almost meet renders unreliably
+  // (it flipped for a frame at the end of the drill-down tween)
+  if (a1 - a0 >= Math.PI * 2 - 0.02) {
+    return `${arc(cx, cy, r0, r1, a0, a0 + Math.PI)} ${arc(cx, cy, r0, r1, a0 + Math.PI, a0 + Math.PI * 2)}`;
   }
   const p = (r: number, a: number) => `${(cx + r * Math.sin(a)).toFixed(2)} ${(cy - r * Math.cos(a)).toFixed(2)}`;
   const large = a1 - a0 > Math.PI ? 1 : 0;
@@ -100,6 +101,11 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
     return { inner, outer, colorOf };
   }, [shown, ringTotal]);
 
+  // Drill-down / back: slice angles tween from the current layout to the new one (zoomed group opens to the full
+  // circle, the others close up), 450 ms ease-in-out. New slices grow from zero width, removed ones shrink to zero.
+  const drawnInner = useAngleTween(inner);
+  const drawnOuter = useAngleTween(outer);
+
   const onMove = (e: React.MouseEvent, slice: Slice) => {
     const r = box.current?.getBoundingClientRect();
     if (r) setHover({ x: e.clientX - r.left, y: e.clientY - r.top, slice });
@@ -128,22 +134,23 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
       ) : total <= 0 ? (
         <div className="flex-1 min-h-[280px] flex items-center justify-center text-[11px] text-slate-400">No process time for the selected filters</div>
       ) : (
-        <div className="flex-1 grid grid-cols-[300px_minmax(0,1fr)] gap-8 items-center px-5 py-2">
-          {/* Donut on the left at a fixed size, legend fills the rest — no empty margins on a wide card */}
-          <div ref={box} className="relative" onMouseLeave={() => setHover(null)}>
-            <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-[300px] h-[300px]" role="img" aria-label="Lead time by group process and process">
-              {inner.map((s) => (
+        <div className="flex-1 flex items-center justify-center gap-10 px-8 py-4">
+          {/* Donut and legend as one centred block: the donut grows with the card (up to 380px), the legend keeps a
+              readable width — balanced margins left/right and less empty space above/below */}
+          <div ref={box} className="relative shrink-0 w-[clamp(240px,46%,380px)] aspect-square" onMouseLeave={() => setHover(null)}>
+            <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="w-full h-full" role="img" aria-label="Lead time by group process and process">
+              {drawnInner.map((s) => (
                 <path key={s.key} d={arc(C, C, R_IN0, R_IN1, s.a0, s.a1)} fill={s.color} stroke="white" strokeWidth={1.5}
                   className={zoomed ? "cursor-pointer" : "cursor-zoom-in"}
                   onClick={() => setZoom(zoomed ? null : s.group)} onMouseMove={(e) => onMove(e, s)} />
               ))}
-              {outer.map((s) => (
+              {drawnOuter.map((s) => (
                 <path key={s.key} d={arc(C, C, R_OUT0, R_OUT1, s.a0, s.a1)} fill={s.color} stroke="white" strokeWidth={1}
                   className={zoomed ? "" : "cursor-zoom-in"}
                   onClick={() => { if (!zoomed) setZoom(s.group); }} onMouseMove={(e) => onMove(e, s)} />
               ))}
               {/* Centre: total (or the zoomed group); click to go back */}
-              <g onClick={() => setZoom(null)} className={zoomed ? "cursor-pointer" : ""}>
+              <g key={zoom ?? "all"} onClick={() => setZoom(null)} className={`ui-fade-in ${zoomed ? "cursor-pointer" : ""}`}>
                 <circle cx={C} cy={C} r={R_IN0 - 3} fill="white" />
                 <text x={C} y={C - 4} textAnchor="middle" style={{ fontSize: 26, fontWeight: 700, fill: "#101828" }}>{fmtLt(ringTotal, unit)}</text>
                 <text x={C} y={C + 14} textAnchor="middle" style={{ fontSize: 11, fill: "#475467", fontWeight: 700 }}>{unit}</text>
@@ -165,7 +172,7 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
             )}
           </div>
 
-          <div className="flex flex-col gap-2 min-w-0">
+          <div className="flex flex-col gap-2 min-w-[220px] flex-1 max-w-[340px]">
             {zoomed && (
               <div className="flex items-center gap-1 text-[11px]">
                 <button onClick={() => setZoom(null)} className="font-semibold text-[#1E4076] hover:underline">All groups</button>
@@ -174,7 +181,7 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
               </div>
             )}
             {/* Compact and scrollable, so a long group (WIP has ~22 processes) never grows the card */}
-            <div className="flex flex-col max-h-[280px] overflow-y-auto pr-1">
+            <div key={zoom ?? "all"} className="ui-fade-in flex flex-col max-h-[300px] overflow-y-auto pr-1">
               {legendRows.map((r, i) => (
                 <button key={r.key} onClick={r.click} disabled={!r.click}
                   className={`flex items-center gap-2 py-1 text-left shrink-0 ${i > 0 ? "border-t border-slate-100" : ""} ${r.click ? "hover:bg-slate-50 cursor-zoom-in" : "cursor-default"}`}>
@@ -195,4 +202,57 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
       )}
     </div>
   );
+}
+
+const TWEEN_MS = 450;
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+/** Animate slice angles between layouts; returns the slices to draw for the current frame. */
+function useAngleTween(target: Slice[]): Slice[] {
+  const [drawn, setDrawn] = useState<Slice[]>(target);
+  const drawnRef = useRef<Slice[]>(target);
+  const mounted = useRef(false);
+  const sig = target.map((t) => `${t.key}:${t.a0.toFixed(4)}:${t.a1.toFixed(4)}`).join("|");
+
+  useEffect(() => {
+    const from = new Map(drawnRef.current.map((s) => [s.key, s]));
+    const to = new Map(target.map((s) => [s.key, s]));
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // First paint: no tween (the card itself fades in); later changes animate
+    if (!mounted.current || reduce || drawnRef.current.length === 0) {
+      mounted.current = true;
+      drawnRef.current = target; setDrawn(target); return;
+    }
+
+    // Pairs of start → end angles over the union of keys
+    const pairs: { start: Slice; end: Slice }[] = [];
+    for (const t of target) {
+      const f = from.get(t.key);
+      pairs.push({ start: f ?? { ...t, a1: t.a0 }, end: t });
+    }
+    for (const f of drawnRef.current) {
+      if (!to.has(f.key) && f.a1 - f.a0 > 1e-4) pairs.push({ start: f, end: { ...f, a1: f.a0 } });
+    }
+
+    let raf = 0;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const k = easeInOut(Math.min(1, (now - t0) / TWEEN_MS));
+      const frame = pairs.map(({ start, end }) => ({
+        ...end,
+        color: end === start ? end.color : (to.has(end.key) ? end.color : start.color),
+        a0: start.a0 + (end.a0 - start.a0) * k,
+        a1: start.a1 + (end.a1 - start.a1) * k,
+      }));
+      drawnRef.current = frame;
+      setDrawn(frame);
+      if (k < 1) raf = requestAnimationFrame(step);
+      else { drawnRef.current = target; setDrawn(target); }
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig]);
+
+  return drawn.filter((s) => s.a1 - s.a0 > 1e-4);
 }
