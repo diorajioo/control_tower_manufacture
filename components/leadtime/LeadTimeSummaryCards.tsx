@@ -23,11 +23,11 @@ const factor = (u: LtUnit) => (u === "hours" ? 24 : 1);
 export const fmtLt = (days: number | null | undefined, u: LtUnit) =>
   days == null ? "—" : (days * factor(u)).toFixed(u === "hours" ? 1 : 2);
 
-// Same status rule as the Overview Lead Time card: ≤ target on track, ≤ +15% at risk, above that above target
+// Same status rule as the Overview Lead Time card: ≤ target on track, ≤ +15% at risk, above that off track
 const TONES = {
   on:      { color: "#067647", label: "On Track" },
   risk:    { color: "#b45309", label: "At Risk" },
-  off:     { color: "#d92d20", label: "Above Target" },
+  off:     { color: "#d92d20", label: "Off Track" },
   up:      { color: "#d92d20", label: "Up vs prior period" },
   down:    { color: "#067647", label: "Down vs prior period" },
   neutral: { color: "#667085", label: "No Data" },

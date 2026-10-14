@@ -1,19 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { ResponsiveLine } from "@nivo/line";
-import { LineDraw } from "@/components/charts/LineDraw";
-import { StatusDot } from "@/components/ui/StatusDot";
 import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
+import { Fade } from "@/components/ui/Fade";
+import { KpiLabel, KpiTargetLine, StatusPill, KpiPriorLine, KpiSparkline, KpiFooter } from "@/components/ui/KpiCardParts";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 const TARGET = LEAD_TIME_TARGET_DAYS;
 
 const TONES = {
-  on:      { color: "#067647", label: "On Track"    },
-  risk:    { color: "#b45309", label: "At Risk"      },
-  off:     { color: "#d92d20", label: "Above Target" },
-  neutral: { color: "#667085", label: "No Data"      },
+  on:      { color: "#067647", bg: "#f0fdf6", border: "#bbf0d2", label: "On Track"     },
+  risk:    { color: "#b45309", bg: "#fffaeb", border: "#f0d58a", label: "At Risk"      },
+  off:     { color: "#d92d20", bg: "#fef4f3", border: "#fbd5d1", label: "Off Track"    },
+  neutral: { color: "#667085", bg: "#f8f9fb", border: "#e4e7ec", label: "No Data"      },
 };
 
 type ToneKey = "on" | "risk" | "off" | "neutral";
@@ -87,10 +86,10 @@ export interface LeadTimeKPICardProps {
   hasAlert?:       boolean;
   showBreakdown?:  boolean;
   basisOverride?:  "created" | "released";
-  /** KPI id whose AI one-liner (KpiOneLiner) shows as a bar below the status row */
+  /** KPI id whose AI one-liner (KpiOneLiner) shows as a bar below the status rows */
   insightId?:      string;
-  /** KPI card standard: off — a card shows only its toggled value; true only for a documented exception */
-  showSecondary?:  boolean;
+  /** Click on the sparkline → switch the trend chart to Lead Time */
+  onSparkClick?:   () => void;
 }
 
 export function LeadTimeKPICard({
@@ -105,7 +104,7 @@ export function LeadTimeKPICard({
   showBreakdown = true,
   basisOverride = "created",
   insightId,
-  showSecondary = false,
+  onSparkClick,
 }: LeadTimeKPICardProps) {
   const [unit, setUnit] = useState<"days" | "hours">("days");
   const [type, setType] = useState<"gross" | "nett">("gross");
@@ -116,8 +115,6 @@ export function LeadTimeKPICard({
 
   const primaryDays    = type === "gross" ? grossDays  : nettDays;
   const primaryTrend   = type === "gross" ? grossTrend : nettTrend;
-  const secondaryDays  = type === "gross" ? nettDays   : grossDays;
-  const secondaryTrend = type === "gross" ? nettTrend  : grossTrend;
 
   const toDisp    = (d: number) => unit === "hours" ? d * 24 : d;
   const fmtVal    = (d: number) => unit === "hours"
@@ -137,158 +134,67 @@ export function LeadTimeKPICard({
   const positions = byPositionGross ?? [];
   const maxHours  = positions[0]?.avgHours || 1;
 
-  const hasSparkline = sparkline.length >= 2;
-  const sparkData = hasSparkline
-    ? [{ id: "leadtime", data: sparkline.map((y, i) => ({ x: i, y: unit === "hours" ? y * 24 : y })) }]
-    : [];
-
   return (
-    <div
-      style={{
-        background: "white",
-        border: hasAlert ? "1px solid #fbd5d1" : "1px solid #EBEBEB",
-        borderRadius: 8,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        width: "100%",
-        fontFamily: "Lato, sans-serif",
-        height: "100%",
-      }}
-    >
+    <div style={{ background: "white", border: hasAlert ? "1px solid #fbd5d1" : "1px solid #EBEBEB", borderRadius: 8, display: "flex", flexDirection: "column", overflow: "hidden", width: "100%", fontFamily: "Lato, sans-serif", height: "100%" }}>
       <div style={{ display: "flex", flex: 1 }}>
-        <div
-          style={{
-            flex: 1,
-            padding: `${z(14)}px ${z(16)}px 0`,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {/* ── Header row ── */}
-          <div style={{ display: "flex", gap: z(16), alignItems: "flex-start" }}>
-
-            {/* LEFT column */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: z(8) }}>
-              <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.06em", color: "#64748b" }}>
-                LEAD TIME
-              </span>
-
-              <div style={{ display: "flex", alignItems: "baseline", gap: z(6), flexWrap: "wrap" }}>
-                <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.015em", color: "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-                  {fmtVal(primaryDays)}
-                </span>
-                <span style={{ fontSize: 12, color: "#98a2b3" }}>{unitLabel}</span>
-                {type === "gross" ? (
-                  /* Delta vs target — always computable, shows ↗/↘ above/below */
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: deltaOver ? "#d92d20" : "#067647", fontVariantNumeric: "tabular-nums" }}>
-                    {deltaOver ? "↗" : "↘"} {deltaOver ? "+" : "−"}{deltaDisplay} {unitLabel}
-                  </span>
-                ) : (
-                  /* Nett has no target — show trend % vs prior period */
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: trendColor(primaryTrend), fontVariantNumeric: "tabular-nums" }}>
-                    {trendArrow(primaryTrend)} {trendLabel(primaryTrend)}
-                  </span>
-                )}
-              </div>
-
-              {type === "gross" ? (
-                <div style={{ fontSize: 11, color: "#98a2b3" }}>
-                  vs target {targetDisp} {unitLabel} ({deltaOver ? "+" : ""}{deltaPct.toFixed(1)}%)
-                </div>
-              ) : (
-                <div style={{ fontSize: 11, color: "#98a2b3" }}>vs prior period</div>
-              )}
-
-              <div style={{ display: "flex", alignItems: "center", gap: z(8) }}>
-                <StatusDot color={tone.color} label={tone.label} />
-              </div>
-            </div>
-
-            {/* RIGHT column: toggles + sparkline */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: z(8) }}>
-              <div style={{ display: "flex", gap: z(6) }}>
-                <SegToggle
-                  options={[{ label: "Days", value: "days" }, { label: "Hours", value: "hours" }]}
-                  value={unit}
-                  onChange={setUnit}
-                  z={z}
-                />
-                <SegToggle
-                  options={[{ label: "Gross", value: "gross" }, { label: "Nett", value: "nett" }]}
-                  value={type}
-                  onChange={setType}
-                  z={z}
-                />
-              </div>
-
-              {hasSparkline ? (
-                <div style={{ width: z(150), height: z(42) }}>
-                  <LineDraw drawKey={JSON.stringify(sparkData)} duration={600}>
-                    <ResponsiveLine
-                      data={sparkData}
-                      margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
-                      xScale={{ type: "point" }}
-                      yScale={{ type: "linear", min: "auto", max: "auto" }}
-                      enableArea={false}
-                      colors={["#1E4076"]}
-                      lineWidth={1.6}
-                      enablePoints={false}
-                      enableGridX={false}
-                      enableGridY={false}
-                      axisLeft={null}
-                      axisBottom={null}
-                      isInteractive={false}
-                      animate={false}
-                    />
-                  </LineDraw>
-                </div>
-              ) : (
-                <div style={{ width: z(150), height: z(42), display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ fontSize: 10, color: "#c5cad8" }}>no sparkline data</span>
-                </div>
-              )}
-
-              <div style={{ fontSize: 10, color: "#a3a8b5", marginTop: z(-4), textAlign: "right" }}>
-                {hasSparkline ? `${sparkline.length} weeks · ${unitLabel}` : ""}
-              </div>
+        <div style={{ flex: 1, padding: `${z(14)}px ${z(16)}px 0`, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          {/* ── Label ⓘ · toggles ── */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: z(12), minHeight: 24 }}>
+            <KpiLabel
+              label="Lead Time"
+              info={`${type === "gross" ? "Gross" : "Nett"} lead time per PO, ${basisOverride === "released" ? "PO Released" : "PO Created"} → Receive NDC. Target ≤ ${target} days is defined on gross.`}
+            />
+            <div style={{ display: "flex", gap: z(6) }}>
+              <SegToggle
+                options={[{ label: "Days", value: "days" }, { label: "Hours", value: "hours" }]}
+                value={unit}
+                onChange={setUnit}
+                z={z}
+              />
+              <SegToggle
+                options={[{ label: "Gross", value: "gross" }, { label: "Nett", value: "nett" }]}
+                value={type}
+                onChange={setType}
+                z={z}
+              />
             </div>
           </div>
 
-          <KpiOneLiner id={insightId} z={z} />
-
-          {/* ── Secondary metric row (the other toggle value — off by default, KPI card standard) ── */}
-          {showSecondary ? (
-            <div
-              style={{
-                marginTop: z(10),
-                paddingTop: z(10),
-                borderTop: "1px solid #eceef2",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingBottom: z(12),
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: z(2) }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: z(4) }}>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: "#101828", fontVariantNumeric: "tabular-nums" }}>
-                    {fmtVal(secondaryDays)}
+          {/* ── Value · target · status · prior period | sparkline ── */}
+          <div style={{ display: "flex", gap: z(16), alignItems: "flex-end", marginTop: z(8) }}>
+            <Fade depKey={`${type}-${unit}`} className="flex-1 min-w-0">
+              <div style={{ display: "flex", flexDirection: "column", gap: z(7), minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: z(6) }}>
+                  <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.015em", color: "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                    {fmtVal(primaryDays)}
                   </span>
-                  <span style={{ fontSize: 11, color: "#98a2b3" }}>{unitLabel}</span>
+                  <span style={{ fontSize: 12, color: "#98a2b3" }}>{unitLabel}</span>
                 </div>
-                <div style={{ fontSize: 10.5, color: "#a3a8b5" }}>
-                  {type === "gross" ? "Nett" : "Gross"} lead time this period
-                </div>
+                {type === "gross" ? (
+                  <KpiTargetLine
+                    delta={`${deltaOver ? "+" : "−"}${deltaDisplay} ${unitLabel}`}
+                    color={deltaOver ? "#d92d20" : "#067647"}
+                    text={`vs target ${targetDisp} ${unitLabel} (${deltaOver ? "+" : ""}${deltaPct.toFixed(1)}%)`}
+                  />
+                ) : (
+                  /* The target is defined on gross only */
+                  <KpiTargetLine text="Target not defined for nett" />
+                )}
+                <StatusPill color={tone.color} bg={tone.bg} border={tone.border} label={tone.label} />
+                <KpiPriorLine pct={primaryTrend} color={trendColor(primaryTrend)} />
               </div>
+            </Fade>
+            <KpiSparkline
+              data={sparkline.map((y) => (unit === "hours" ? y * 24 : y))}
+              caption={`${sparkline.length} weeks · ${unitLabel}`}
+              z={z}
+              onClick={onSparkClick}
+              label="Lead Time"
+            />
+          </div>
 
-              {secondaryTrend !== null && (
-                <div style={{ fontSize: 11, fontWeight: 700, color: trendColor(secondaryTrend), borderRadius: 5, padding: `${z(3)}px ${z(9)}px`, fontVariantNumeric: "tabular-nums" }}>
-                  {trendArrow(secondaryTrend)} {trendLabel(secondaryTrend)}
-                </div>
-              )}
-            </div>
-          ) : <div style={{ height: z(12) }} />}
+          <KpiOneLiner id={insightId} z={z} />
+          <div style={{ height: z(12) }} />
 
           {/* Breakdown bars */}
           {showBreakdown && positions.length > 0 && (
@@ -311,25 +217,7 @@ export function LeadTimeKPICard({
         </div>
       </div>
 
-      {/* Footer */}
-      <div
-        style={{
-          background: "white",
-          borderTop: "1px solid #eceef2",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: `${z(7)}px ${z(16)}px`,
-          borderRadius: "0 0 7px 7px",
-        }}
-      >
-        <span style={{ fontSize: 11, color: "#667085" }}>
-          {basisOverride === "released" ? "PO Released → Receive NDC" : "PO Created → Receive NDC"}
-        </span>
-        <span style={{ fontSize: 10, color: "#a3a8b5", fontVariantNumeric: "tabular-nums" }}>
-          Target ≤ {target.toFixed(2)} days
-        </span>
-      </div>
+      <KpiFooter href="/lead-time" right={`Target ≤ ${target.toFixed(2)} days`} z={z} />
     </div>
   );
 }

@@ -86,6 +86,11 @@ confirmed. See `docs/BUSINESS_LOGIC.md` → Lead Time basis.
 
 ## Technical Limitations
 
+### Lead Time PO list payload near the data-cache limit
+
+**Description:** `/api/lead-time/po-list` returns every PO of the period (≈20k for 12 months, ≈1.6 MB compact JSON). The Next data cache (`unstable_cache`) refuses entries over 2 MB, so a much longer custom range is not cached (each request re-runs the ~2.5 s query) and the browser downloads more. Fix if it bites: server-side paging by bin, or a shorter default range.
+
+
 ### Cross-plant POs attributed to their last plant
 
 **Status: Resolved 2026-10-13 · Area: every lead time query, plant filter**

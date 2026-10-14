@@ -108,6 +108,9 @@ lib/
 |---|---|---|---|---|
 | `/api/dashboard/kpi` | GET | Required | 1h | KPI card values (all 7 KPIs in one call) |
 | `/api/dashboard/trends` | GET | Required | 1h | Chart trend data per period; `grain=week\|month` |
+| `/api/dashboard/etl` | GET | Required | 5 min | Header live indicator: last data load time (`getEtlTimestamp()` = MAX(LOAD_TIMESTAMP) of CT_MANUF_LEADTIME) as ISO `etlAt` |
+| `/api/lead-time/lines` | GET | Required | 1h | Lead Time page Analysis tab: process time per line × SKU (`getLeadTimeByLineSku`): rows `[line, sku, poCount, Σ span days, Σ RELEASE_QTY]` + `skus` names; `lineActivity=mixing\|filpac` (not `activity` — that is the ACTIVITY dimension filter) + dimension filters. The browser aggregates per line for the bubble chart |
+| `/api/lead-time/po-list` | GET | Required | 1h | Lead Time page Analysis tab: one row per PO under the distribution histogram (`getLeadTimePoList`, same population as `/api/lead-time/distribution`): gross, nett and the 6 process-group times for `metric=gross\|nett`. Compact payload (arrays + `skus` name map, ≈1.6 MB for 20k POs) to stay under the 2 MB data-cache entry limit. `basis=created\|released` + dimension filters |
 | `/api/lead-time/analysis` | GET | Required | 1h | Lead Time page Analysis tab: gross + nett stats per PO (avg, median, P25, P75, max, vs prior period), weekly series, composition, time per activity (gross span / nett). `scope=created\|released` + dimension filters |
 | `/api/lead-time/note` | POST | Required | 1h | AI draft of the Lead Time card note from the variables the page shows; null unless every number in it is one of them (`lib/leadTimeNote.ts`) |
 | `/api/lead-time/options` | GET | Required | 1h | Dropdown values for the Lead Time filters (period + plant) |

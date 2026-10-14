@@ -170,6 +170,9 @@ const dict = {
     common_cancel: "Batal",
     common_loading: "Memuat...",
     common_no_data: "Belum ada data",
+    unit_million: "juta",
+    header_data_updated: "Sinkron terakhir",
+    header_ago: "lalu",
   },
 
   en: {
@@ -335,6 +338,9 @@ const dict = {
     common_cancel: "Cancel",
     common_loading: "Loading...",
     common_no_data: "No data yet",
+    unit_million: "million",
+    header_data_updated: "Last sync",
+    header_ago: "ago",
   },
 } as const;
 

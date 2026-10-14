@@ -9,7 +9,7 @@ import {
   evenWeekTicks, isolatedColor, rowsAtX, seriesColor, monthLabel, GRAIN_OPTIONS,
   makeActivePointsLayer, makeActiveLineLayer, type StandardSeries, type TrendGrain,
 } from "@/components/charts/StandardLine";
-import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { ToggleSelect } from "@/components/ui/ToggleSelect";
 import type { LeadTimeChartData } from "@/components/dashboard/LeadTimeCharts";
 import { stageLabel } from "@/lib/leadTimeStages";
 
@@ -109,7 +109,7 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
       unitBadge="Total & per position · days"
       loading={isLoading}
       actions={filters && (
-        <SegmentedToggle options={GRAIN_OPTIONS} value={grain} onChange={setGrain} ariaLabel="Trend granularity" />
+        <ToggleSelect options={GRAIN_OPTIONS} value={grain} onChange={setGrain} ariaLabel="Trend granularity" align="right" />
       )}
       legend={!isEmpty && <LineLegend series={series} hovered={hovered} onHover={setHovered} />}
       height={300}

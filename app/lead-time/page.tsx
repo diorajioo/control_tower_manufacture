@@ -24,6 +24,9 @@ import { LeadTimeFilterCard, type LtBasis, type LtScope, type LtUnit } from "@/c
 import { LeadTimeBoxPlot } from "@/components/leadtime/LeadTimeBoxPlot";
 import { LeadTimeSummaryCard, LeadTimeCompositionCard, type LtStats } from "@/components/leadtime/LeadTimeSummaryCards";
 import { ProcessSunburst, type ActivityTime } from "@/components/leadtime/ProcessSunburst";
+import { LeadTimeHistogram } from "@/components/leadtime/LeadTimeHistogram";
+import { LeadTimePoTable, type PoListResponse } from "@/components/leadtime/LeadTimePoTable";
+import { LeadTimeLineSection } from "@/components/leadtime/LeadTimeLineSection";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 import { PROCESS_GROUPS } from "@/lib/leadTimeStages";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
@@ -105,12 +108,18 @@ export default function LeadTimePage() {
   const analysis = useFetch<Analysis>(tab === "analysis" ? "/api/lead-time/analysis" : null, filters, dims, { scope }, refreshKey);
   const charts   = useFetch<LeadTimeChartData>(tab === "ranking" ? "/api/lead-time/charts" : null, filters, dims, {}, refreshKey);
   const stages   = useFetch<{ plants: PlantBreakdown[]; targetDays: number; activities: PlantActivity[]; stages: StageStdPoint[] }>(
-    tab === "pareto" ? "/api/lead-time/stages" : null, filters, dims, { basis: scope }, refreshKey);
+    tab === "pareto" || tab === "analysis" ? "/api/lead-time/stages" : null, filters, dims, { basis: scope }, refreshKey);
 
   // Flattened filters for components that build their own query string (trend Monthly, scatter, Pareto)
   const flat = useMemo(() => dimsToParams(dims, new URLSearchParams(filters)), [filters, dims]);
   const flatRecord = useMemo(() => Object.fromEntries(flat.entries()), [flat]);
   const tacticalFilters = useMemo(() => ({ ...filters, lt: dims }), [filters, dims]);
+
+  // Distribution per PO + PO table: a clicked histogram bin filters the table; any filter change clears it
+  const poList = useFetch<PoListResponse>(tab === "analysis" ? "/api/lead-time/po-list" : null, filters, dims, { basis: scope, metric: basis }, refreshKey);
+  const [poBin, setPoBin] = useState<number | null>(null);
+  const poBinReset = `${JSON.stringify(filters)}|${dimsKey(dims)}|${scope}|${basis}|${refreshKey}`;
+  useEffect(() => { setPoBin(null); }, [poBinReset]);
 
   if (status === "loading") {
     return (
@@ -214,6 +223,20 @@ export default function LeadTimePage() {
                 detailHref={null}
               />
               <LeadTimeBoxPlot data={a?.boxPlot ?? null} loading={analysis.loading} unit={unit} />
+              <LeadTimeHistogram filters={tacticalFilters} basis={scope} metric={basis} unit={unit} detailHref={null}
+                selectedBin={poBin} onBinClick={(b) => setPoBin((cur) => (cur === b ? null : b))} />
+              <LeadTimePoTable data={poList.data} loading={poList.loading} unit={unit} metric={basis}
+                bin={poBin} onClearBin={() => setPoBin(null)} />
+              {/* Bottom: lead time per plant (same table as the Pareto tab), then per line + SKU per line */}
+              <LeadTimePlantTable
+                data={stages.data?.plants ?? null}
+                activities={stages.data?.activities ?? []}
+                targetDays={stages.data?.targetDays ?? LEAD_TIME_TARGET_DAYS}
+                loading={stages.loading}
+                basis={scope}
+                unit={unit}
+              />
+              <LeadTimeLineSection filters={tacticalFilters} unit={unit} refreshKey={refreshKey} />
             </>
           )}
 

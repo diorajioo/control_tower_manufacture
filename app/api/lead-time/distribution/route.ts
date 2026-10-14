@@ -3,11 +3,14 @@ import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { getLeadTimeDistributionBins } from "@/lib/queries";
+import { dimsFromParams, type LtDims } from "@/lib/leadTimeFilters";
 
 export const maxDuration = 60;
 
-async function runDistQuery(plant: string, startDate: string, endDate: string, period: string | undefined, basis: "created" | "released", metric: "gross" | "nett") {
-  const rows = await getLeadTimeDistributionBins({ plant, startDate, endDate, period }, basis, metric);
+// `dims` = Lead Time page filters as JSON (part of the cache key)
+async function runDistQuery(plant: string, startDate: string, endDate: string, period: string | undefined, basis: "created" | "released", metric: "gross" | "nett", dims: string) {
+  const lt = JSON.parse(dims) as LtDims;
+  const rows = await getLeadTimeDistributionBins({ plant, startDate, endDate, period, lt }, basis, metric);
   const first = rows[0];
   return {
     bins:   rows.map((r) => ({ binStart: Number(r.BIN_START), count: Number(r.CNT) })),
@@ -18,7 +21,7 @@ async function runDistQuery(plant: string, startDate: string, endDate: string, p
   };
 }
 
-const cached = unstable_cache(runDistQuery, ["lead-time-distribution-v5"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runDistQuery, ["lead-time-distribution-v6"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -33,7 +36,7 @@ export async function GET(req: NextRequest) {
   const metric    = searchParams.get("metric") === "nett" ? "nett" : "gross";
 
   try {
-    return NextResponse.json(await cached(plant, startDate, endDate, period, basis, metric));
+    return NextResponse.json(await cached(plant, startDate, endDate, period, basis, metric, JSON.stringify(dimsFromParams(searchParams))));
   } catch (e) {
     console.error("Lead time distribution failed:", (e as Error).message);
     return NextResponse.json({ bins: [], mean: 0, median: 0, stddev: 0, total: 0, error: "query_failed" }, { status: 500 });

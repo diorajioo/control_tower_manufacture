@@ -1353,6 +1353,112 @@ export async function getLeadTimeDistributionBins(filters: QueryFilters, basis: 
   `, [...dateBinds, ...ltBinds(filters)]);
 }
 
+// Lead Time page → Analysis tab: one row per PO under the distribution histogram (same population as
+// getLeadTimeDistributionBins: completed in the period, ACTUAL rows, Lead Time page filters). Gross = start
+// (PO Created / Released) → RECEIVE NDC; nett = active time (LINE_CATEGORY rows). Per process group (PROCESS_GROUPS):
+// gross = sum of each activity's span (first start → last stop), nett = sum of NET_LEADTIME — same formulas as the
+// sunburst, per PO. The browser bins the POs with the same rule as the SQL to filter by a clicked bar.
+const PO_GROUP_COLS: { key: string; positions: string[] }[] = [
+  { key: "PO",       positions: ["PO"] },
+  { key: "WEIGHING", positions: ["TIMBANG"] },
+  { key: "MIXING",   positions: ["OLAH", "CUCI OLAH"] },
+  { key: "FILPAC",   positions: ["KEMAS 1", "KEMAS 2", "CUCI KEMAS"] },
+  { key: "NDC",      positions: ["RECEIVE NDC"] },
+  { key: "WIP",      positions: ["WIP"] },
+];
+
+export type LeadTimePoRow = {
+  PROCESS_ORDER_FG: string; PRODUCT_CODE: string | null; PRODUCT_NAME: string | null; PLANT: string | null;
+  GROSS_DAYS: number | null; NETT_DAYS: number | null;
+} & Record<`${"G" | "N"}_${"PO" | "WEIGHING" | "MIXING" | "FILPAC" | "NDC" | "WIP"}`, number | null>;
+
+export async function getLeadTimePoList(filters: QueryFilters, basis: "created" | "released" = "created") {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const startSql = basis === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
+  const nettMinutes = "SUM(CASE WHEN LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END)";
+  const groupCols = PO_GROUP_COLS.map(({ key, positions }) => {
+    const inList = positions.map((p) => `'${p}'`).join(", ");
+    return `SUM(CASE WHEN POSITION IN (${inList}) THEN span_min END) / 1440.0 AS G_${key},
+      SUM(CASE WHEN POSITION IN (${inList}) THEN net_min END) / 1440.0 AS N_${key}`;
+  }).join(",\n      ");
+  return executeQuery<LeadTimePoRow>(`
+    WITH lt_rows AS (
+      SELECT *
+      FROM ${LT_TABLE}
+      WHERE PO_FG_DONE_DATE IS NOT NULL
+        AND ACTIVITY_TYPE = 'ACTUAL'
+        AND ${datePred}
+        ${ltWhere(filters)}
+    ),
+    po AS (
+      SELECT PROCESS_ORDER_FG,
+        MAX(PRODUCT_CODE) AS PRODUCT_CODE,
+        MAX(PRODUCT_NAME) AS PRODUCT_NAME,
+        MAX(PLANT)        AS PLANT,
+        CASE WHEN ${startSql} IS NOT NULL AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
+               AND DATEDIFF('minute', ${startSql}, ${NDC_RECEIVED_AT_SQL}) >= 0
+             THEN DATEDIFF('minute', ${startSql}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 END AS GROSS_DAYS,
+        CASE WHEN ${nettMinutes} >= 0 THEN ${nettMinutes} / 1440.0 END AS NETT_DAYS
+      FROM lt_rows
+      GROUP BY PROCESS_ORDER_FG
+    ),
+    act AS (
+      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY,
+        GREATEST(COALESCE(DATEDIFF('minute', MIN(ACTIVITY_START), MAX(ACTIVITY_STOP)), 0), 0) AS span_min,
+        COALESCE(SUM(NET_LEADTIME), 0) AS net_min
+      FROM lt_rows
+      WHERE POSITION IS NOT NULL
+      GROUP BY PROCESS_ORDER_FG, POSITION, ACTIVITY
+    ),
+    grp AS (
+      SELECT PROCESS_ORDER_FG,
+      ${groupCols}
+      FROM act
+      GROUP BY PROCESS_ORDER_FG
+    )
+    SELECT po.PROCESS_ORDER_FG, po.PRODUCT_CODE, po.PRODUCT_NAME, po.PLANT, po.GROSS_DAYS, po.NETT_DAYS,
+      ${PO_GROUP_COLS.map(({ key }) => `grp.G_${key}, grp.N_${key}`).join(", ")}
+    FROM po LEFT JOIN grp ON grp.PROCESS_ORDER_FG = po.PROCESS_ORDER_FG
+    WHERE po.GROSS_DAYS IS NOT NULL OR po.NETT_DAYS IS NOT NULL
+    ORDER BY po.GROSS_DAYS DESC NULLS LAST
+    LIMIT 50000
+  `, [...dateBinds, ...ltBinds(filters)]);
+}
+
+// Lead Time page → Analysis tab: "Lead Time per Line" bubble chart + "Lead Time SKU per Line" table.
+// Process time at a line = span of the activity rows of that process on that line per PO (first start → last stop);
+// Mixing = OLAH, Filling Packing = KEMAS 1 / KEMAS 2 (cleaning rows left out). Volume = RELEASE_QTY (pcs, one
+// value per PO). One row per line × SKU with sums, so the browser can aggregate per line exactly
+// (avg = SPAN_DAYS / PO_COUNT). Same population as the PO list (completed in the period, ACTUAL rows, page filters).
+export type LineActivity = "mixing" | "filpac";
+const LINE_POSITIONS: Record<LineActivity, string[]> = { mixing: ["OLAH"], filpac: ["KEMAS 1", "KEMAS 2"] };
+
+export async function getLeadTimeByLineSku(filters: QueryFilters, activity: LineActivity = "filpac") {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const positions = LINE_POSITIONS[activity].map((p) => `'${p}'`).join(", ");
+  return executeQuery<{ LINE_NAME: string; PRODUCT_CODE: string | null; PRODUCT_NAME: string | null; PO_COUNT: number; SPAN_DAYS: number; QTY: number | null }>(`
+    WITH per_po AS (
+      SELECT LINE_NAME, PROCESS_ORDER_FG,
+        MAX(PRODUCT_CODE) AS PRODUCT_CODE,
+        MAX(PRODUCT_NAME) AS PRODUCT_NAME,
+        GREATEST(COALESCE(DATEDIFF('minute', MIN(ACTIVITY_START), MAX(ACTIVITY_STOP)), 0), 0) / 1440.0 AS span_days,
+        MAX(RELEASE_QTY) AS qty
+      FROM ${LT_TABLE}
+      WHERE PO_FG_DONE_DATE IS NOT NULL
+        AND ACTIVITY_TYPE = 'ACTUAL'
+        AND POSITION IN (${positions})
+        AND LINE_NAME IS NOT NULL
+        AND ${datePred}
+        ${ltWhere(filters)}
+      GROUP BY LINE_NAME, PROCESS_ORDER_FG
+    )
+    SELECT LINE_NAME, PRODUCT_CODE, MAX(PRODUCT_NAME) AS PRODUCT_NAME,
+      COUNT(*) AS PO_COUNT, SUM(span_days) AS SPAN_DAYS, SUM(qty) AS QTY
+    FROM per_po
+    GROUP BY LINE_NAME, PRODUCT_CODE
+  `, [...dateBinds, ...ltBinds(filters)]);
+}
+
 // Tactical Overview gauge stats (Lead Time tab): max gross LT (gauge right end), avg PO-stage days, PO count.
 export async function getLeadTimeTacticalStats(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);

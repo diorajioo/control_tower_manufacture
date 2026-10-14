@@ -6,6 +6,7 @@
 //   Reading      — inner ring = group process, outer ring = the processes of that group.
 //   Interaction  — click a group to zoom into its processes; click the centre or "All groups" to go back.
 //   Small slices — merged into "Others" in the ring; the list on the right lists every process when zoomed.
+//   Labels       — each slice shows its time with the unit (days / hours) on a second line inside the ring when the slice is wide enough for the text.
 //   Scope        — follows Scope, Basis and Unit above. The PO group is left out when Scope = PO Released.
 // Gross = span of the activity (first start → last stop); Nett = SUM(NET_LEADTIME). Data: /api/lead-time/analysis.
 
@@ -29,6 +30,29 @@ function tint(hex: string, t: number) {
   const n = parseInt(hex.slice(1), 16);
   const mix = (c: number) => Math.round(c + (255 - c) * t);
   return `rgb(${mix((n >> 16) & 255)}, ${mix((n >> 8) & 255)}, ${mix(n & 255)})`;
+}
+
+/** Readable text colour on a slice fill (hex or rgb()): white on dark fills, navy-black on light ones. */
+function labelColor(fill: string) {
+  const [r, g, b] = fill.startsWith("#")
+    ? [0, 8, 16].map((sh) => (parseInt(fill.slice(1), 16) >> (16 - sh)) & 255)
+    : (fill.match(/\d+/g) ?? ["0", "0", "0"]).map(Number);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 165 ? "#16305C" : "#ffffff";
+}
+
+// Value labels inside the rings: only on slices wide enough to hold the text (arc length at mid-radius)
+const MIN_LABEL_ARC = 44;
+
+function SliceLabel({ s, r0, r1, unit }: { s: Slice; r0: number; r1: number; unit: LtUnit }) {
+  const mid = (s.a0 + s.a1) / 2, rm = (r0 + r1) / 2;
+  if ((s.a1 - s.a0) * rm < MIN_LABEL_ARC) return null;
+  const x = C + rm * Math.sin(mid), y = C - rm * Math.cos(mid), fill = labelColor(s.color);
+  return (
+    <text x={x} y={y} textAnchor="middle" style={{ fill, pointerEvents: "none", fontVariantNumeric: "tabular-nums" }}>
+      <tspan x={x} dy={-1} style={{ fontSize: 10, fontWeight: 700 }}>{fmtLt(s.value, unit)}</tspan>
+      <tspan x={x} dy={10} style={{ fontSize: 8, fontWeight: 400 }}>{unit}</tspan>
+    </text>
+  );
 }
 
 function arc(cx: number, cy: number, r0: number, r1: number, a0: number, a1: number): string {
@@ -148,6 +172,9 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
                   className={zoomed ? "" : "cursor-zoom-in"}
                   onClick={() => { if (!zoomed) setZoom(s.group); }} onMouseMove={(e) => onMove(e, s)} />
               ))}
+              {/* Value of each slice inside the ring (time in the chosen unit); hidden on slices too narrow for the text */}
+              {drawnInner.map((s) => <SliceLabel key={`l-${s.key}`} s={s} r0={R_IN0} r1={R_IN1} unit={unit} />)}
+              {drawnOuter.map((s) => <SliceLabel key={`l-${s.key}`} s={s} r0={R_OUT0} r1={R_OUT1} unit={unit} />)}
               {/* Centre: total (or the zoomed group); click to go back */}
               <g key={zoom ?? "all"} onClick={() => setZoom(null)} className={`ui-fade-in ${zoomed ? "cursor-pointer" : ""}`}>
                 <circle cx={C} cy={C} r={R_IN0 - 3} fill="white" />

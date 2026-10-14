@@ -126,6 +126,7 @@ Plant 4 → #10b981   Plant 5 → #8b5cf6   Plant 6 → #f97316
 - **Hide / show** (2026-10-13): button left of the logo. Only the menu collapses, **animated** (width 224 → 0, 200 ms `ease-out`; inner column stays 224 px so the menu slides instead of reflowing; stays mounted so the idle timer keeps running). The logo block (`SidebarBrand`, `components/dashboard/SidebarToggle.tsx`) is **one fixed element** top-left that never moves; the Sidebar keeps a 52 px navy spacer under it. State = `data-sidebar="collapsed"` on `<html>` (set before the first paint by an inline script in `app/layout.tsx`, switched by `setSidebarCollapsed()`, stored in localStorage `ct-sidebar-collapsed`). CSS in `globals.css`: `.ct-sidebar` width and `.ct-topbar-row` (Header top bar) left padding animate with the same duration and easing, so the top bar content stays still while the content below widens; `.ct-topbar-pad` gives Settings (no Header) 52 px of room under the logo; `.ct-icon-*` swaps the button icon. Reduced motion → no transition. Every page with `<Header>` must also render `<Sidebar>` (it owns the logo block).
 
 ### Header (`components/dashboard/Header.tsx`)
+- **Live indicator** (top bar, right of the clock): two lines in a `bg-white/10` box with a green dot — **"Last sync"** (11.5px bold white) over the elapsed time "14m 32s ago" (9.5px `white/60`) — counts up every second from the last data load (`MAX(LOAD_TIMESTAMP)` of CT_MANUF_LEADTIME via `/api/dashboard/etl`, cached 5 min; `ETL_BATCH_TIMESTAMP` is date-only). Re-read after every refresh; hover shows the exact load time (WIB) and the hourly auto-refresh countdown. Words from i18n (`header_data_updated`, `header_ago`). No timestamp → old "Live mm:ss" countdown.
 - Top bar: fixed 52px, `bg-[#1E4076]`; controls use white-on-blue (`text-white/85`, `border-white/25`, `hover:bg-white/10`)
 - Left: brand text "MANUFACTURING CONTROL TOWER" (`text-[13px] font-medium text-white/70 uppercase tracking-[0.07em]`)
 - Alert dropdown severity = colored dot (red / amber / blue), no emoji
@@ -140,38 +141,39 @@ The view toggle only renders when `views` prop has 2+ items. On `/dashboard`, St
 
 ## Component Patterns
 
-### KPI Card standard (2026-10-06)
+### KPI Card standard (2026-10-14)
 
-**Every KPI card follows this anatomy.** Components: `RegularKPICard` (generic), `LeadTimeKPICard`, `OutputKPICard` (Overview + Strategic Monitor), `LiteKPICard` / `LeadTimeCategoryCard` (Lead Time page, same rules without toggle / one-liner). When you add a KPI, use `RegularKPICard` unless the KPI needs its own toggles in the card.
+**Every KPI card follows this anatomy.** Components: `RegularKPICard` (generic), `LeadTimeKPICard`, `OutputKPICard` (Overview Strategic + Strategic Monitor), all built from the shared blocks in `components/ui/KpiCardParts.tsx` (`KpiLabel`, `KpiTargetLine`, `StatusPill`, `KpiPriorLine`, `KpiSparkline`, `KpiFooter`). `LiteKPICard` / `LeadTimeCategoryCard` (Lead Time page) keep the older layout. When you add a KPI, use `RegularKPICard` unless the KPI needs its own toggles in the card. Layout changed 2026-10-14 at the user's request (reference card: Output).
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ LABEL (11.5 bold UPPER #64748b)              [Toggle] [Toggle]│  ← header row
-│ 16.95 days  ↗ +3.95 days  (30 bold · 12 unit · 11.5 delta)   │     right column:
-│ vs target 13.00 days (+30.4%)        (11 #98a2b3)  ╱╲╱‾ spark │     toggles, sparkline
-│ ● Above Target   (StatusDot 11.5 bold, tone color)  15 weeks │     150×42, caption 10px
-│ ┌ AI  WIP stage averages 9.19 days, 57% of gross lead time ─┐ │  ← KpiOneLiner bar
+│ OUTPUT ⓘ                                [Finished Good][Bulk]│  ← label + info · toggles
+│ 284.80 M pcs                                                 │  ← value + unit
+│ −16.20 M pcs vs target 301.00 M pcs   (or "Target not defined")│ ← target line
+│ [Off Track]                                     ╱╲╱‾╲  spark │  ← status pill · sparkline
+│ ↑ 3.9% vs prior period                       15 weeks · pcs  │  ← prior-period line
+│ ┌ AI  J4 short 7.1 M pcs, 44% of the total gap ─────────────┐ │  ← KpiOneLiner bar
 │ └───────────────────────────────────────────────────────────┘ │
-│                                                   (12px gap) │  ← no secondary row
 ├──────────────────────────────────────────────────────────────┤
-│ PO Created → Receive NDC (11 #667085)    Target ≤ 13.00 days  │  ← footer
+│ Open page →                                 Target ≤ 13 days │  ← footer
 └──────────────────────────────────────────────────────────────┘
 ```
 
 | Part | Rule |
 |---|---|
-| Shell | white, `1px solid #EBEBEB` (alert: `#fbd5d1`), radius 8 (`rounded-lg`), no shadow at rest, **no accent bar, no icon** next to the label |
+| Shell | white, `1px solid #EBEBEB` (alert: `#fbd5d1`), radius 8 (`rounded-lg`), no shadow at rest, no accent bar, no icon next to the label |
 | Size | `compact` in the Overview 3-per-row grid: spacing, sparkline and toggles ×0.8 (`z()`), **font sizes never scale** |
-| Label | 11.5px bold uppercase `#64748b`, letter-spacing .06em, one line with ellipsis; changes with the card toggle (e.g. "Mixing Productivity") |
-| Value | 30px bold `#101828`, tabular, line-height 1; unit 12px `#98a2b3`; then the change (11.5px bold, tone color, ↗ / ↘ / →) — vs target when the KPI has one, else % vs prior period |
-| Sub-label | 11px `#98a2b3`: "vs target …" or "vs prior period {value}" |
-| Status | `StatusDot` (6px dot + 11.5px bold label in tone color). Tones (`TONES` in each card): on `#067647`, risk `#b45309`, off `#d92d20`, neutral `#667085` "No Data"; value but no prior period → "No Prior Data". Rules: target KPIs from the target (Lead Time: ≤ target on, ≤ +15% risk, above off); trend KPIs: up on, down ≤ 5% risk, worse off (`inverse` when lower is better) |
-| Toggles | top of the right column, `SegmentedToggle` (or the inline compact copy in Lead Time / Output); a not-yet-available option is `locked` (lock icon, not clickable) |
-| Sparkline | right column, 150×42 (×0.8 compact), Nivo line only, 1.6px, Paragon Blue `#1E4076`, no area/points/axes, not interactive; caption "{n} weeks · {unit}" 10px `#a3a8b5`; < 2 points → "no sparkline data" |
-| AI one-liner | `<KpiOneLiner id={insightId}>` bar right below the status row, full width — see KpiOneLiner below; only on cards with data (Lead Time, Output, Productivity E2E) |
-| Secondary row | hairline top border `#eceef2`; value 20px bold, unit 11px, label 10.5px `#a3a8b5`; optional trend as colored text (no pill). **Standard since 2026-10-06: not shown.** A KPI card shows only its toggled value — never the other toggle value (Gross/Nett, FG/Bulk) or an extra metric below; the user clicks the toggle to switch. `showSecondary` on `LeadTimeKPICard` / `OutputKPICard` defaults to `false` (also hides Output's footer "Bulk: / FG:"); don't pass `secondary` to `RegularKPICard`. A 12px spacer replaces the row. Applies to the Overview and the Strategic Monitor. |
-| Footer | white, hairline top border, 11px `#667085` left (definition / basis / data source), 10px `#a3a8b5` right (target or total) |
-| No data | value "—" in `#d0d5dd`, status "No Data", no sparkline, footer says what is missing (e.g. "CT_MANUF_KEMAS not connected yet") |
+| Label | `KpiLabel`: 11.5px bold uppercase `#64748b`, letter-spacing .06em, ellipsis, then an ⓘ `InfoTooltip` with the definition / basis / data source (this text used to sit in the footer) |
+| Toggles | same row as the label, right; `SegmentedToggle` (or the inline compact copy in Lead Time / Output); a not-yet-available option is `locked` |
+| Value | 30px bold `#101828`, tabular, line-height 1; unit 12px `#98a2b3`. Nothing else on this line. Output (FG and Bulk) is shown in millions with 2 decimals: "284.80 million pcs" / "16.81 million kg" — the word comes from i18n `unit_million` ("juta" in Indonesian), never abbreviated (exact value on hover of the unit) |
+| Target line | `KpiTargetLine`, 11.5px `#98a2b3`, always shown: gap to target in bold tone color + "vs target …" (Lead Time gross), or gray "Target ≥ 65%" / "Target not defined" when the KPI has no target yet (Output, Productivity, Energy, Lead Time nett — target is on gross). Never remove the line when the target is missing |
+| Status | `StatusPill`: 11px bold tone color on the tone bg + border, radius 4. Tones (`TONES` in each card), same labels on every card: on `#067647` **"On Track"**, risk `#b45309` **"At Risk"**, off `#d92d20` **"Off Track"**, neutral `#667085` "No Data"; value but no prior period → "No Prior Data". Rules: target KPIs from the target (Lead Time: ≤ target on, ≤ +15% risk, above off); trend KPIs: up on, down ≤ 5% risk, worse off (`inverse` when lower is better) |
+| Prior-period line | `KpiPriorLine`, 11px: "↑ 3.9%" bold tone color + "vs prior period" (+ optional prior value, e.g. "(12.3)"); no comparison or no data → "No prior period data" (no-data cards keep the row) |
+| Sparkline | `KpiSparkline`, right column, bottom-aligned with the status + prior rows, 150×42 (×0.8 compact), Nivo line only, 1.6px, Paragon Blue `#1E4076`, no area/points/axes; caption "{n} weeks · {unit}" 10px `#a3a8b5`; < 2 points → "no sparkline data". **Click = switch the trend chart to this KPI** (`onSparkClick`; Overview also scrolls the chart into view): Lead Time → `leadtime`, Output → `output` (FG; also from the Bulk view), Productivity → `productivity` (E2E; also from Mixing / Filpac). Hover `#EEF4FB` bg, focus ring navy, title "Show in trend chart" |
+| AI one-liner | `<KpiOneLiner id={insightId}>` bar right below the prior-period row, full width, **always with the `AiTag`** — see KpiOneLiner below; only on cards with data (Lead Time, Output, Productivity E2E) |
+| Secondary row | **Not shown.** A KPI card shows only its toggled value — never the other toggle value (Gross/Nett, FG/Bulk) or an extra metric; the user clicks the toggle to switch. A 12px spacer sits below the one-liner |
+| Footer | `KpiFooter`, hairline top border: left "Open page →" (11.5px bold `#1E4076`, hover `#16305C` underline) when the KPI has a detail page (Lead Time → `/lead-time`), else muted "No detail page yet"; right 10px `#a3a8b5` (target or total, e.g. "Target ≤ 13.00 days", "12,345 mh") |
+| No data | same rows as a data card: value "—" in `#d0d5dd`, target line, status "No Data", "No prior period data", "no sparkline data", footer; ⓘ says what is missing (e.g. "CT_MANUF_KEMAS not connected") |
 | Wrapper | always inside `<KpiHighlightTarget id>` (see Interactions) |
 | Loading | `SkeletonCard`, same height as the card |
 
@@ -185,7 +187,7 @@ Legacy, not rendered anywhere: `components/dashboard/KPICard.tsx` (5px accent ba
 - Skeleton bars `bg-white/20`; "truncated" note `#FFE38A`; error text white with icon
 
 ### KpiOneLiner (`components/ui/KpiOneLiner.tsx`)
-- One-line AI insight per data KPI card (Lead Time, Output, Productivity E2E), its own bar right below the status row (above the footer), full card width
+- One-line AI insight per data KPI card (Lead Time, Output, Productivity E2E), its own bar right below the prior-period row (above the footer), full card width
 - `bg #EEF4FB`, radius 6, padding 5×8 (scaled in compact cards); "AI" tag 9px bold `#1E4076`; text 11px `#16305C`, one line with ellipsis, full text in `title`
 - Comes from the same model call as the AI Summary (`[[CARDS]]` block); nothing is rendered while the summary loads, on error, or when the model gave no line for that KPI
 
@@ -219,7 +221,7 @@ Legacy, not rendered anywhere: `components/dashboard/KPICard.tsx` (5px accent ba
 | Line | `curve="linear"`, 2px, no resting points (`LINE_DEFAULTS`). Trend charts and sparklines both use linear |
 | Ticks | `#a0a6b1` 10px tabular; y-ticks integers (compact, e.g. `8.29M`, for large values); point x-scale, auto y-scale (% metrics clamped 0–100) |
 | Colours | `SERIES_COLORS` (`lib/chartConfig.ts`) in **fixed entity order, never by rank**: `#3b82f6` `#f59e0b` `#ef4444` `#10b981` `#8b5cf6` `#f97316` `#06b6d4` `#db2777`; 9th+ series → `SERIES_OVERFLOW_COLOR` `#98a2b3`; aggregate ("Total", "All plants") → Paragon Blue `#1E4076` (never black). `PLANT_COLORS` = first 6 |
-| Weekly / Monthly | `SegmentedToggle` with `GRAIN_OPTIONS` in the card header, left of the unit pill. Weekly axis = even ISO weeks (`evenWeekTicks()`: `W2, W4…`, every 4th when > 26); Monthly axis = every month (`Jan`, or `Jan 25` when the range spans years). Monthly is **re-queried** with `grain=month` (`DATE_TRUNC('month')` in SQL) — never averaged from weekly points |
+| Weekly / Monthly | `ToggleSelect` dropdown with `GRAIN_OPTIONS` in the card header, left of the unit pill (every trend chart since 2026-10-14; Quarterly planned — add it to `GRAIN_OPTIONS` + `DATE_TRUNC('quarter')` later). **Overview / Monitor `TrendChart`**: metric and grain are `ToggleSelect` dropdowns (`components/ui/ToggleSelect.tsx` — filter field standard: same box and menu as the Header filter dropdowns (`FIELD` / `FIELD_ON` / `MENU*` in `FilterField.tsx`), no label above, 28px high) in one header row: Metric ▾ · Overall / By plant · Weekly ▾ · unit pill (unit only); the metric pill row is gone. Weekly axis = even ISO weeks (`evenWeekTicks()`: `W2, W4…`, every 4th when > 26); Monthly axis = every month (`Jan`, or `Jan 25` when the range spans years). Monthly is **re-queried** with `grain=month` (`DATE_TRUNC('month')` in SQL) — never averaged from weekly points |
 
 #### 3. Card
 `LineChartCard`: white `rounded-lg p-3 border-[#EBEBEB]`, hover shadow; label 11.5px bold uppercase `slate-500` + spinner while loading; header right = `actions` (toggles) then unit pill `bg-[#EEF4FB] text-[#16305C]` (e.g. "Lead Time · days"); plot 300px; legend row below; empty state "No data available" (or a specific sentence).
@@ -285,6 +287,16 @@ Both charts share a KPI selector — changing selection in one updates the other
 **StackedBarChart:** Bar per plant, status legend (In Control / Above UCL / Below LCL).
 
 ---
+
+### Lead Time page — sunburst + Lead Time Distribution (2026-10-14)
+
+- **Sunburst** (`components/leadtime/ProcessSunburst.tsx`): every slice shows its time inside the ring: value (`fmtLt`, 10px bold) with the unit spelled out below it ("days" / "hours", 8px regular), white on dark fills / navy `#16305C` on light ones; hidden when the slice arc is < 44px at mid-radius. Labels follow the drill-down tween.
+- **Lead Time Distribution** (`components/leadtime/LeadTimeBoxPlot.tsx`, look matched to the user's reference):
+  - Chart: box = IQR P25–P75, fill `#D9E0EA`, navy `#1E4076` 1.25px outline; median = short navy dash (2px); whisker Min → **P90** (1px `#A9B4C4`, cap at P90); log-like y axis (symlog, 1-2-5 ticks) with title "Lead time (days|hours)"; stage labels slanted −30°; hovered column = amber band `#FDF1DC`. Legend: Min to P90 · IQR (P25–P75) · Median (· Focus when not Median). Focus ≠ Median → dashed amber line on each box.
+  - Controls: Focus ▾ (FilterField style; sorts Pareto, outlined in the tooltip) · Pareto / Process order toggle.
+  - Table "Lead time statistics (unit)": navy header 9.5px, label column navy text; rows Minimum · Percentile 25 · **Median (bold)** · Mean · Percentile 75 · Maximum (red) · PO count (muted); values without unit, centred; **columns aligned with the boxes** (table `table-layout: fixed`, label column 104px = chart left margin, right padding 16px = chart right margin, one equal column per chart slot); hovering a column in the chart or table tints that column `#FEF6E7` and gives its header an amber underline. Focus row = amber dot next to the label.
+  - Summary line in a `bg-slate-50` strip below the table.
+  - **Tooltip exception to `LineTooltip`** (user request): dark card `#13213D`, title + "n PO", 2-column grid Mean/P25 · Min/Median · Max/P75 (label 9px `#A3B1C6`, value 12px bold white + unit); the Focus stat cell is outlined amber with an amber label. Only this chart uses it.
 
 ## Monitor Mode Layout
 

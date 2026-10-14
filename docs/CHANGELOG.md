@@ -4,6 +4,21 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-10-14
+
+### Changed
+- **KPI card layout** (Overview Strategic + Strategic Monitor, user request, reference = Output card): label + ⓘ definition tooltip · toggles right · value · target line on its own row ("Target not defined" for Output / Productivity / Energy / Lead Time nett) · status as a pill · "↑ x% vs prior period" row · sparkline bottom-right · AI one-liner (AI tag kept) · footer "Open page →". Shared blocks in `components/ui/KpiCardParts.tsx`; spec in `docs/UI_UX.md` → KPI Card standard.
+- **Status labels unified** on every KPI card: On Track / At Risk / Off Track (was Up / Declining / Down on trend cards, Above Target on Lead Time) — Overview, Strategic Monitor, Tactical view and Lead Time page. No-data cards (OEE, Yield Loss, Energy) keep every row of the standard.
+- **Metric Trend header**: metric pills and the Weekly / Monthly toggle became dropdowns (`ToggleSelect`) in one row with Overall / By plant; the unit pill shows the unit only. Lead Time page trend uses the same Weekly / Monthly dropdown.
+- **Lead Time sunburst**: time value inside each slice with "days" / "hours" below it (hidden on narrow slices).
+- **Distribution histogram legend** (Tactical + Lead Time page) shows the Mean value and the Mean ±1σ range; the PO table scroll area is 280px, the histogram plot height.
+- **Lead Time Distribution** restyled to the user's reference: slate boxes with navy outline, short median dash, whisker Min → P90 (was min → max), log-like y axis with title, slanted labels, amber hover band; statistics table with navy labels, bold Median, red Maximum, muted PO count and a linked hover column; dark tooltip with a 2-column stat grid and the Focus stat outlined (documented exception to `LineTooltip`). Mean dot removed from the chart (still in the table and tooltip). Toggle labels Par / Seq → Pareto / Process order.
+- **Lead Time page: distribution per PO + PO table** (Analysis tab, below the box plot): the Tactical histogram (moved to `components/leadtime/LeadTimeHistogram.tsx`, now honours the page filters) and a sortable "Lead Time per PO" table (`/api/lead-time/po-list`, `getLeadTimePoList`); clicking a bar filters the table to that bin. Bins match the SQL exactly (checked: 20,509 POs, every bin equal).
+- **Lead Time page bottom**: lead time per plant table (reused from Pareto), "Lead Time per Line" bubble chart (process time at the line vs PO count, bubble = released pcs, mean quadrants, Mixing / Filling Packing) and "Lead Time SKU per Line" table; clicking a bubble filters the table to that line. `ToggleSelect` menus scroll when long.
+- **Output KPI card value in millions**, 2 decimals ("284.80 million pcs", Bulk "million kg"; i18n `unit_million`, "juta" in Indonesian) instead of the full number.
+- **Header live indicator** counts up from the last data load (`LOAD_TIMESTAMP`): "Last sync" over "14m 32s ago", exact time on hover; the hourly auto-refresh is unchanged.
+- **Sparkline click → trend chart**: clicking a KPI card sparkline switches the trend chart tab to that KPI (Overview also scrolls to it).
+
 ## 2026-10-13
 
 ### Changed

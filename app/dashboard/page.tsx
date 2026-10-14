@@ -141,6 +141,12 @@ export default function DashboardPage() {
   const [undoId, setUndoId] = useState<string | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sentAlertIds = useRef<Set<string>>(new Set());
+  // KPI card sparkline click → trend chart switches to that KPI and scrolls into view
+  const trendRef = useRef<HTMLDivElement>(null);
+  const showTrend = useCallback((k: string) => {
+    setKpiType(k);
+    trendRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, []);
   const teamsSettingsRef = useRef<{ enabled?: boolean; recipients?: Array<{ email: string; kpis: Record<string, boolean> }> } | null>(null);
 
   useEffect(() => {
@@ -373,6 +379,7 @@ export default function DashboardPage() {
                 insightId="leadtime"
                 showBreakdown={false}
                 basisOverride="created"
+                onSparkClick={() => showTrend("leadtime")}
                 grossDays={kpi?.leadTime?.grossDays ?? 0}
                 nettDays={kpi?.leadTime?.nettDays ?? 0}
                 grossTrend={kpi?.leadTime?.grossTrend ?? null}
@@ -386,6 +393,7 @@ export default function DashboardPage() {
               <OutputKPICard
                 compact
                 insightId="output"
+                onSparkClick={() => showTrend("output")}
                 fgQty={kpi?.output?.fgQty ?? 0}
                 bulkQty={kpi?.output?.bulkQty ?? 0}
                 fgTrend={kpi?.output?.fgTrend ?? null}
@@ -410,7 +418,10 @@ export default function DashboardPage() {
                     sparkUnit={v.sparkUnit}
                     trend={(prodView === "e2e" ? kpi?.productivity?.e2eTrend : stage?.trend) ?? null}
                     insightId={prodView === "e2e" ? "productivity" : undefined}
-                    subLabel={prev ? `vs prior period ${prev.toFixed(1)}` : "vs prior period"}
+                    info={v.footer}
+                    targetText="Target not defined"
+                    priorSuffix={prev ? `(${prev.toFixed(1)})` : undefined}
+                    onSparkClick={() => showTrend("productivity")}
                     sparkline={(prodView === "e2e" ? kpi?.productivity?.sparkline : stage?.sparkline) ?? []}
                     toggle={
                       <SegmentedToggle
@@ -420,7 +431,6 @@ export default function DashboardPage() {
                         onChange={setProdView}
                       />
                     }
-                    footerLeft={v.footer}
                     footerRight={prodView === "e2e" && kpi?.productivity?.manhours ? `${formatThousands(Math.round(kpi.productivity.manhours))} mh` : undefined}
                   />
                 );
@@ -452,9 +462,8 @@ export default function DashboardPage() {
                     }
                     value="—"
                     unit="%"
-                    subLabel="target ≥ 65%"
-                    footerLeft="CT_MANUF_KEMAS not connected yet"
-                    footerRight="Target ≥ 65%"
+                    info="Overall equipment effectiveness. No data yet: CT_MANUF_KEMAS not connected."
+                    targetText="Target ≥ 65%"
                   />
                 </KpiHighlightTarget>
 
@@ -468,9 +477,8 @@ export default function DashboardPage() {
                     icon={<Droplets size={13} color="#f59e0b" strokeWidth={1.75} />}
                     value="—"
                     unit="%"
-                    subLabel="target ≤ 3%"
-                    footerLeft="CT_MANUF_KEMAS not connected yet"
-                    footerRight="Target ≤ 3%"
+                    info="Bulk and pack loss as % of input. No data yet: CT_MANUF_KEMAS not connected."
+                    targetText="Target ≤ 3%"
                   />
                 </KpiHighlightTarget>
 
@@ -484,8 +492,8 @@ export default function DashboardPage() {
                     icon={<Zap size={13} color="#eab308" strokeWidth={1.75} />}
                     value="—"
                     unit="kWh/unit"
-                    subLabel="target not set"
-                    footerLeft="No source table yet"
+                    info="Energy per unit produced. No data yet: no source table."
+                    targetText="Target not defined"
                   />
                 </KpiHighlightTarget>
               </>
@@ -501,7 +509,9 @@ export default function DashboardPage() {
               </>
             ) : (
               <>
-                <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} fillHeight />
+                <div ref={trendRef} className="h-full min-h-0 min-w-0">
+                  <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} fillHeight />
+                </div>
                 <AIRisksPanel
                   kpi={kpi}
                   alerts={visibleAlerts}

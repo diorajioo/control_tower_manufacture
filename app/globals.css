@@ -96,3 +96,9 @@ html[data-sidebar="collapsed"] .ct-topbar-pad { padding-top: 52px; }      /* pag
 html[data-sidebar="collapsed"] .ct-icon-open { display: block; }
 html[data-sidebar="collapsed"] .ct-icon-close { display: none; }
 @media (prefers-reduced-motion: reduce) { .ct-sidebar, .ct-topbar-row, .ct-topbar-pad { transition: none; } }
+
+/* KPI card: clickable sparkline (switches the trend chart) + "Open page →" link — hover and focus states */
+.kpi-spark { transition: background-color 150ms ease-out; }
+.kpi-spark:hover { background-color: #EEF4FB; }
+.kpi-spark:focus-visible, .kpi-open-link:focus-visible { outline: 2px solid #1E4076; outline-offset: 2px; }
+.kpi-open-link:hover { color: #16305C !important; text-decoration: underline !important; }

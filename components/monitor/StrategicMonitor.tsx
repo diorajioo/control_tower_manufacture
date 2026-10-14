@@ -104,6 +104,7 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 compact
                 insightId="leadtime"
                 showBreakdown={false}
+                onSparkClick={() => setKpiType("leadtime")}
                 grossDays={kpi?.leadTime?.grossDays ?? 0}
                 nettDays={kpi?.leadTime?.nettDays ?? 0}
                 grossTrend={kpi?.leadTime?.grossTrend ?? null}
@@ -117,6 +118,7 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
               <OutputKPICard
                 compact
                 insightId="output"
+                onSparkClick={() => setKpiType("output")}
                 fgQty={kpi?.output?.fgQty ?? 0}
                 bulkQty={kpi?.output?.bulkQty ?? 0}
                 fgTrend={kpi?.output?.fgTrend ?? null}
@@ -135,9 +137,11 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 unit="pcs/manhour"
                 sparkUnit="pcs/mh"
                 trend={kpi?.productivity?.e2eTrend ?? null}
-                subLabel={kpi?.productivity?.e2ePrev ? `vs prior period ${kpi.productivity.e2ePrev.toFixed(1)}` : "vs prior period"}
+                info="Output per operator manhour, end to end"
+                targetText="Target not defined"
+                priorSuffix={kpi?.productivity?.e2ePrev ? `(${kpi.productivity.e2ePrev.toFixed(1)})` : undefined}
+                onSparkClick={() => setKpiType("productivity")}
                 sparkline={kpi?.productivity?.sparkline ?? []}
-                footerLeft="Output per operator manhour, end to end"
                 footerRight={kpi?.productivity?.manhours ? `${formatThousands(Math.round(kpi.productivity.manhours))} mh` : undefined}
               />
             </KpiHighlightTarget>
@@ -157,9 +161,8 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 label="OEE"
                 icon={<Gauge size={13} color="#8b5cf6" strokeWidth={1.75} />}
                 value="—" unit="%"
-                subLabel="target ≥ 65%"
-                footerLeft="CT_MANUF_KEMAS not connected yet"
-                footerRight="Target ≥ 65%"
+                info="Overall equipment effectiveness. No data yet: CT_MANUF_KEMAS not connected."
+                targetText="Target ≥ 65%"
               />
             </KpiHighlightTarget>
             <KpiHighlightTarget id="yield">
@@ -168,9 +171,8 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 label="Yield Loss"
                 icon={<Droplets size={13} color="#f59e0b" strokeWidth={1.75} />}
                 value="—" unit="%"
-                subLabel="target ≤ 3%"
-                footerLeft="CT_MANUF_KEMAS not connected yet"
-                footerRight="Target ≤ 3%"
+                info="Bulk and pack loss as % of input. No data yet: CT_MANUF_KEMAS not connected."
+                targetText="Target ≤ 3%"
               />
             </KpiHighlightTarget>
             <KpiHighlightTarget id="energy">
@@ -179,8 +181,8 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 label="Energy"
                 icon={<Zap size={13} color="#eab308" strokeWidth={1.75} />}
                 value="—" unit="kWh/unit"
-                subLabel="target not set"
-                footerLeft="No source table yet"
+                info="Energy per unit produced. No data yet: no source table."
+                targetText="Target not defined"
               />
             </KpiHighlightTarget>
           </>

@@ -6,7 +6,6 @@ import { ResponsiveLine } from "@nivo/line";
 import { LineDraw } from "@/components/charts/LineDraw";
 import { format, parseISO, getISOWeek } from "date-fns";
 import { PLANT_COLORS, TREND_KPI_OPTIONS } from "@/lib/chartConfig";
-import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LINE_DEFAULTS, LineTooltip, LineLegend, rowsAtX, isolatedColor,
@@ -15,6 +14,7 @@ import {
   laneyPLimits, xmrLimits, makePChartLayer, outOfLimitColor, type PointStats,
 } from "@/components/charts/StandardLine";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { ToggleSelect } from "@/components/ui/ToggleSelect";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 interface Filters {
@@ -255,46 +255,31 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Metric + grain are dropdowns in the same row as the Overall / By plant toggle (user request 2026-10-14) */}
+          {!hideSelector && (
+            <ToggleSelect
+              options={TREND_KPI_OPTIONS.map((o) => ({
+                key: o.value,
+                label: KPI_TAB_LABELS[o.value] ? t(KPI_TAB_LABELS[o.value] as Parameters<typeof t>[0]) : o.label,
+                locked: o.locked,
+              }))}
+              value={kpiType}
+              onChange={onKpiChange}
+              ariaLabel="Trend metric"
+            />
+          )}
           <SegmentedToggle
             options={[{ key: "overall", label: "Overall" }, { key: "plant", label: "By plant", locked: plantLocked }]}
             value={overall ? "overall" : "plant"}
             onChange={(v) => { setPView(v); setHovered(null); }}
             ariaLabel="Trend view"
           />
-          <SegmentedToggle options={GRAIN_OPTIONS} value={grain} onChange={setGrain} ariaLabel="Trend granularity" />
-          <span className="text-[11px] bg-[#EEF4FB] text-[#16305C] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
-            {selectedKpi.label} · {unitLabel}
+          <ToggleSelect options={GRAIN_OPTIONS} value={grain} onChange={setGrain} ariaLabel="Trend granularity" align="right" />
+          <span className="text-[11px] bg-[#EEF4FB] text-[#16305C] px-2.5 py-0.5 rounded-full font-semibold tracking-tight whitespace-nowrap">
+            {unitLabel}
           </span>
         </div>
       </div>
-
-      {/* KPI tabs (legend sits below the plot) */}
-      {!hideSelector && (
-        <div className={cn("flex items-center justify-between gap-2 mb-2", fillHeight && "shrink-0")}>
-          {!hideSelector && (
-            <div className="flex flex-wrap gap-1">
-              {TREND_KPI_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  disabled={opt.locked}
-                  title={opt.locked ? "No data yet" : undefined}
-                  onClick={() => onKpiChange(opt.value)}
-                  className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-semibold transition-colors ${
-                    kpiType === opt.value
-                      ? "bg-[#1E4076] text-white"
-                      : opt.locked
-                        ? "bg-gray-50 text-gray-300 cursor-not-allowed"
-                        : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
-                  }`}
-                >
-                  {opt.locked && <Lock size={9} strokeWidth={2} />}
-                  {KPI_TAB_LABELS[opt.value] ? t(KPI_TAB_LABELS[opt.value] as Parameters<typeof t>[0]) : opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Chart */}
       {/* While new data loads (e.g. Weekly ↔ Monthly) the current chart stays, dimmed; the new lines then draw in */}

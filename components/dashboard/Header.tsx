@@ -235,6 +235,32 @@ export function Header({
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
   };
 
+  // Live indicator: time since the data was last loaded into Snowflake (LOAD_TIMESTAMP via /api/dashboard/etl),
+  // counting up every second. Re-read on mount and after every refresh; the hourly auto-refresh is unchanged.
+  const [etlAt, setEtlAt] = useState<Date | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    fetch("/api/dashboard/etl")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setEtlAt(d?.etlAt ? new Date(d.etlAt) : null))
+      .catch(() => setEtlAt(null));
+  }, [lastUpdated]);
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const fmtElapsed = (ms: number) => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+    if (m > 0) return `${m}m ${String(sec).padStart(2, "0")}s`;
+    return `${sec}s`;
+  };
+  const etlTitle = etlAt
+    ? `Last data load: ${etlAt.toLocaleString("en-GB", { timeZone: "Asia/Jakarta", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB · auto-refresh in ${fmtCountdown(countdown)}`
+    : `Auto-refresh in ${fmtCountdown(countdown)}`;
+
 
   return (
     <header className="shrink-0">
@@ -261,10 +287,16 @@ export function Header({
           <span className="text-[9.5px] text-white/60 leading-tight">{clockDate}</span>
         </div>
 
-        {/* Sync / countdown */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 text-[11px] text-white/85 font-medium shrink-0">
-          <span className={cn("w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0", !isLoading && "animate-pulse")} />
-          {isLoading ? "Loading..." : `Live ${lastUpdated ? fmtCountdown(countdown) : ""}`}
+        {/* Live indicator: time since the last data load (ETL) */}
+        {/* Two lines: "Last sync" (bold) over the elapsed time (muted), green dot left */}
+        <div title={etlTitle} className="flex items-center gap-2 pl-2.5 pr-3 py-1 rounded-lg bg-white/10 shrink-0">
+          <span className={cn("w-2 h-2 rounded-full bg-emerald-400 shrink-0", !isLoading && "animate-pulse")} />
+          <span className="flex flex-col leading-tight">
+            <span className="text-[11.5px] font-bold text-white">{etlAt ? t("header_data_updated") : "Live"}</span>
+            <span className="text-[9.5px] text-white/60 tabular-nums">
+              {isLoading ? "Loading..." : etlAt ? `${fmtElapsed(nowMs - etlAt.getTime())} ${t("header_ago")}` : lastUpdated ? fmtCountdown(countdown) : ""}
+            </span>
+          </span>
         </div>
 
         {/* Monitor mode */}

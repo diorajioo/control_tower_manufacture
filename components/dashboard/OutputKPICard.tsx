@@ -1,20 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { ResponsiveLine } from "@nivo/line";
-import { LineDraw } from "@/components/charts/LineDraw";
-import { StatusDot } from "@/components/ui/StatusDot";
+import { useI18n } from "@/lib/i18n";
 import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
+import { Fade } from "@/components/ui/Fade";
+import { KpiLabel, KpiTargetLine, StatusPill, KpiPriorLine, KpiSparkline, KpiFooter } from "@/components/ui/KpiCardParts";
 
 // ---------------------------------------------------------------------------
 // Status tone system
 // ---------------------------------------------------------------------------
 
 const TONES = {
-  on:      { color: "#067647", bg: "#f0fdf6", border: "#bbf0d2", fill: "rgba(6,118,71,.07)",   icon: "↑", label: "Up"       },
-  risk:    { color: "#b45309", bg: "#fffaeb", border: "#f0d58a", fill: "rgba(180,83,9,.07)",   icon: "!", label: "Declining" },
-  off:     { color: "#d92d20", bg: "#fef4f3", border: "#fbd5d1", fill: "rgba(217,45,32,.07)",  icon: "↓", label: "Down"     },
-  neutral: { color: "#667085", bg: "#f8f9fb", border: "#e4e7ec", fill: "rgba(102,112,133,.05)", icon: "—", label: "No Data"  },
+  on:      { color: "#067647", bg: "#f0fdf6", border: "#bbf0d2", label: "On Track"  },
+  risk:    { color: "#b45309", bg: "#fffaeb", border: "#f0d58a", label: "At Risk"   },
+  off:     { color: "#d92d20", bg: "#fef4f3", border: "#fbd5d1", label: "Off Track" },
+  neutral: { color: "#667085", bg: "#f8f9fb", border: "#e4e7ec", label: "No Data"   },
 };
 
 type ToneKey = "on" | "risk" | "off" | "neutral";
@@ -26,24 +26,10 @@ function toneFromTrend(trend: number | null): ToneKey {
   return "off";
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function fmt(n: number): string {
-  return n.toLocaleString("en-US");
-}
-
-function fmtTrend(n: number | null): string {
-  if (n === null) return "—";
-  return (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
-}
-
-function trendArrow(n: number | null): string {
-  if (n === null) return "→";
-  if (n > 0) return "↗";
-  if (n < 0) return "↘";
-  return "→";
+/** Output value in millions, 2 decimals (284,801,234 → "284.80"); the unit reads "million pcs" / "million kg"
+ *  (word from i18n `unit_million` — "juta" in Indonesian; never abbreviated). */
+function fmtMillions(n: number): string {
+  return (n / 1e6).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // ---------------------------------------------------------------------------
@@ -59,14 +45,14 @@ export interface OutputKPICardProps {
   bulkTrend:    number | null;
   sparkline:    number[];
   bulkSparkline: number[];
-  /** KPI id whose AI one-liner (KpiOneLiner) shows as a bar below the status row */
+  /** KPI id whose AI one-liner (KpiOneLiner) shows as a bar below the status rows */
   insightId?:   string;
-  /** KPI card standard: off — a card shows only its toggled value; true only for a documented exception */
-  showSecondary?: boolean;
+  /** Click on the sparkline → switch the trend chart to Output */
+  onSparkClick?: () => void;
 }
 
 // ---------------------------------------------------------------------------
-// Component
+// Component — KPI Card standard (docs/UI_UX.md), blocks from KpiCardParts
 // ---------------------------------------------------------------------------
 
 export function OutputKPICard({
@@ -78,319 +64,84 @@ export function OutputKPICard({
   bulkSparkline,
   compact = false,
   insightId,
-  showSecondary = false,
+  onSparkClick,
 }: OutputKPICardProps) {
   // Size scale for spacing/sparkline: 1 = regular, 0.8 = compact. Font sizes are always regular.
   const z = (n: number) => (compact ? Math.round(n * 0.8 * 2) / 2 : n);
   const [mode, setMode] = useState<"fg" | "bulk">("fg");
+  const { t } = useI18n();
 
   const primaryValue = mode === "fg" ? fgQty     : bulkQty;
   const primaryUnit  = mode === "fg" ? "pcs"     : "kg";
   const primaryTrend = mode === "fg" ? fgTrend   : bulkTrend;
-  const secondaryValue = mode === "fg" ? bulkQty  : fgQty;
-  const secondaryUnit  = mode === "fg" ? "kg"     : "pcs";
-  const secondaryTrend = mode === "fg" ? bulkTrend : fgTrend;
-  const secondaryLabel = mode === "fg"
-    ? "Bulk output accepted this period"
-    : "Finished goods released this period";
-
-  const tone = TONES[toneFromTrend(primaryTrend)];
-
   const activeSparkline = mode === "fg" ? sparkline : bulkSparkline;
-  const hasSparkline = activeSparkline.length >= 2;
-  const nivoData = hasSparkline
-    ? [{ id: "output", data: activeSparkline.map((y, i) => ({ x: i, y })) }]
-    : [];
+
+  const toneKey = toneFromTrend(primaryTrend);
+  const tone = TONES[toneKey];
+  const statusLabel = primaryTrend === null ? "No Prior Data" : tone.label;
 
   return (
-    <div
-      style={{
-        background: "white",
-        border: "1px solid #EBEBEB",
-        borderRadius: 8,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        width: "100%",
-        fontFamily: "Lato, sans-serif",
-        height: "100%",
-      }}
-    >
-      {/* Inner layout: accent bar + main content */}
-      <div style={{ display: "flex", flex: 1 }}>
-
-        {/* Main content */}
-        <div
-          style={{
-            flex: 1,
-            padding: `${z(14)}px ${z(16)}px 0`,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {/* ── Header row ── */}
-          <div style={{ display: "flex", gap: z(16), alignItems: "flex-start" }}>
-
-            {/* LEFT column */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: z(8) }}>
-
-              {/* Eyebrow */}
-              <div style={{ display: "flex", alignItems: "center", gap: z(6) }}>
-                <span
-                  style={{
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    letterSpacing: "0.06em",
-                    color: "#64748b",
-                    fontFamily: "Lato, sans-serif",
-                  }}
-                >
-                  OUTPUT
-                </span>
-              </div>
-
-              {/* Primary value + trend */}
-              <div style={{ display: "flex", alignItems: "baseline", gap: z(6), flexWrap: "wrap" }}>
-                <span
-                  style={{
-                    fontSize: 30,
-                    fontWeight: 700,
-                    letterSpacing: "-0.015em",
-                    color: "#101828",
-                    fontFamily: "Lato, sans-serif",
-                    fontVariantNumeric: "tabular-nums",
-                    lineHeight: 1,
-                  }}
-                >
-                  {mode === "bulk" ? primaryValue.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : fmt(primaryValue)}
-                </span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    color: "#98a2b3",
-                    fontFamily: "Lato, sans-serif",
-                  }}
-                >
-                  {primaryUnit}
-                </span>
-                <span
-                  style={{
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    color: tone.color,
-                    fontFamily: "Lato, sans-serif",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {trendArrow(primaryTrend)} {fmtTrend(primaryTrend)}
-                </span>
-              </div>
-
-              {/* vs prior period label */}
-              <div
-                style={{
-                  fontSize: 11,
-                  color: "#98a2b3",
-                  fontFamily: "Lato, sans-serif",
-                }}
-              >
-                vs prior period
-              </div>
-
-              {/* Status pill */}
-              <div style={{ display: "flex", alignItems: "center", gap: z(8) }}>
-                <StatusDot color={tone.color} label={tone.label} />
-              </div>
-            </div>
-
-            {/* RIGHT column */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: z(8) }}>
-
-              {/* Segmented toggle */}
-              <div
-                style={{
-                  background: "#f2f3f6",
-                  borderRadius: 7,
-                  padding: z(3),
-                  display: "flex",
-                  gap: z(2),
-                }}
-              >
-                {(["fg", "bulk"] as const).map((m) => {
-                  const active = mode === m;
-                  return (
-                    <button
-                      key={m}
-                      onClick={() => setMode(m)}
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        padding: `${z(4)}px ${z(12)}px`,
-                        borderRadius: 5,
-                        border: "none",
-                        cursor: "pointer",
-                        background: active ? "white" : "transparent",
-                        color: active ? "#101828" : "#667085",
-                        boxShadow: active ? "0 1px 2px rgba(16,24,40,.08)" : "none",
-                        fontFamily: "Lato, sans-serif",
-                        transition: "background 0.15s, color 0.15s",
-                      }}
-                    >
-                      {m === "fg" ? "Finished Goods" : "Bulk"}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Sparkline (FG only) */}
-              {hasSparkline ? (
-                <div style={{ width: z(150), height: z(42) }}>
-                  <LineDraw drawKey={JSON.stringify(nivoData)} duration={600}>
-                    <ResponsiveLine
-                      data={nivoData}
-                      margin={{ top: 2, right: 2, bottom: 2, left: 2 }}
-                      xScale={{ type: "point" }}
-                      yScale={{ type: "linear", min: "auto", max: "auto" }}
-                      enableArea={false}
-                      colors={["#1E4076"]}
-                      lineWidth={1.6}
-                      enablePoints={false}
-                      enableGridX={false}
-                      enableGridY={false}
-                      axisLeft={null}
-                      axisBottom={null}
-                      isInteractive={false}
-                      animate={false}
-                    />
-                  </LineDraw>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    width: 150,
-                    height: 42,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <span style={{ fontSize: 10, color: "#c5cad8", fontFamily: "Lato, sans-serif" }}>
-                    no sparkline data
-                  </span>
-                </div>
-              )}
-
-              {/* Sparkline caption */}
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "#a3a8b5",
-                  fontFamily: "Lato, sans-serif",
-                  marginTop: z(-4),
-                  textAlign: "right",
-                }}
-              >
-                {hasSparkline ? `${activeSparkline.length} weeks · ${primaryUnit}` : ""}
-              </div>
-            </div>
-          </div>
-
-          <KpiOneLiner id={insightId} z={z} />
-
-          {/* ── Secondary metric row (the other toggle value — off by default, KPI card standard) ── */}
-          {showSecondary ? (
-            <div
-              style={{
-                marginTop: z(10),
-                paddingTop: z(10),
-                borderTop: "1px solid #eceef2",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingBottom: z(12),
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: z(2) }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: z(4) }}>
-                  <span
-                    style={{
-                      fontSize: 20,
-                      fontWeight: 700,
-                      color: "#101828",
-                      fontFamily: "Lato, sans-serif",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {fmt(secondaryValue)}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "#98a2b3",
-                      fontFamily: "Lato, sans-serif",
-                    }}
-                  >
-                    {secondaryUnit}
-                  </span>
-                </div>
-                <div style={{ fontSize: 10.5, color: "#a3a8b5", fontFamily: "Lato, sans-serif" }}>
-                  {secondaryLabel}
-                </div>
-              </div>
-
-              {/* Secondary trend chip */}
-              {secondaryTrend !== null && (
-                <div
+    <div style={{ background: "white", border: "1px solid #EBEBEB", borderRadius: 8, display: "flex", flexDirection: "column", overflow: "hidden", width: "100%", fontFamily: "Lato, sans-serif", height: "100%" }}>
+      <div style={{ flex: 1, padding: `${z(14)}px ${z(16)}px 0`, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {/* ── Label ⓘ · toggle ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: z(12), minHeight: 24 }}>
+          <KpiLabel
+            label="Output"
+            info={mode === "fg" ? "Finished goods released to warehouse, in pcs." : "Bulk output accepted this period, in kg. Plant filter does not apply (source has no plant column)."}
+          />
+          <div style={{ background: "#f2f3f6", borderRadius: 7, padding: z(3), display: "flex", gap: z(2) }}>
+            {(["fg", "bulk"] as const).map((m) => {
+              const active = mode === m;
+              return (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  aria-pressed={active}
                   style={{
                     fontSize: 11,
-                    fontWeight: 700,
-                    color: TONES[toneFromTrend(secondaryTrend)].color,
+                    fontWeight: 600,
+                    padding: `${z(4)}px ${z(12)}px`,
                     borderRadius: 5,
-                    padding: `${z(3)}px ${z(9)}px`,
+                    border: "none",
+                    cursor: "pointer",
+                    background: active ? "white" : "transparent",
+                    color: active ? "#101828" : "#667085",
+                    boxShadow: active ? "0 1px 2px rgba(16,24,40,.08)" : "none",
                     fontFamily: "Lato, sans-serif",
-                    fontVariantNumeric: "tabular-nums",
+                    transition: "background 0.15s, color 0.15s",
                   }}
                 >
-                  {trendArrow(secondaryTrend)} {fmtTrend(secondaryTrend)}
-                </div>
-              )}
-            </div>
-          ) : <div style={{ height: z(12) }} />}
+                  {m === "fg" ? "Finished Goods" : "Bulk"}
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        {/* ── Value · target · status · prior period | sparkline ── */}
+        <div style={{ display: "flex", gap: z(16), alignItems: "flex-end", marginTop: z(8) }}>
+          <Fade depKey={mode} className="flex-1 min-w-0">
+            <div style={{ display: "flex", flexDirection: "column", gap: z(7), minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: z(6) }}>
+                <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.015em", color: "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                  {fmtMillions(primaryValue)}
+                </span>
+                <span style={{ fontSize: 12, color: "#98a2b3" }} title={`${primaryValue.toLocaleString("en-US")} ${primaryUnit}`}>{t("unit_million")} {primaryUnit}</span>
+              </div>
+              {/* No output target in the data yet (theoretical output) — the line stays so the anatomy matches */}
+              <KpiTargetLine text="Target not defined" />
+              <StatusPill color={tone.color} bg={tone.bg} border={tone.border} label={statusLabel} />
+              <KpiPriorLine pct={primaryTrend} color={tone.color} />
+            </div>
+          </Fade>
+          <KpiSparkline data={activeSparkline} caption={`${activeSparkline.length} weeks · ${primaryUnit}`} z={z} onClick={onSparkClick} label="Output" />
+        </div>
+
+        <KpiOneLiner id={insightId} z={z} />
+        <div style={{ height: z(12) }} />
       </div>
 
-      {/* Footer bar */}
-      <div
-        style={{
-          background: "white",
-          borderTop: "1px solid #eceef2",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: `${z(7)}px ${z(16)}px ${z(7)}px ${z(16)}px`,
-          borderRadius: "0 0 7px 7px",
-        }}
-      >
-        <span style={{ fontSize: 11, color: "#667085", fontFamily: "Lato, sans-serif" }}>
-          {mode === "fg"
-            ? "Finished goods released to warehouse · pcs"
-            : "Bulk output accepted this period · kg"}
-        </span>
-        {showSecondary && (
-          <span
-            style={{
-              fontSize: 10,
-              color: "#a3a8b5",
-              fontFamily: "Lato, sans-serif",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
-            {mode === "fg"
-              ? `Bulk: ${fmt(bulkQty)} kg`
-              : `FG: ${fmt(fgQty)} pcs`}
-          </span>
-        )}
-      </div>
+      <KpiFooter z={z} />
     </div>
   );
 }
