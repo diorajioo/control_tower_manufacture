@@ -16,12 +16,12 @@ import { Header } from "@/components/dashboard/Header";
 import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
 import { LeadTimeSkuScatter, type LeadTimeChartData } from "@/components/dashboard/LeadTimeCharts";
-import { LeadTimeTrendChart } from "@/components/dashboard/LeadTimeTrendChart";
 import { LeadTimeTopSkuChart } from "@/components/dashboard/LeadTimeTopSkuChart";
 import { LeadTimePlantTable, type PlantBreakdown, type PlantActivity } from "@/components/dashboard/LeadTimePlantTable";
 import type { StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
 import { TacticalParetoChart } from "@/components/dashboard/TacticalView";
 import { LeadTimeFilterCard, type LtBasis, type LtScope, type LtUnit } from "@/components/leadtime/LeadTimeFilterCard";
+import { LeadTimeBoxPlot } from "@/components/leadtime/LeadTimeBoxPlot";
 import { LeadTimeSummaryCard, LeadTimeCompositionCard, type LtStats } from "@/components/leadtime/LeadTimeSummaryCards";
 import { ProcessSunburst, type ActivityTime } from "@/components/leadtime/ProcessSunburst";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
@@ -53,6 +53,7 @@ interface Analysis {
   weekly: { week: string; gross: number | null; nett: number | null }[];
   composition: { va: number; nnva: number; unva: number; wip: number };
   activities: ActivityTime[];
+  boxPlot?: { stage: string; poCount: number; min: number; p25: number; median: number; mean: number; p75: number; p90: number; max: number }[];
 }
 
 /** GET helper: base filters + dims (+ extra), cancelled when inputs change. */
@@ -102,7 +103,7 @@ export default function LeadTimePage() {
   const handleRefresh = useCallback(() => { setRefreshKey((n) => n + 1); setLastUpdated(new Date()); }, []);
 
   const analysis = useFetch<Analysis>(tab === "analysis" ? "/api/lead-time/analysis" : null, filters, dims, { scope }, refreshKey);
-  const charts   = useFetch<LeadTimeChartData>(tab !== "pareto" ? "/api/lead-time/charts" : null, filters, dims, {}, refreshKey);
+  const charts   = useFetch<LeadTimeChartData>(tab === "ranking" ? "/api/lead-time/charts" : null, filters, dims, {}, refreshKey);
   const stages   = useFetch<{ plants: PlantBreakdown[]; targetDays: number; activities: PlantActivity[]; stages: StageStdPoint[] }>(
     tab === "pareto" ? "/api/lead-time/stages" : null, filters, dims, { basis: scope }, refreshKey);
 
@@ -203,7 +204,16 @@ export default function LeadTimePage() {
                     onlyActivity={dims.activity} loading={analysis.loading} />
                 </div>
               </div>
-              <LeadTimeTrendChart data={charts.data} loading={charts.loading} filters={flatRecord} />
+              <TacticalParetoChart
+                showExtendedFilters
+                filters={tacticalFilters}
+                stageStd={[]}
+                stageLoading={false}
+                unit={unit}
+                onlyActivity={dims.activity}
+                detailHref={null}
+              />
+              <LeadTimeBoxPlot data={a?.boxPlot ?? null} loading={analysis.loading} unit={unit} />
             </>
           )}
 

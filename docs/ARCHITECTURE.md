@@ -347,5 +347,13 @@ backend; table names are the same on both. Status (2026-10-04): framework ready,
   `/api/debug/*` routes stay on Snowflake (`INFORMATION_SCHEMA`).
 - **ClickHouse table requirements:** timestamps as `DateTime64`, columns that can be empty as `Nullable(...)` (queries rely
   on `IS NOT NULL`), keep `LOAD_TIMESTAMP` / `ETL_BATCH_TIMESTAMP` filled ("Last sync").
+- **ClickHouse naming — all lowercase (2026-10-14).** This instance stores database names, table names, and column names
+  in lowercase (`migration__control_tower`, `ct_manuf_leadtime`, `po_fg_done_date`). The translator handles this
+  automatically: database/table names are lowercased during the `MIGRATION.CONTROL_TOWER.TABLE` → `db.table` replacement;
+  column identifiers are lowercased by `lowercaseOutsideStrings()` at the end of `snowflakeToClickHouse()` (function names
+  are preserved — ClickHouse functions ARE case-sensitive, e.g. `toDate` ≠ `todate`); result keys are uppercased back in
+  `executeClickHouse()` so TypeScript typings continue to use uppercase field names.
+  **Env vars must use lowercase DB names:** `CLICKHOUSE_DB_CONTROL_TOWER=migration__control_tower`,
+  `CLICKHOUSE_DB_DATAMART=datamart__manufacture`. Uppercase values → "Database does not exist" errors at runtime.
 - **Switch:** fill the `CLICKHOUSE_*` env (Vercel + `.env.local`), run the compare script until it reports no differences,
   then set `DATA_SOURCE=clickhouse` in Vercel.

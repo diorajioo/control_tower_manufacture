@@ -43,6 +43,9 @@ export async function executeClickHouse<T = Record<string, unknown>>(sql: string
     const detail = (await res.text()).slice(0, 500);
     throw new Error(`ClickHouse query failed (${res.status}): ${detail}`);
   }
-  const json = (await res.json()) as { data?: T[] };
-  return json.data ?? [];
+  const json = (await res.json()) as { data?: Record<string, unknown>[] };
+  // ClickHouse column names are lowercase; uppercase them to match Snowflake-style TypeScript typings.
+  return (json.data ?? []).map((row) =>
+    Object.fromEntries(Object.entries(row).map(([k, v]) => [k.toUpperCase(), v]))
+  ) as T[];
 }

@@ -306,6 +306,52 @@ export async function getLeadTimeByStageCategory(filters: QueryFilters) {
   `, [...dateBinds, ...ltBinds(filters)]);
 }
 
+// Box-plot percentiles per group process — min, p25, median, mean, p75, p90, max, count.
+// Groups POSITION codes into the 6 PROCESS_GROUPS; sums net lead time per PO per group first,
+// then computes percentiles across POs so they reflect per-PO-per-group experience.
+export async function getLeadTimeBoxPlot(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  return executeQuery<{
+    STAGE: string; PO_COUNT: number;
+    MIN_DAYS: number; P25_DAYS: number; MEDIAN_DAYS: number; MEAN_DAYS: number;
+    P75_DAYS: number; P90_DAYS: number; MAX_DAYS: number;
+  }>(`
+    WITH base AS (
+      SELECT
+        PROCESS_ORDER_FG,
+        CASE
+          WHEN POSITION = 'PO'                                   THEN 'po'
+          WHEN POSITION = 'TIMBANG'                              THEN 'weighing'
+          WHEN POSITION IN ('OLAH', 'CUCI OLAH')                 THEN 'mixing'
+          WHEN POSITION IN ('KEMAS 1', 'KEMAS 2', 'CUCI KEMAS') THEN 'filpac'
+          WHEN POSITION = 'RECEIVE NDC'                          THEN 'ndc'
+          WHEN POSITION = 'WIP'                                  THEN 'wip'
+        END AS STAGE,
+        SUM(NET_LEADTIME) / 1440.0 AS days
+      FROM ${LT_TABLE}
+      WHERE ${datePred}
+        AND POSITION IS NOT NULL
+        AND POSITION IN ('PO','TIMBANG','OLAH','CUCI OLAH','KEMAS 1','KEMAS 2','CUCI KEMAS','RECEIVE NDC','WIP')
+        ${ltWhere(filters)}
+      GROUP BY PROCESS_ORDER_FG, STAGE
+    )
+    SELECT
+      STAGE,
+      COUNT(*)                                                    AS PO_COUNT,
+      MIN(days)                                                   AS MIN_DAYS,
+      PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY days)         AS P25_DAYS,
+      MEDIAN(days)                                                AS MEDIAN_DAYS,
+      AVG(days)                                                   AS MEAN_DAYS,
+      PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY days)         AS P75_DAYS,
+      PERCENTILE_CONT(0.9)  WITHIN GROUP (ORDER BY days)         AS P90_DAYS,
+      MAX(days)                                                   AS MAX_DAYS
+    FROM base
+    WHERE STAGE IS NOT NULL
+    GROUP BY STAGE
+    ORDER BY STAGE
+  `, [...dateBinds, ...ltBinds(filters)]);
+}
+
 // Lead time per stage (POSITION): actual vs standard → Overview Tactical view
 // ACTUAL_DAYS = SUM(NET_LEADTIME) / COUNT(DISTINCT PO in period) / 1440 (same basis as the Pareto above).
 // STD_DAYS    = SUM(ACTIVITY_LEADTIME_STD) on the same basis — the column is minutes per activity row.

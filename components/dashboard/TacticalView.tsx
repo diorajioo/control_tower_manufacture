@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { ChevronDown, Check } from "lucide-react";
 import { Fade } from "@/components/ui/Fade";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ import { LeadTimeGaugeBar } from "@/components/ui/LeadTimeGaugeBar";
 import { ResponsiveBar, type BarCustomLayerProps, type BarDatum } from "@nivo/bar";
 import { STAGE_ORDER, stageLabel } from "@/lib/leadTimeStages";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
+import { FIELD, FIELD_ON, MENU, MENU_ITEM, MENU_ITEM_ON, MENU_ITEM_OFF } from "@/components/ui/FilterField";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -731,18 +733,32 @@ const paretoSeq = (stage: string) => {
 
 export function TacticalParetoChart({
   filters, stageStd, stageLoading, unit = "days", onlyActivity, detailHref = "/lead-time",
+  showExtendedFilters = false,
 }: {
   filters: TacticalFilters; stageStd: StageStdPoint[]; stageLoading: boolean; unit?: LtUnit;
   /** Show only this ACTIVITY (Lead Time page Activity filter) */
   onlyActivity?: string;
   /** "Open detail →" link; null hides it (already on the detail page) */
   detailHref?: string | null;
+  /** Show extra category + WIP toggles (Lead Time Analysis tab) */
+  showExtendedFilters?: boolean;
 }) {
   const [rawStages, setRawStages] = useState<ParetoStageData[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<"pareto" | "sequence">("pareto");
   const [group, setGroup] = useState<"group" | "process">("group");
-  const [cumHover, setCumHover] = useState<{ row: ParetoRow; x: number; y: number } | null>(null);
+  const [wip, setWip] = useState<"tahap" | "with-wip">("with-wip");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | "VA" | "NNVA" | "UNVA">("all");
+  const [catOpen, setCatOpen] = useState(false);
+  const catRef = useRef<HTMLDivElement>(null);
+  const [cumHover, setCumHover] = useState<{ row: ParetoRow; clientX: number; clientY: number } | null>(null);
+
+  useEffect(() => {
+    if (!catOpen) return;
+    const h = (e: MouseEvent) => { if (catRef.current && !catRef.current.contains(e.target as Node)) setCatOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [catOpen]);
 
   useEffect(() => {
     const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate });
@@ -761,20 +777,35 @@ export function TacticalParetoChart({
   const stdMap = useMemo(() => new Map(stageStd.map(s => [s.stage, s.std * f])), [stageStd, f]);
 
   const rows = useMemo((): ParetoRow[] => {
-    const src = (rawStages ?? []).filter((r) => !onlyActivity || r.activity === onlyActivity);
+    const src = (rawStages ?? []).filter((r) => {
+      if (onlyActivity && r.activity !== onlyActivity) return false;
+      // "Tahap" = exclude WIP rows; "Tahap dan WIP" = include (default)
+      if (showExtendedFilters && wip === "tahap" && r.stage === "WIP") return false;
+      // Category filter: only rows of the selected category
+      if (showExtendedFilters && categoryFilter !== "all" && r.category !== categoryFilter) return false;
+      return true;
+    });
 
-    // Seq = process flow: lowest ACTIVITY_SEQUENCE per bar (activity in Process mode, attached stage in Group mode).
-    // Each WIP activity sits right after the activity it follows.
+    // In group mode with "with-wip": WIP rows use their own stage key so WIP appears as a separate bar.
+    // In group mode with "stages": WIP rows were already filtered out above.
+    // In process mode: always key by activity.
+    const groupKey = (r: ParetoStageData) => {
+      if (group !== "group") return r.activity;
+      if (showExtendedFilters && wip === "with-wip" && r.stage === "WIP") return r.stage;
+      return r.attached;
+    };
+
+    // Seq = process flow: lowest ACTIVITY_SEQUENCE per bar.
     const seqOf = new Map<string, number>();
     for (const r of src) {
-      const key = group === "group" ? r.attached : r.activity;
+      const key = groupKey(r);
       const seq = r.sequence ?? Infinity;
       if (seq < (seqOf.get(key) ?? Infinity)) seqOf.set(key, seq);
     }
 
     const byKey = new Map<string, Record<"VA" | "NNVA" | "UNVA", number>>();
     for (const r of src) {
-      const key = group === "group" ? r.attached : r.activity;
+      const key = groupKey(r);
       if (!byKey.has(key)) byKey.set(key, { VA: 0, NNVA: 0, UNVA: 0 });
       byKey.get(key)![r.category] += r.days;
     }
@@ -796,7 +827,8 @@ export function TacticalParetoChart({
     let run = 0;
     for (const r of list) { run += r.total; r.cumPct = grand > 0 ? (run / grand) * 100 : 0; }
     return list;
-  }, [rawStages, group, sort, f, onlyActivity]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawStages, group, sort, f, onlyActivity, wip, categoryFilter, showExtendedFilters]);
 
   const CumulativeLayer = useCallback(({ bars, innerWidth, innerHeight }: BarCustomLayerProps<ParetoRow>) => {
     const centers = new Map<string, number>();
@@ -822,7 +854,7 @@ export function TacticalParetoChart({
         {pts.map((p, i) => (
           <circle key={`h${i}`} cx={p.x} cy={p.y} r={9} fill="transparent"
             style={{ pointerEvents: "all", cursor: "default" }}
-            onMouseEnter={() => setCumHover(p)}
+            onMouseEnter={(e: React.MouseEvent<SVGCircleElement>) => setCumHover({ row: p.row, clientX: e.clientX, clientY: e.clientY })}
             onMouseLeave={() => setCumHover(null)} />
         ))}
       </g>
@@ -860,13 +892,45 @@ export function TacticalParetoChart({
         <div className="flex items-center gap-3">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Pareto Lead Time</p>
           {detailHref && <a href={detailHref} className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">Open detail →</a>}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
           <SegmentedToggle<"group" | "process">
             options={[{ key: "group", label: "Group Process" }, { key: "process", label: "Process" }]}
             value={group}
             onChange={setGroup}
           />
+        </div>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {showExtendedFilters && (
+            <div className="relative" ref={catRef}>
+              <button
+                onClick={() => setCatOpen((o) => !o)}
+                aria-haspopup="listbox"
+                aria-expanded={catOpen}
+                className={cn(FIELD, FIELD_ON, "justify-between gap-2 min-w-[80px]")}
+              >
+                <span>{categoryFilter === "all" ? "Semua" : categoryFilter}</span>
+                <ChevronDown size={11} className={cn("text-slate-400 shrink-0 transition-transform duration-150", catOpen && "rotate-180")} />
+              </button>
+              {catOpen && (
+                <div className={cn(MENU, "w-[max(100%,100px)]")} role="listbox">
+                  {(["all", "VA", "NNVA", "UNVA"] as const).map((v) => (
+                    <button key={v} role="option" aria-selected={categoryFilter === v}
+                      onClick={() => { setCategoryFilter(v); setCatOpen(false); }}
+                      className={cn(MENU_ITEM, categoryFilter === v ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
+                      <span>{v === "all" ? "Semua" : v}</span>
+                      {categoryFilter === v && <Check size={10} className="text-[#1E4076] shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {showExtendedFilters && (
+            <SegmentedToggle<"tahap" | "with-wip">
+              options={[{ key: "tahap", label: "Stages" }, { key: "with-wip", label: "Stages + WIP" }]}
+              value={wip}
+              onChange={setWip}
+            />
+          )}
           <SegmentedToggle<"pareto" | "sequence">
             options={[{ key: "pareto", label: "Par" }, { key: "sequence", label: "Seq" }]}
             value={sort}
@@ -880,9 +944,9 @@ export function TacticalParetoChart({
       ) : rows.length === 0 ? (
         <div className="h-[280px] flex items-center justify-center text-[11px] text-gray-400">No data for selected period</div>
       ) : (
-        <Fade depKey={`${group}|${sort}|${unit}|${rows.length}|${rows[0]?.stage}`}>
-        {/* Fades on Group Process / Process, Par / Seq, unit and new data */}
-        <div style={{ height: group === "process" ? 336 : 280, position: "relative" }}>
+        <Fade depKey={`${group}|${sort}|${unit}|${wip}|${categoryFilter}|${rows.length}|${rows[0]?.stage}`}>
+        {/* Fades on Group Process / Process, Par / Seq, WIP, category, unit and new data */}
+        <div style={{ height: group === "process" ? 336 : 280, position: "relative" }} onMouseLeave={() => setCumHover(null)}>
           <ResponsiveBar<ParetoRow>
             data={rows}
             keys={["VA", "NNVA", "UNVA"]}
@@ -919,14 +983,17 @@ export function TacticalParetoChart({
             layers={["grid", "axes", "bars", StdLayer, CumulativeLayer]}
             tooltip={({ id, data: d }) => {
               const std = stdMap.get(d.stage) ?? 0;
+              const catRows = ([
+                { label: "VA",   color: PARETO_CAT_COLORS.VA,   value: Number(d.VA).toFixed(2),   unit, strong: id === "VA"   },
+                { label: "NNVA", color: PARETO_CAT_COLORS.NNVA, value: Number(d.NNVA).toFixed(2), unit, strong: id === "NNVA" },
+                { label: "UNVA", color: PARETO_CAT_COLORS.UNVA, value: Number(d.UNVA).toFixed(2), unit, strong: id === "UNVA" },
+              ] as const).filter(r => categoryFilter === "all" || r.label === categoryFilter);
               return (
                 <LineTooltip
                   title={d.label}
                   subtitle={d.stage}
                   rows={[
-                    { label: "VA",   color: PARETO_CAT_COLORS.VA,   value: Number(d.VA).toFixed(2),   unit, strong: id === "VA"   },
-                    { label: "NNVA", color: PARETO_CAT_COLORS.NNVA, value: Number(d.NNVA).toFixed(2), unit, strong: id === "NNVA" },
-                    { label: "UNVA", color: PARETO_CAT_COLORS.UNVA, value: Number(d.UNVA).toFixed(2), unit, strong: id === "UNVA" },
+                    ...catRows,
                     ...(std > 0 ? [{ label: "Standard", color: PARETO_STD_COLOR, value: std.toFixed(2), unit }] : []),
                   ]}
                   footer={{ label: "Total · cumulative", value: `${d.total.toFixed(2)} ${unit} · ${Math.round(d.cumPct)}%` }}
@@ -937,24 +1004,24 @@ export function TacticalParetoChart({
             role="img"
             ariaLabel="Pareto lead time per stage, stacked by VA, NNVA and UNVA"
           />
-          {cumHover && (
-            <div style={{
-              position: "absolute", pointerEvents: "none", zIndex: 10,
-              left: margin.left + cumHover.x,
-              top: margin.top + cumHover.y,
-              transform: "translate(-50%, calc(-100% - 12px))",
-            }}>
-              <LineTooltip
-                title={stageLabel(cumHover.row.stage)}
-                subtitle={cumHover.row.stage}
-                rows={[
-                  { label: "Cumulative", color: PARETO_CUMUL_COLOR, value: `${Math.round(cumHover.row.cumPct)}%` },
-                  { label: "Total", value: cumHover.row.total.toFixed(2), unit },
-                ]}
-              />
-            </div>
-          )}
         </div>
+        {cumHover && (
+          <div style={{
+            position: "fixed", pointerEvents: "none", zIndex: 9999,
+            left: cumHover.clientX,
+            top: cumHover.clientY,
+            transform: "translate(-50%, calc(-100% - 12px))",
+          }}>
+            <LineTooltip
+              title={stageLabel(cumHover.row.stage)}
+              subtitle={cumHover.row.stage}
+              rows={[
+                { label: "Cumulative", color: PARETO_CUMUL_COLOR, value: `${Math.round(cumHover.row.cumPct)}%` },
+                { label: "Total", value: cumHover.row.total.toFixed(2), unit },
+              ]}
+            />
+          </div>
+        )}
         </Fade>
       )}
 

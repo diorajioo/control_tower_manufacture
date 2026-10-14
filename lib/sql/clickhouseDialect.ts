@@ -92,9 +92,12 @@ const unit = (s: string) => s.replace(/'/g, "").toLowerCase();
 export function snowflakeToClickHouse(sql: string): string {
   let out = sql;
 
-  // Fully-qualified table names → ClickHouse database.table
+  // Fully-qualified table names → ClickHouse database.table (both database and table names are lowercase in CH)
   for (const [from, db] of Object.entries(clickhouseDatabaseMap())) {
-    out = out.replace(new RegExp(`\\b${from.replace(".", "\\.")}\\.`, "gi"), `${db}.`);
+    out = out.replace(
+      new RegExp(`\\b${from.replace(".", "\\.")}\\.(\\w+)`, "gi"),
+      (_, table: string) => `${db}.${table.toLowerCase()}`
+    );
   }
 
   out = out.replace(/\bCURRENT_DATE\s*\(\s*\)/gi, "today()").replace(/\bCURRENT_TIMESTAMP\s*\(\s*\)/gi, "now()");
@@ -102,6 +105,9 @@ export function snowflakeToClickHouse(sql: string): string {
 
   out = rewriteCalls(out, "PERCENTILE_CONT", (a) => `__QUANTILE__(${a[0]})`);
   out = out.replace(/__QUANTILE__\(([^)]*)\)\s*WITHIN\s+GROUP\s*\(\s*ORDER\s+BY\s+([^)]+)\)/gi, "quantileExactInclusive($1)($2)");
+  // MEDIAN(col) → median(col); use a sentinel to avoid re-matching the lowercase output.
+  out = rewriteCalls(out, "MEDIAN", (a) => `__MEDIAN__(${a[0]})`);
+  out = out.replace(/__MEDIAN__\(/g, "median(");
 
   out = rewriteCalls(out, "DATE_TRUNC", ([u, x]) => {
     const f = { week: "toMonday", month: "toStartOfMonth", year: "toStartOfYear", day: "toDate" }[unit(u)];
@@ -121,6 +127,44 @@ export function snowflakeToClickHouse(sql: string): string {
   // SELECT t.* EXCLUDE (col) → SELECT t.* EXCEPT (col)   (lead time owner-plant source, lib/queries.ts LT_TABLE)
   out = out.replace(/\*\s+EXCLUDE\s*\(/gi, "* EXCEPT (");
 
+  // Lowercase everything outside single-quoted string literals.
+  // ClickHouse column/table identifiers are case-sensitive and this instance uses all-lowercase naming.
+  // SQL keywords and function names are case-insensitive in ClickHouse, so lowercasing them is safe.
+  out = lowercaseOutsideStrings(out);
+
+  return out;
+}
+
+/**
+ * Lowercase SQL identifiers (column/table names, keywords) outside single-quoted string literals,
+ * but preserve the casing of function names — ClickHouse function names are case-sensitive while
+ * SQL keywords and column identifiers in this instance are all lowercase.
+ * A word is treated as a function name when it is immediately followed (after optional whitespace) by '('.
+ */
+function lowercaseOutsideStrings(sql: string): string {
+  let out = "", inStr = false, i = 0;
+  while (i < sql.length) {
+    const ch = sql[i];
+    if (inStr) {
+      out += ch;
+      if (ch === "'" && sql[i + 1] === "'") { out += sql[i + 1]; i += 2; } // escaped ''
+      else { if (ch === "'") inStr = false; i++; }
+    } else if (ch === "'") {
+      inStr = true; out += ch; i++;
+    } else if (/[A-Za-z_]/.test(ch)) {
+      // Accumulate a full identifier (letters, digits, underscores)
+      let j = i;
+      while (j < sql.length && /\w/.test(sql[j])) j++;
+      const word = sql.slice(i, j);
+      // Look past whitespace to see if a '(' follows — if so it's a function call, preserve case
+      let k = j;
+      while (k < sql.length && (sql[k] === " " || sql[k] === "\t" || sql[k] === "\n")) k++;
+      out += sql[k] === "(" ? word : word.toLowerCase();
+      i = j;
+    } else {
+      out += ch; i++;
+    }
+  }
   return out;
 }
 

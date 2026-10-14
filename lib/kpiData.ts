@@ -344,7 +344,7 @@ const fetchByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runKPIQueries(plant, startDate, endDate, period);
   },
-  ["kpi-by-period-v13"],
+  ["kpi-by-period-v14"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 
@@ -352,7 +352,7 @@ const fetchByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string) => {
     return runKPIQueries(plant, startDate, endDate, undefined);
   },
-  ["kpi-by-dates-v13"],
+  ["kpi-by-dates-v14"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 
@@ -361,9 +361,11 @@ const KNOWN_PERIODS = new Set(["Today", "YTD", "30D", "90D", "6M"]);
 /** Cached KPI snapshot: preset periods share one entry per plant; anything else is cached per date range. */
 export async function getKpiSnapshot(plant: string, period: string, startDate: string, endDate: string) {
   if (!KNOWN_PERIODS.has(period) && !(startDate && endDate)) throw new Error("getKpiSnapshot: custom period needs startDate and endDate");
-  return KNOWN_PERIODS.has(period)
-    ? fetchByPeriod(plant, period)
-    : fetchByDates(plant, startDate, endDate);
+  if (KNOWN_PERIODS.has(period)) {
+    const { startDate: s, endDate: e } = resolvePeriodDates(period);
+    return runKPIQueries(plant, s, e, period);
+  }
+  return runKPIQueries(plant, startDate, endDate, undefined);
 }
 
 export type KpiSnapshot = Awaited<ReturnType<typeof runKPIQueries>>;

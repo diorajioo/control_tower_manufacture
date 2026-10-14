@@ -23,7 +23,7 @@ export function LeadTimeGaugeBar({
   counts: GaugeCounts;
   compact?: boolean;
 }) {
-  const [hoveredKey, setHoveredKey] = useState<"onTime" | "atRisk" | "late" | null>(null);
+  const [hovered, setHovered] = useState<{ key: "onTime" | "atRisk" | "late"; clientX: number; clientY: number } | null>(null);
   const total = counts.onTime + counts.atRisk + counts.late;
   if (total === 0) return null;
 
@@ -38,7 +38,7 @@ export function LeadTimeGaugeBar({
   return (
     <div
       style={{ display: "flex", flexDirection: "column", gap: compact ? 4 : 5, position: "relative" }}
-      onMouseLeave={() => setHoveredKey(null)}
+      onMouseLeave={() => setHovered(null)}
     >
       {/* Label row */}
       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -66,21 +66,22 @@ export function LeadTimeGaugeBar({
               style={{
                 height: "100%", width: `${pct}%`, background: seg.color,
                 transition: "opacity 0.12s",
-                opacity: hoveredKey && hoveredKey !== seg.key ? 0.35 : 1,
+                opacity: hovered?.key && hovered.key !== seg.key ? 0.35 : 1,
               }}
-              onMouseEnter={() => setHoveredKey(seg.key)}
+              onMouseEnter={(e) => setHovered({ key: seg.key, clientX: e.clientX, clientY: e.clientY })}
+              onMouseMove={(e) => setHovered((h) => h ? { ...h, clientX: e.clientX, clientY: e.clientY } : null)}
             />
           );
         })}
       </div>
 
       {/* Floating tooltip */}
-      {hoveredKey && (() => {
-        const seg = segments.find((s) => s.key === hoveredKey)!;
+      {hovered && (() => {
+        const seg = segments.find((s) => s.key === hovered.key)!;
         const pct = (seg.count / total) * 100;
         return (
           <div style={{
-            position: "absolute", top: compact ? 28 : 34, left: 0, right: 0, zIndex: 30,
+            position: "fixed", left: hovered.clientX + 12, top: hovered.clientY + 12, zIndex: 9999,
             background: TOOLTIP_COLORS.bg,
             border: `1px solid ${TOOLTIP_COLORS.border}`,
             backdropFilter: "blur(4px)",
@@ -109,7 +110,7 @@ export function LeadTimeGaugeBar({
             style={{
               display: "flex", alignItems: "center", gap: 3,
               transition: "opacity 0.12s",
-              opacity: hoveredKey && hoveredKey !== seg.key ? 0.35 : 1,
+              opacity: hovered?.key && hovered.key !== seg.key ? 0.35 : 1,
             }}
           >
             <span style={{ width: compact ? 6 : 7, height: compact ? 6 : 7, borderRadius: 2, background: seg.color, flexShrink: 0 }} />

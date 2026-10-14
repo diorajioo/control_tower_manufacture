@@ -50,7 +50,7 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
   activities: ActivityTime[]; basis: LtBasis; scope: LtScope; unit: LtUnit; onlyActivity?: string; loading: boolean;
 }) {
   const [zoom, setZoom] = useState<ProcessGroupId | null>(null);
-  const [hover, setHover] = useState<{ x: number; y: number; slice: Slice } | null>(null);
+  const [hover, setHover] = useState<{ clientX: number; clientY: number; slice: Slice } | null>(null);
   const box = useRef<HTMLDivElement>(null);
 
   // Groups with their processes (process order), values in days for the chosen basis
@@ -107,8 +107,7 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
   const drawnOuter = useAngleTween(outer);
 
   const onMove = (e: React.MouseEvent, slice: Slice) => {
-    const r = box.current?.getBoundingClientRect();
-    if (r) setHover({ x: e.clientX - r.left, y: e.clientY - r.top, slice });
+    setHover({ clientX: e.clientX, clientY: e.clientY, slice });
   };
   const pct = (v: number, of: number) => (of > 0 ? `${((v / of) * 100).toFixed(0)}%` : "—");
   const legendRows = zoomed
@@ -158,7 +157,7 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
               </g>
             </svg>
             {hover && (
-              <div className="pointer-events-none absolute z-10" style={{ left: hover.x + 12, top: hover.y + 12 }}>
+              <div className="pointer-events-none fixed z-[9999]" style={{ left: hover.clientX + 12, top: hover.clientY + 12 }}>
                 <LineTooltip
                   title={hover.slice.label}
                   subtitle={PROCESS_GROUPS.find((g) => g.id === hover.slice.group)?.label}

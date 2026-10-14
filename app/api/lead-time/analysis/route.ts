@@ -6,6 +6,7 @@ import { dimsFromParams, type LtDims } from "@/lib/leadTimeFilters";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 import {
   getLeadTimeAnalysisStats, getLeadTimeAnalysisWeekly, getLeadTimeProcessBreakdown, getLeadTimeComposition,
+  getLeadTimeBoxPlot,
 } from "@/lib/queries";
 
 export const maxDuration = 60;
@@ -30,12 +31,13 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   const lt = JSON.parse(dims) as LtDims;
   const filters = { plant, startDate, endDate, period, lt };
   const prev = { plant, ...prevPeriod(startDate, endDate), lt };
-  const [stats, prevStats, weekly, breakdown, comp] = await Promise.all([
+  const [stats, prevStats, weekly, breakdown, comp, boxPlotRows] = await Promise.all([
     getLeadTimeAnalysisStats(filters, scope),
     getLeadTimeAnalysisStats(prev, scope),
     getLeadTimeAnalysisWeekly(filters, scope),
     getLeadTimeProcessBreakdown(filters),
     getLeadTimeComposition(filters),
+    getLeadTimeBoxPlot(filters),
   ]);
   const block = (k: "GROSS" | "NETT") => {
     const s = stats as unknown as Record<string, unknown>, p = prevStats as unknown as Record<string, unknown>;
@@ -55,10 +57,21 @@ async function run(plant: string, startDate: string, endDate: string, period: st
     activities: breakdown
       .map((r) => ({ stage: r.STAGE, activity: r.ACTIVITY, sequence: r.SEQ == null ? null : Number(r.SEQ), gross: num(r.GROSS_DAYS) ?? 0, nett: num(r.NETT_DAYS) ?? 0 }))
       .sort((a, b) => (a.sequence ?? 999) - (b.sequence ?? 999)),
+    boxPlot: boxPlotRows.map((r) => ({
+      stage:   r.STAGE,
+      poCount: Number(r.PO_COUNT),
+      min:     num(r.MIN_DAYS)    ?? 0,
+      p25:     num(r.P25_DAYS)    ?? 0,
+      median:  num(r.MEDIAN_DAYS) ?? 0,
+      mean:    num(r.MEAN_DAYS)   ?? 0,
+      p75:     num(r.P75_DAYS)    ?? 0,
+      p90:     num(r.P90_DAYS)    ?? 0,
+      max:     num(r.MAX_DAYS)    ?? 0,
+    })),
   };
 }
 
-const cached = unstable_cache(run, ["lead-time-analysis-v2"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["lead-time-analysis-v3"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
