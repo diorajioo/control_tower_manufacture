@@ -162,10 +162,12 @@ export function scoreActivePOs(dm: DeployModel, rows: ActivePoRow[], now = Date.
     }
   }
 
-  // Build seq → activity name map from all rows (for nextActivity lookup)
+  // Build seq → activity name map from all rows (for nextActivity lookup).
+  // Coerce SEQ to number — ClickHouse may return integer columns as strings.
   const seqToActivity = new Map<number, string>();
   for (const r of rows) {
-    if (r.ACTIVITY && !seqToActivity.has(r.SEQ)) seqToActivity.set(r.SEQ, r.ACTIVITY);
+    const seq = Number(r.SEQ);
+    if (r.ACTIVITY && !seqToActivity.has(seq)) seqToActivity.set(seq, r.ACTIVITY);
   }
 
   // Second pass: score each PO
@@ -221,7 +223,7 @@ export function scoreActivePOs(dm: DeployModel, rows: ActivePoRow[], now = Date.
       lastSeq,
       lastActivity: lastStep?.ACTIVITY ?? "",
       nextSeq,
-      nextActivity: seqToActivity.get(nextSeq) ?? "",
+      nextActivity: seqToActivity.get(Number(nextSeq)) ?? "",
     });
   }
 

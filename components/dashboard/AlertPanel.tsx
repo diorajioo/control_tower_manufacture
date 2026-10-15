@@ -249,7 +249,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
               <div className="text-[10px] text-gray-500 truncate">
                 {r.lastActivity && r.lastActivity !== "PO" ? activityLabel(r.lastActivity) : "PO Released"}
                 {" → "}
-                {r.nextActivity ? activityLabel(r.nextActivity) : `Step ${r.nextSeq}`}
+                {r.nextActivity ? activityLabel(r.nextActivity) : "—"}
               </div>
             </div>
           );
