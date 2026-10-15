@@ -53,6 +53,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
   const [loading, setLoading] = useState(false);
   const [grain,   setGrain]   = useState<TrendGrain>("week");
   const [pointStats, setPointStats] = useState<PointStats | null>(null);
+  // Lead Time sub-mode: "pct" = Laney P′ (% PO > target), "avg" = XmR on average days
+  const [ltMode, setLtMode] = useState<"pct" | "avg">("pct");
   // Legend hover isolates a plant; parents that track hover (Monitor) pass it in, otherwise kept here
   const [localHover, setLocalHover] = useState<string | null>(null);
   const hovered = onPlantHover ? hoveredPlant : localHover;
@@ -75,11 +77,15 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
   }, [kpiType]);
 
   const selectedKpi = TREND_KPI_OPTIONS.find((o) => o.value === displayedKpiType) ?? TREND_KPI_OPTIONS[0];
+  // When Lead Time is in "avg" mode, suppress pointStats so the existing XmR path reads KPI_VALUE (avg days) directly.
+  const effectivePointStats = displayedKpiType === "leadtime" && ltMode === "avg" ? null : pointStats;
   // Control chart per metric: Laney P′ for count proportions (Lead Time = % PO above target, RFT = % activities
   // without ADJUST — limits move with the count n), XmR for the rest (Output, OEE, OPE, Yield Loss).
-  const isPChart = displayedKpiType === "leadtime" || displayedKpiType === "rft";
-  const isPct = displayedKpiType !== "output" && displayedKpiType !== "productivity";
-  const unitLabel = displayedKpiType === "leadtime" ? `% PO > ${LEAD_TIME_TARGET_DAYS} d` : displayedKpiType === "rft" ? "% RFT" : selectedKpi.unit;
+  const isPChart = (displayedKpiType === "leadtime" && ltMode === "pct") || displayedKpiType === "rft";
+  const isPct = isPChart || (displayedKpiType !== "output" && displayedKpiType !== "productivity" && displayedKpiType !== "leadtime");
+  const unitLabel = displayedKpiType === "leadtime"
+    ? (ltMode === "pct" ? `% PO > ${LEAD_TIME_TARGET_DAYS} d` : "days")
+    : displayedKpiType === "rft" ? "% RFT" : selectedKpi.unit;
   const countLabel = displayedKpiType === "leadtime" ? "POs" : "activities";
   // Overall = the "All plants" series from the API (default); By plant = one line per plant.
   // Yield Loss has no PLANT column in its source, so By plant is locked.
@@ -173,21 +179,21 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, grain]);
 
-  // One series per id: P′ metrics plot x/n from pointStats, XmR metrics plot the API value.
+  // One series per id: P′ metrics plot x/n from effectivePointStats, XmR metrics plot the API value.
   const buildSeries = useCallback((id: string, color: string) => ({
     id,
     color,
-    data: pointStats
+    data: effectivePointStats
       ? data
-          .filter((pt) => pointStats[pt.date as string]?.[id]?.n)
+          .filter((pt) => effectivePointStats[pt.date as string]?.[id]?.n)
           .map((pt) => {
-            const st = pointStats[pt.date as string][id];
+            const st = effectivePointStats[pt.date as string][id];
             return { x: pt.date as string, y: Number(((st.late / st.n) * 100).toFixed(1)) };
           })
       : data
           .filter((pt) => typeof pt[id] === "number" && !isNaN(pt[id] as number))
           .map((pt) => ({ x: pt.date as string, y: pt[id] as number })),
-  }), [data, pointStats]);
+  }), [data, effectivePointStats]);
 
   const plantIds = useMemo(() => plants.filter((p) => p !== OVERALL), [plants]);
   const overallSeries = useMemo(() => (plants.includes(OVERALL) ? buildSeries(OVERALL, "#1E4076") : null), [plants, buildSeries]);
@@ -200,8 +206,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
 
   const limitsOfSeries = useCallback(
     (series: { id: string; color: string; data: { x: string; y: number | null }[] }[]) =>
-      pointStats ? laneyPLimits(series, pointStats) : xmrLimits(series, { min: 0, max: isPct ? 100 : undefined }),
-    [pointStats, isPct]
+      effectivePointStats ? laneyPLimits(series, effectivePointStats) : xmrLimits(series, { min: 0, max: isPct ? 100 : undefined }),
+    [effectivePointStats, isPct]
   );
   const limits = useMemo(() => limitsOfSeries(nivoData), [nivoData, limitsOfSeries]);
   // One band of limits on the chart: All plants, or in By plant the hovered plant's own limits
@@ -212,8 +218,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
   }, [overall, hovered, limits, overallLimits]);
   const fmtValue = useCallback((v: number) => (isPct ? `${v.toFixed(1)}%` : formatCompact(v)), [isPct]);
   const ControlLayer = useMemo(
-    () => makePChartLayer(nivoData, limits, band, hovered, { center: pointStats ? "p̄" : "Mean", fmt: fmtValue }),
-    [nivoData, limits, band, hovered, pointStats, fmtValue]
+    () => makePChartLayer(nivoData, limits, band, hovered, { center: effectivePointStats ? "p̄" : "Mean", fmt: fmtValue }),
+    [nivoData, limits, band, hovered, effectivePointStats, fmtValue]
   );
 
   // Red only on hover: out-of-limit points (each series' own limits) turn red at the crosshair
@@ -318,8 +324,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
                 const rows = rowsAtX(nivoData, x, isPct ? "%" : selectedKpi.unit).map((r) => {
                   const lim = limits[r.label]?.[x];
                   if (!lim) return r;
-                  const st = pointStats?.[x]?.[r.label];
-                  return { ...r, sub: <>{pointStats ? "p̄" : "Mean"} {fmtValue(lim.mean)} · UCL <span style={{ color: "#f5a39a" }}>{fmtValue(lim.ucl)}</span> · LCL <span style={{ color: "#f5a39a" }}>{fmtValue(lim.lcl)}</span>{st ? ` · ${st.late.toLocaleString("en-US")}/${st.n.toLocaleString("en-US")} ${countLabel}` : ""}</> };
+                  const st = effectivePointStats?.[x]?.[r.label];
+                  return { ...r, sub: <>{effectivePointStats ? "p̄" : "Mean"} {fmtValue(lim.mean)} · UCL <span style={{ color: "#f5a39a" }}>{fmtValue(lim.ucl)}</span> · LCL <span style={{ color: "#f5a39a" }}>{fmtValue(lim.lcl)}</span>{st ? ` · ${st.late.toLocaleString("en-US")}/${st.n.toLocaleString("en-US")} ${countLabel}` : ""}</> };
                 });
                 return <LineTooltip title={dateLabel} rows={rows} />;
               }}
@@ -332,13 +338,34 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       {nivoData.length > 0 && (
         <div className={cn("mt-1.5", fillHeight && "shrink-0")}>
           <LineLegend series={nivoData} hovered={hovered} onHover={setHovered} />
-          <div className="mt-1 text-center text-[9.5px] text-slate-400 whitespace-nowrap">
-            {pointStats
-              ? `P′ chart · limits move with the ${kpiType === "leadtime" ? "PO" : "activity"} count of each ${grain === "month" ? "month" : "week"}`
-              : "XmR chart · limits from week-to-week variation"}
-            {` · red dot = outside ${overall ? "limits" : "its plant's limits"}`}
-            {!overall && plantIds.length > 1 ? " · hover a plant to see its limits" : ""}
-            {plantLocked ? " · no plant column in the source, By plant unavailable" : ""}
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <div className="text-[9.5px] text-slate-400 whitespace-nowrap">
+              {effectivePointStats
+                ? `P′ chart · limits move with the ${kpiType === "leadtime" ? "PO" : "activity"} count of each ${grain === "month" ? "month" : "week"}`
+                : "XmR chart · limits from week-to-week variation"}
+              {` · red dot = outside ${overall ? "limits" : "its plant's limits"}`}
+              {!overall && plantIds.length > 1 ? " · hover a plant to see its limits" : ""}
+              {plantLocked ? " · no plant column in the source, By plant unavailable" : ""}
+            </div>
+            {displayedKpiType === "leadtime" && (
+              <div className="flex shrink-0 items-center gap-0.5 bg-[#f2f3f6] rounded-[5px] p-0.5">
+                {(["pct", "avg"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setLtMode(m)}
+                    className="text-[9.5px] font-semibold px-2 py-0.5 rounded-[4px] transition-colors duration-150"
+                    style={{
+                      background: ltMode === m ? "white" : "transparent",
+                      color: ltMode === m ? "#101828" : "#667085",
+                      boxShadow: ltMode === m ? "0 1px 2px rgba(16,24,40,.08)" : "none",
+                      fontFamily: "Lato, sans-serif",
+                    }}
+                  >
+                    {m === "pct" ? "% Late" : "Avg days"}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

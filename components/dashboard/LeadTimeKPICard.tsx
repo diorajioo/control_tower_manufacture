@@ -177,8 +177,11 @@ export function LeadTimeKPICard({
                     text={`vs target ${targetDisp} ${unitLabel} (${deltaOver ? "+" : ""}${deltaPct.toFixed(1)}%)`}
                   />
                 ) : (
-                  /* The target is defined on gross only */
-                  <KpiTargetLine text="Target not defined for nett" />
+                  <KpiTargetLine
+                    delta={`−${unit === "hours" ? Math.round((grossDays - nettDays) * 24).toString() : (grossDays - nettDays).toFixed(2)} ${unitLabel}`}
+                    color="#667085"
+                    text={`vs gross ${fmtVal(grossDays)} ${unitLabel} (non-process time)`}
+                  />
                 )}
                 <StatusPill color={tone.color} bg={tone.bg} border={tone.border} label={tone.label} />
                 <KpiPriorLine pct={primaryTrend} color={trendColor(primaryTrend)} />
@@ -186,7 +189,7 @@ export function LeadTimeKPICard({
             </Fade>
             <KpiSparkline
               data={sparkline.map((y) => (unit === "hours" ? y * 24 : y))}
-              caption={`${sparkline.length} weeks · ${unitLabel}`}
+              caption={type === "nett" ? `Gross · ${sparkline.length} wks` : `${sparkline.length} weeks · ${unitLabel}`}
               z={z}
               onClick={onSparkClick}
               label="Lead Time"

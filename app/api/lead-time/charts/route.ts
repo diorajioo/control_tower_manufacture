@@ -72,7 +72,7 @@ async function runChartQueries(plant: string, startDate: string, endDate: string
   };
 }
 
-const cached = unstable_cache(runChartQueries, ["lead-time-charts-v11"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runChartQueries, ["lead-time-charts-v12"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
