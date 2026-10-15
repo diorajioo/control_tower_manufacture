@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { AlertTriangle, AlertCircle, Info, X, ChevronDown, ChevronUp, Send, Check, Loader2, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { KPIAlert } from "@/lib/alerts";
 import type { RiskPoResult } from "@/lib/riskScore";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { activityLabel } from "@/lib/leadTimeStages";
 
 interface AlertPanelProps {
   alerts: KPIAlert[];
@@ -45,9 +47,10 @@ type SendState = "idle" | "sending" | "sent" | "error";
 
 export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDate, riskScores = [], riskLoading = false }: AlertPanelProps) {
   const [collapsed, setCollapsed] = useState(true);
-  const [riskExpanded, setRiskExpanded] = useState(false);
   const [sendState, setSendState] = useState<SendState>("idle");
   const [sendError, setSendError] = useState<string | null>(null);
+  const [atRiskOpen, setAtRiskOpen] = useState(true);
+  const [lateOpen, setLateOpen] = useState(false);
 
   const criticalCount = alerts.filter((a) => a.severity === "critical").length;
   const warningCount  = alerts.filter((a) => a.severity === "warning").length;
@@ -215,14 +218,86 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
 
       {/* At-Risk POs section */}
       {!collapsed && (riskLoading || riskScores.filter((s) => s.score >= 0.5).length > 0) && (() => {
-        const flagged = riskScores.filter((s) => s.score >= 0.5);
-        const visible = riskExpanded ? flagged : flagged.slice(0, 3);
-        const hidden = flagged.length - 3;
+        const flagged   = riskScores.filter((s) => s.score >= 0.5);
+        const confirmed = flagged.filter((r) => r.daysSinceRelease > 13);
+        const atRisk    = flagged.filter((r) => r.daysSinceRelease <= 13);
+
+        const colCls = "grid grid-cols-[minmax(0,1fr)_48px_52px_minmax(0,1fr)] gap-x-3";
+
+        const ColHeaders = () => (
+          <div className={cn(colCls, "px-4 py-1 text-[9.5px] font-semibold text-gray-400 uppercase tracking-wide border-b border-gray-100")}>
+            <span>PO · Plant</span><span className="text-right">Risk</span><span className="text-right">Days</span><span>Last → Next stage</span>
+          </div>
+        );
+
+        const PoRow = ({ r }: { r: RiskPoResult }) => {
+          const pct = Math.round(r.score * 100);
+          const isLate = r.daysSinceRelease > 13;
+          const badgeCls = pct >= 70 ? "bg-[#FFEDEF] text-[#8A0011]" : "bg-[#FFFBE4] text-[#342900]";
+          return (
+            <div className={cn(colCls, "px-4 py-1.5 items-center hover:bg-gray-50 transition-colors")}>
+              <div className="min-w-0">
+                <div className="text-[11px] font-semibold text-gray-700 truncate">{r.po}</div>
+                <div className="text-[10px] text-gray-400 truncate">{r.plant} · {r.product}</div>
+              </div>
+              <div className="text-right">
+                <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded tabular-nums", badgeCls)}>{pct}%</span>
+              </div>
+              <div className={cn("text-right text-[11px] font-semibold tabular-nums", isLate ? "text-[#E6001C]" : "text-gray-600")}>
+                {r.daysSinceRelease}d
+              </div>
+              <div className="text-[10px] text-gray-500 truncate">
+                {r.lastActivity && r.lastActivity !== "PO" ? activityLabel(r.lastActivity) : "PO Released"}
+                {" → "}
+                {r.nextActivity ? activityLabel(r.nextActivity) : `Step ${r.nextSeq}`}
+              </div>
+            </div>
+          );
+        };
+
+        const SubSection = ({
+          open, onToggle, icon, label, count, badgeCls, rows,
+        }: {
+          open: boolean; onToggle: () => void;
+          icon: ReactNode; label: string; count: number; badgeCls: string;
+          rows: RiskPoResult[];
+        }) => (
+          <div className="border-t border-gray-100">
+            <button
+              onClick={onToggle}
+              className="w-full flex items-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+            >
+              {icon}
+              <span className="text-[10.5px] font-semibold text-gray-600">{label}</span>
+              <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full", badgeCls)}>{count} POs</span>
+              <span className="ml-auto text-gray-400">
+                {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </span>
+            </button>
+            {open && (
+              <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
+                <ColHeaders />
+                {rows.map((r) => <PoRow key={r.po} r={r} />)}
+              </div>
+            )}
+          </div>
+        );
+
         return (
           <>
             <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-t border-gray-100">
               <TrendingUp size={13} className="text-amber-500" />
               <span className="text-[11px] font-semibold text-gray-600">At-Risk POs</span>
+              <InfoTooltip
+                size={11}
+                width={272}
+                rows={[
+                  { label: "Risk %",      text: "Predicted probability this PO exceeds the 13-day target. ≥ 50% = flagged." },
+                  { label: "Days",        text: "Calendar days since PO Released." },
+                  { label: "Last · Next", text: "Most-recent completed activity → next expected activity for this PO." },
+                ]}
+                footer="Logistic-regression model scored on: route-steps remaining, idle wait time, product late-rate history, and queue depth at the next step."
+              />
               {!riskLoading && (
                 <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold ml-auto">
                   {flagged.length} flagged
@@ -234,40 +309,30 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
                 {[1, 2, 3].map((i) => <div key={i} className="h-7 bg-gray-100 rounded animate-pulse" />)}
               </div>
             ) : (
-              <div className="divide-y divide-gray-50">
-                <div className="grid grid-cols-[1fr_52px_60px_1fr] gap-2 px-4 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
-                  <span>PO · Plant</span><span className="text-right">Risk</span><span className="text-right">Days</span><span>Last stage</span>
-                </div>
-                {visible.map((r) => {
-                  const pct = Math.round(r.score * 100);
-                  const badgeCls = pct >= 70 ? "bg-[#FFEDEF] text-[#8A0011]" : "bg-[#FFFBE4] text-[#342900]";
-                  return (
-                    <div key={r.po} className="grid grid-cols-[1fr_52px_60px_1fr] gap-2 px-4 py-2 items-center">
-                      <div className="min-w-0">
-                        <div className="text-[11px] font-semibold text-gray-700 truncate">{r.po}</div>
-                        <div className="text-[10px] text-gray-400">{r.plant} · {r.product}</div>
-                      </div>
-                      <div className="text-right">
-                        <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded tabular-nums", badgeCls)}>{pct}%</span>
-                      </div>
-                      <div className={cn("text-right text-[11px] font-semibold tabular-nums", r.daysSinceRelease > 13 ? "text-[#E6001C]" : "text-gray-600")}>
-                        {r.daysSinceRelease}d
-                      </div>
-                      <div className="text-[10px] text-gray-500 truncate">
-                        {r.lastSeq > 1 ? `#${r.lastSeq} ${r.lastActivity}` : "Released"} → #{r.nextSeq}
-                      </div>
-                    </div>
-                  );
-                })}
-                {flagged.length > 3 && (
-                  <button
-                    onClick={() => setRiskExpanded((v) => !v)}
-                    className="w-full px-4 py-2 text-[11px] text-blue-700 hover:text-blue-800 font-semibold hover:bg-blue-50 transition-colors text-left"
-                  >
-                    {riskExpanded ? "Show less" : `Show ${hidden} more POs`}
-                  </button>
+              <>
+                {atRisk.length > 0 && (
+                  <SubSection
+                    open={atRiskOpen}
+                    onToggle={() => setAtRiskOpen((v) => !v)}
+                    icon={<TrendingUp size={11} className="text-amber-500" />}
+                    label="Predicted at risk"
+                    count={atRisk.length}
+                    badgeCls="bg-amber-100 text-amber-700"
+                    rows={atRisk}
+                  />
                 )}
-              </div>
+                {confirmed.length > 0 && (
+                  <SubSection
+                    open={lateOpen}
+                    onToggle={() => setLateOpen((v) => !v)}
+                    icon={<AlertTriangle size={11} className="text-red-500" />}
+                    label="Already late — still in production"
+                    count={confirmed.length}
+                    badgeCls="bg-red-100 text-red-700"
+                    rows={confirmed}
+                  />
+                )}
+              </>
             )}
           </>
         );

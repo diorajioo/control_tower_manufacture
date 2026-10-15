@@ -56,6 +56,7 @@ export interface RiskPoResult {
   lastSeq: number;
   lastActivity: string;
   nextSeq: number;
+  nextActivity: string;
 }
 
 // ── Model loading ─────────────────────────────────────────────────────────────
@@ -161,6 +162,12 @@ export function scoreActivePOs(dm: DeployModel, rows: ActivePoRow[], now = Date.
     }
   }
 
+  // Build seq → activity name map from all rows (for nextActivity lookup)
+  const seqToActivity = new Map<number, string>();
+  for (const r of rows) {
+    if (r.ACTIVITY && !seqToActivity.has(r.SEQ)) seqToActivity.set(r.SEQ, r.ACTIVITY);
+  }
+
   // Second pass: score each PO
   const results: RiskPoResult[] = [];
   for (const [po, steps] of Array.from(byPo.entries())) {
@@ -214,6 +221,7 @@ export function scoreActivePOs(dm: DeployModel, rows: ActivePoRow[], now = Date.
       lastSeq,
       lastActivity: lastStep?.ACTIVITY ?? "",
       nextSeq,
+      nextActivity: seqToActivity.get(nextSeq) ?? "",
     });
   }
 
