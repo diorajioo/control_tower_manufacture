@@ -26,7 +26,7 @@ import { formatThousands } from "@/lib/utils";
 import { alertsFromKpi, type KPIAlert } from "@/lib/alerts";
 import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
-import { trackFilterApplied, trackReportViewed, trackErrorShown } from "@/lib/analytics/events";
+import { trackFilterApplied, trackReportViewed, trackErrorShown, trackAlertDismissed } from "@/lib/analytics/events";
 
 interface KPIResponse {
   leadTime: {
@@ -293,6 +293,8 @@ export default function DashboardPage() {
 
   const handleDismissAlert = (id: string) => {
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    const alert = alerts.find((a) => a.id === id);
+    if (alert) trackAlertDismissed({ report: "dashboard_strategic", alert_type: alert.kpi.toLowerCase().replace(/[\s-]+/g, "_") });
     setDismissedIds((prev) => new Set(Array.from(prev).concat(id)));
     setUndoId(id);
     undoTimerRef.current = setTimeout(() => setUndoId(null), 5000);

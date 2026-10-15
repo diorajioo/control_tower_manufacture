@@ -72,8 +72,7 @@ interface DisplaySettings {
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 
-// UI language is fixed to English (2026-09-26) — the language picker is hidden.
-const SHOW_LANGUAGE_PICKER = false;
+const SHOW_LANGUAGE_PICKER = true;
 
 const KPI_CHIPS: Record<KpiKey, string> = {
   leadTime: "Lead Time",

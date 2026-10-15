@@ -30,7 +30,7 @@ import { LeadTimeLineSection } from "@/components/leadtime/LeadTimeLineSection";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 import { PROCESS_GROUPS } from "@/lib/leadTimeStages";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
-import { trackFilterApplied } from "@/lib/analytics/events";
+import { trackFilterApplied, trackTabSwitched } from "@/lib/analytics/events";
 import { cn } from "@/lib/utils";
 
 type BaseFilters = { plant: string; startDate: string; endDate: string; period: string };
@@ -180,7 +180,7 @@ export default function LeadTimePage() {
           {/* Tabs — same minimal style as the Overview Tactical tab bar */}
           <div className="border-b border-slate-200 flex items-center gap-5" role="tablist">
             {TABS.map((t) => (
-              <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+              <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => { setTab(t.id); trackTabSwitched({ report: "lead_time", tab: t.id }); }}
                 className={cn("relative py-2 text-[12px] transition-colors focus:outline-none focus-visible:text-[#1E4076]",
                   tab === t.id ? "text-slate-900 font-semibold" : "text-slate-500 hover:text-slate-800")}>
                 {t.label}

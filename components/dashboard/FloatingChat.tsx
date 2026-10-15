@@ -7,7 +7,7 @@ import { GROQ_MODELS, CHAT_DEFAULT_MODEL_ID, getModelConfig } from "@/lib/ai-mod
 import type { KPISnapshot } from "@/lib/diagnostic-prompt";
 import type { KPIAlert } from "@/lib/alerts";
 import { highlightKpi, isKpiHighlightId, KPI_TRIGGER_ATTR } from "@/components/ui/KpiHighlight";
-import { trackFeatureUsed } from "@/lib/analytics/events";
+import { trackFeatureUsed, trackPanelOpened } from "@/lib/analytics/events";
 
 interface Message {
   role: "user" | "assistant";
@@ -454,7 +454,7 @@ export function FloatingChat({ filters, kpiSnapshot, kpi, alerts }: FloatingChat
 
       {/* FAB */}
       <button
-        onClick={() => { const next = !open; setOpen(next); if (next) trackFeatureUsed({ report: "dashboard_strategic", feature: "chat_opened" }); }}
+        onClick={() => { const next = !open; setOpen(next); if (next) { trackFeatureUsed({ report: "dashboard_strategic", feature: "chat_opened" }); trackPanelOpened({ report: "dashboard_strategic", panel: "chat" }); } }}
         className="group relative w-12 h-12 bg-brand-800 hover:bg-brand-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center"
       >
         {open ? <X size={18} /> : <MessageSquare size={18} />}

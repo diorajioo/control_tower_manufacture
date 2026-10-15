@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState } from "react";
 
 export type Lang = "id" | "en";
 
@@ -360,16 +360,21 @@ const I18nContext = createContext<I18nContextValue>({
   t: (key) => dict.en[key] as string,
 });
 
-// UI language is fixed to English (2026-09-26). The `id` dictionary is kept in
-// code, but a stored "id" preference in "ct-display-settings" is ignored and
-// setLang is a no-op.
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const lang: Lang = "en";
+  const [lang, setLangState] = useState<Lang>(() => {
+    if (typeof window === "undefined") return "en";
+    try {
+      const v = localStorage.getItem("ct-lang");
+      return v === "id" || v === "en" ? v : "en";
+    } catch { return "en"; }
+  });
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const setLang = (_l: Lang) => { /* language is fixed to English */ };
+  const setLang = (l: Lang) => {
+    setLangState(l);
+    try { localStorage.setItem("ct-lang", l); } catch {}
+  };
 
-  const t = (key: TranslationKey): string => (dict[lang][key] as string) ?? (dict.id[key] as string);
+  const t = (key: TranslationKey): string => (dict[lang][key] as string) ?? (dict.en[key] as string);
 
   return <I18nContext.Provider value={{ lang, setLang, t }}>{children}</I18nContext.Provider>;
 }

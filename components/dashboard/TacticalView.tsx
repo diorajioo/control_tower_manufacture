@@ -676,7 +676,7 @@ export function TacticalParetoChart({
                     <button key={v} role="option" aria-selected={categoryFilter === v}
                       onClick={() => { setCategoryFilter(v); setCatOpen(false); }}
                       className={cn(MENU_ITEM, categoryFilter === v ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
-                      <span>{v === "all" ? "Semua" : v}</span>
+                      <span>{v === "all" ? "Semua" : v === "VA" ? "VA – Value Added" : v === "NNVA" ? "NNVA – Non-Value Added" : "UNVA – Waste"}</span>
                       {categoryFilter === v && <Check size={10} className="text-[#1E4076] shrink-0" />}
                     </button>
                   ))}

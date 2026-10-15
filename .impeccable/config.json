@@ -350,6 +350,30 @@
           "components/dashboard/Sidebar.tsx"
         ],
         "createdAt": "2026-10-12T09:54:12.667Z"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#16305c",
+        "createdAt": "2026-10-14T07:23:26.679Z",
+        "reason": "Documented Paragon Blue hover tint from CLAUDE.md"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#fef3c7",
+        "createdAt": "2026-10-14T07:23:31.774Z",
+        "reason": "Amber-100 focused-row highlight, spec-defined in task"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#f8fafc",
+        "createdAt": "2026-10-14T07:23:32.040Z",
+        "reason": "Slate-50 alternating row background, standard Tailwind tone"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#334155",
+        "createdAt": "2026-10-14T07:23:32.306Z",
+        "reason": "Slate-700 table cell text, standard Tailwind tone used throughout codebase"
       }
     ]
   }

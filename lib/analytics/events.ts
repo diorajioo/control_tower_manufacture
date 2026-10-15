@@ -225,6 +225,56 @@ export function trackLinkOut(href: string, text?: string): void {
   send('link_out', { href, text });
 }
 
+/**
+ * User switches between named tabs within a page (e.g. Strategic/Tactical, Analysis/Pareto).
+ * Use report_viewed for a tab that is its own full page; use this for in-page tabs only.
+ * tab: short snake_case id of the tab the user switched TO (e.g. 'tactical', 'pareto').
+ */
+export function trackTabSwitched({ report, tab }: { report: Report; tab: string }): void {
+  if (!/^[a-z][a-z0-9_]{0,39}$/.test(tab)) {
+    console.warn(`[analytics] tab "${tab}" must be snake_case ≤ 40 chars, tab_switched not sent`);
+    return;
+  }
+  send('tab_switched', { report, tab });
+}
+
+/**
+ * User sorts a table column. One event per sort action, not per render.
+ * column: the snake_case column key (e.g. 'lead_time', 'plant'). direction: 'asc' | 'desc'.
+ */
+export function trackSortApplied({ report, column, direction }: { report: Report; column: string; direction: 'asc' | 'desc' }): void {
+  if (!/^[a-z][a-z0-9_]{0,39}$/.test(column)) {
+    console.warn(`[analytics] column "${column}" must be snake_case ≤ 40 chars, sort_applied not sent`);
+    return;
+  }
+  send('sort_applied', { report, column, direction });
+}
+
+/**
+ * An alert or informational banner is dismissed by the user (not auto-dismissed by a timeout).
+ * alert_type: short snake_case code identifying which kind of alert (e.g. 'kpi_warning', 'session_expiry').
+ */
+export function trackAlertDismissed({ report, alert_type }: { report: Report; alert_type: string }): void {
+  if (!/^[a-z0-9_]{1,40}$/.test(alert_type)) {
+    console.warn(`[analytics] alert_type "${alert_type}" must be snake_case ≤ 40 chars, alert_dismissed not sent`);
+    return;
+  }
+  send('alert_dismissed', { report, alert_type });
+}
+
+/**
+ * A modal, drawer or side-panel opens. Covers any overlay that partially occludes the page.
+ * panel: short snake_case id of the panel (e.g. 'notification_settings', 'po_detail').
+ * trigger: what caused the open — 'click' (user action) | 'auto' (system-initiated, e.g. first-visit hint).
+ */
+export function trackPanelOpened({ report, panel, trigger = 'click' }: { report: Report; panel: string; trigger?: 'click' | 'auto' }): void {
+  if (!/^[a-z][a-z0-9_]{0,39}$/.test(panel)) {
+    console.warn(`[analytics] panel "${panel}" must be snake_case ≤ 40 chars, panel_opened not sent`);
+    return;
+  }
+  send('panel_opened', { report, panel, trigger });
+}
+
 // ---- Search (debounced) -----------------------------------------------------
 const SEARCH_SETTLE_MS = 1000;
 const searchTimers = new Map<string, ReturnType<typeof setTimeout>>();

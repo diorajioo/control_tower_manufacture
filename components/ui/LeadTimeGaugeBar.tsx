@@ -55,24 +55,38 @@ export function LeadTimeGaugeBar({
         />
       </div>
 
-      {/* Stacked bar */}
-      <div style={{ height: barHeight, borderRadius: 4, overflow: "hidden", display: "flex", cursor: "default" }}>
-        {segments.map((seg) => {
-          const pct = (seg.count / total) * 100;
-          if (pct <= 0) return null;
-          return (
-            <div
-              key={seg.key}
-              style={{
-                height: "100%", width: `${pct}%`, background: seg.color,
-                transition: "opacity 0.12s",
-                opacity: hovered?.key && hovered.key !== seg.key ? 0.35 : 1,
-              }}
-              onMouseEnter={(e) => setHovered({ key: seg.key, clientX: e.clientX, clientY: e.clientY })}
-              onMouseMove={(e) => setHovered((h) => h ? { ...h, clientX: e.clientX, clientY: e.clientY } : null)}
-            />
-          );
-        })}
+      {/* Stacked bar + boundary triangles */}
+      <div style={{ position: "relative", paddingBottom: compact ? 10 : 12 }}>
+        <div style={{ height: barHeight, borderRadius: 4, overflow: "hidden", display: "flex", cursor: "default" }}>
+          {segments.map((seg) => {
+            const pct = (seg.count / total) * 100;
+            if (pct <= 0) return null;
+            return (
+              <div
+                key={seg.key}
+                style={{
+                  height: "100%", width: `${pct}%`, background: seg.color,
+                  transition: "opacity 0.12s",
+                  opacity: hovered?.key && hovered.key !== seg.key ? 0.35 : 1,
+                }}
+                onMouseEnter={(e) => setHovered({ key: seg.key, clientX: e.clientX, clientY: e.clientY })}
+                onMouseMove={(e) => setHovered((h) => h ? { ...h, clientX: e.clientX, clientY: e.clientY } : null)}
+              />
+            );
+          })}
+        </div>
+        {/* Boundary triangles at the on-time/at-risk and at-risk/late thresholds */}
+        {[
+          { pct: (counts.onTime / total) * 100, label: `${LEAD_TIME_TARGET_DAYS}d` },
+          { pct: ((counts.onTime + counts.atRisk) / total) * 100, label: `${(LEAD_TIME_TARGET_DAYS * 1.15).toFixed(1)}d` },
+        ].filter(({ pct }) => pct > 0 && pct < 100).map(({ pct, label }) => (
+          <div key={label} style={{ position: "absolute", top: barHeight, left: `${pct}%`, transform: "translateX(-50%)" }}>
+            <div style={{ width: 0, height: 0, borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderBottom: "7px solid #101828", margin: "0 auto" }} />
+            <div style={{ fontSize: 9, color: "#344054", fontWeight: 700, whiteSpace: "nowrap", textAlign: "center", marginTop: 2, fontFamily: "Lato, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+              {label}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Floating tooltip */}

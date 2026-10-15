@@ -75,6 +75,7 @@ function SegToggle<T extends string>({
   );
 }
 
+
 export interface LeadTimeKPICardProps {
   compact?:        boolean;
   grossDays:       number;
@@ -207,8 +208,14 @@ export function LeadTimeKPICard({
                   <span style={{ fontSize: 10, color: "#475569", width: z(90), flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={p.position}>
                     {p.position}
                   </span>
-                  <div style={{ flex: 1, background: "#EEF4FB", borderRadius: 999, height: 4, overflow: "hidden" }}>
-                    <div style={{ height: "100%", background: "#1E4076", borderRadius: 999, width: `${(p.avgHours / maxHours) * 100}%` }} />
+                  <div style={{ flex: 1, position: "relative" }}>
+                    <div style={{ background: "#EEF4FB", borderRadius: 999, height: 4, overflow: "hidden" }}>
+                      <div style={{ height: "100%", background: "#1E4076", borderRadius: 999, width: `${(p.avgHours / maxHours) * 100}%` }} />
+                    </div>
+                    <div
+                      title={unit === "hours" ? `${Math.round(p.avgHours)}h` : `${(p.avgHours / 24).toFixed(2)}d`}
+                      style={{ position: "absolute", top: "100%", left: `${(p.avgHours / maxHours) * 100}%`, transform: "translateX(-50%)", marginTop: 1, width: 0, height: 0, borderLeft: "3px solid transparent", borderRight: "3px solid transparent", borderTop: "4px solid #1E4076" }}
+                    />
                   </div>
                   <span style={{ fontSize: 10, color: "#64748b", width: z(40), textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                     {unit === "hours" ? `${Math.round(p.avgHours)}h` : `${(p.avgHours / 24).toFixed(2)}d`}

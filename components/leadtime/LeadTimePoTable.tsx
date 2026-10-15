@@ -6,6 +6,7 @@
 // ~20k rows: rendered in pages of 200 as the user scrolls. Scroll area 280px = the histogram plot height. Data: /api/lead-time/po-list.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { trackSortApplied } from "@/lib/analytics/events";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
@@ -91,7 +92,11 @@ export function LeadTimePoTable({ data, loading, unit, metric, bin, onClearBin }
 
   const fmt = (d: number | null) => (d == null ? "—" : (d * f).toFixed(2));
   const toggleSort = (key: ColKey) =>
-    setSort((s) => (s.key === key ? { key, dir: s.dir === "desc" ? "asc" : "desc" } : { key, dir: key === "po" || key === "sku" ? "asc" : "desc" }));
+    setSort((s) => {
+      const dir = s.key === key ? (s.dir === "desc" ? "asc" : "desc") : (key === "po" || key === "sku" ? "asc" : "desc");
+      trackSortApplied({ report: "lead_time", column: key, direction: dir });
+      return { key, dir };
+    });
 
   // One-line headers, same height for every column; unit once in the title. Text columns left, numbers right
   // (header aligned with its values). No. PO and SKU have fixed widths; the 8 number columns share the rest equally.
