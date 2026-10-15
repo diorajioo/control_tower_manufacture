@@ -49,7 +49,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
   const [collapsed, setCollapsed] = useState(true);
   const [sendState, setSendState] = useState<SendState>("idle");
   const [sendError, setSendError] = useState<string | null>(null);
-  const [atRiskOpen, setAtRiskOpen] = useState(true);
+  const [atRiskOpen, setAtRiskOpen] = useState(false);
   const [lateOpen, setLateOpen] = useState(false);
 
   const criticalCount = alerts.filter((a) => a.severity === "critical").length;
