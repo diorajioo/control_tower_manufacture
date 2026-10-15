@@ -35,7 +35,9 @@ async function runTrendQuery(plant: string, startDate: string, endDate: string, 
     const weekRaw = row.WEEK as unknown;
     const d: Date = weekRaw instanceof Date ? weekRaw : new Date(String(weekRaw));
     const week = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-    const rowPlant = String(row.PLANT ?? "Unknown");
+    // ClickHouse returns null/'' for the GROUPING SETS aggregate row; Snowflake returns 'All plants'
+    const rawPlant = row.PLANT != null ? String(row.PLANT).trim() : "";
+    const rowPlant = rawPlant === "" ? "All plants" : rawPlant;
     plantsSet.add(rowPlant);
 
     if (!weekMap.has(week)) weekMap.set(week, {});

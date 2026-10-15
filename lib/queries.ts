@@ -283,7 +283,7 @@ export async function getLeadTimeByStageCategory(filters: QueryFilters) {
         ${ltWhere(filters)}
     ),
     act_pos AS (
-      SELECT ACTIVITY, MAX(POSITION) AS POSITION
+      SELECT ACTIVITY, MAX(POSITION) AS PARENT_STAGE
       FROM base
       WHERE POSITION <> 'WIP'
       GROUP BY ACTIVITY
@@ -294,7 +294,7 @@ export async function getLeadTimeByStageCategory(filters: QueryFilters) {
       b.ACTIVITY  AS ACTIVITY,
       MIN(b.ACTIVITY_ID) AS MIN_ACTIVITY_ID,
       MIN(b.ACTIVITY_SEQUENCE) AS MIN_SEQUENCE,
-      CASE WHEN b.POSITION = 'WIP' THEN COALESCE(ap.POSITION, 'WIP') ELSE b.POSITION END AS ATTACHED_STAGE,
+      CASE WHEN b.POSITION = 'WIP' THEN COALESCE(ap.PARENT_STAGE, 'WIP') ELSE b.POSITION END AS ATTACHED_STAGE,
       b.ACTIVITY_CATEGORY AS CATEGORY,
       SUM(b.NET_LEADTIME) / 1440.0 / NULLIF(MAX(po.N), 0) AS DAYS
     FROM base b
@@ -1184,7 +1184,7 @@ export async function getTrendKPIByPlant(
     case "output":
       // SUM({FIXED [Process Order Fg]: SUM([Release Fg])}) → SUM per week per plant
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT WEEK, IFF(GROUPING(PLANT) = 1, 'All plants', PLANT) AS PLANT, SUM(po_fg) AS KPI_VALUE
+        SELECT WEEK, CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT, SUM(po_fg) AS KPI_VALUE
         FROM (
           SELECT
             PROCESS_ORDER_FG,
@@ -1202,7 +1202,7 @@ export async function getTrendKPIByPlant(
 
     case "oee":
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT DATE_TRUNC('${unit}', KEMAS_COMPLETED_AT::DATE) AS WEEK, IFF(GROUPING(PLANT) = 1, 'All plants', PLANT) AS PLANT,
+        SELECT DATE_TRUNC('${unit}', KEMAS_COMPLETED_AT::DATE) AS WEEK, CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
           AVG(
             (CASE WHEN QTY_TOTAL > 0 THEN QTY_FG_GOOD::FLOAT / QTY_TOTAL ELSE 0 END) *
             (CASE WHEN ACTIVITY_PRODUCTIVITY_STD > 0
@@ -1218,7 +1218,7 @@ export async function getTrendKPIByPlant(
     case "rft":
       // N + LATE (here: activities without ADJUST) feed the Laney P′ chart, same as lead time
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number; N: number; LATE: number }>(`
-        SELECT DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK, IFF(GROUPING(PLANT) = 1, 'All plants', PLANT) AS PLANT,
+        SELECT DATE_TRUNC('${unit}', PO_FG_DONE_DATE::DATE) AS WEEK, CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
           COUNT(CASE WHEN ACTIVITY <> 'ADJUST' THEN 1 END) * 100.0
             / NULLIF(COUNT(*), 0) AS KPI_VALUE,
           COUNT(*) AS N,
@@ -1233,7 +1233,7 @@ export async function getTrendKPIByPlant(
     case "productivity":
       // E2E productivity — same source and rule as the Overview card (getE2EProductivity): AVG(E2E_PRODUCTIVITY)
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT DATE_TRUNC('${unit}', KEMAS_COMPLETED_AT::DATE) AS WEEK, IFF(GROUPING(PLANT) = 1, 'All plants', PLANT) AS PLANT,
+        SELECT DATE_TRUNC('${unit}', KEMAS_COMPLETED_AT::DATE) AS WEEK, CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
           AVG(E2E_PRODUCTIVITY) AS KPI_VALUE
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
         WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ${dateRange}

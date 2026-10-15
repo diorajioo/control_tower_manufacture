@@ -192,6 +192,6 @@ export function bindParams(sql: string, binds: unknown[]): { sql: string; params
 
 /** Throws if a Snowflake-only construct survived translation. */
 export function assertNoSnowflakeLeft(sql: string): void {
-  const left = sql.match(/::[A-Z]+|\b(DATEADD|DATE_TRUNC|IFF|DAYOFWEEKISO|PERCENTILE_CONT|CURRENT_DATE|CURRENT_TIMESTAMP|REGEXP_REPLACE|QUALIFY|ILIKE|GENERATOR|SEQ4|ANY_VALUE|TO_CHAR|EXCLUDE|COUNT_IF)\b/i);
+  const left = sql.match(/::[A-Z]+|\b(DATEADD|DATE_TRUNC|IFF|DAYOFWEEKISO|PERCENTILE_CONT|CURRENT_DATE|CURRENT_TIMESTAMP|REGEXP_REPLACE|QUALIFY|ILIKE|GENERATOR|SEQ4|ANY_VALUE|TO_CHAR|EXCLUDE|COUNT_IF)\b|GROUPING\s*\(/i);
   if (left) throw new Error(`Untranslated Snowflake SQL for ClickHouse: "${left[0]}" — extend lib/sql/clickhouseDialect.ts`);
 }
