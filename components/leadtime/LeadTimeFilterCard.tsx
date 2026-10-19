@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
-import { FIELD_LABEL, SelectField, type FieldOption } from "@/components/ui/FilterField";
+import { FIELD_LABEL, SelectField, MultiSelectField, type FieldOption } from "@/components/ui/FilterField";
 import { LT_DIM_COLUMNS, type LtDims } from "@/lib/leadTimeFilters";
 
 export type LtScope = "created" | "released";
@@ -42,7 +42,10 @@ export function LeadTimeFilterCard({ base, scope, onScope, basis, onBasis, unit,
     return () => { cancelled = true; };
   }, [base.plant, base.startDate, base.endDate, base.period]);
 
-  const active = LT_DIM_COLUMNS.filter(({ key }) => dims[key]).length;
+  const active = LT_DIM_COLUMNS.filter(({ key }) => {
+    const v = dims[key as keyof LtDims];
+    return Array.isArray(v) ? v.length > 0 : !!v;
+  }).length;
 
   return (
     <div className="rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5 flex items-end gap-2.5 flex-wrap">
@@ -64,11 +67,17 @@ export function LeadTimeFilterCard({ base, scope, onScope, basis, onBasis, unit,
 
       <div className="w-px self-stretch bg-slate-100 mx-0.5" />
 
-      {LT_DIM_COLUMNS.map(({ key, label }) => (
-        <SelectField key={key} label={label} value={dims[key] ?? ""} width={WIDTH[key]}
-          options={options?.[key] ?? []} loading={!options} allLabel={ALL_LABEL[key]}
-          onChange={(v) => onDims({ ...dims, [key]: v || undefined })} />
-      ))}
+      <SelectField label="No. PO" value={dims.po ?? ""} width={WIDTH.po}
+        options={options?.po ?? []} loading={!options} allLabel={ALL_LABEL.po}
+        onChange={(v) => onDims({ ...dims, po: v || undefined })} />
+      {(["activity", "lineCategory", "line", "skuGroup", "sku", "variant"] as const).map((key) => {
+        const col = LT_DIM_COLUMNS.find((c) => c.key === key)!;
+        return (
+          <MultiSelectField key={key} label={col.label} value={dims[key] ?? []} width={WIDTH[key]}
+            options={options?.[key] ?? []} loading={!options} allLabel={ALL_LABEL[key]}
+            onChange={(v) => onDims({ ...dims, [key]: v.length ? v : undefined })} />
+        );
+      })}
 
       {active > 0 && (
         <button onClick={() => onDims({})}

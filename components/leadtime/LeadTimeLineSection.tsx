@@ -19,6 +19,7 @@ import { ToggleSelect } from "@/components/ui/ToggleSelect";
 import { LINE_THEME, LineTooltip } from "@/components/charts/StandardLine";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 import type { LtUnit } from "@/components/leadtime/LeadTimeFilterCard";
+import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 
 type Activity = "mixing" | "filpac";
 const ACTIVITY_OPTIONS: { key: Activity; label: string }[] = [
@@ -91,7 +92,7 @@ export function LeadTimeLineSection({ filters, unit, refreshKey = 0 }: { filters
   return (
     <div className="grid grid-cols-2 gap-3.5">
       <LineBubbleCard
-        points={shown} totalLines={lines.length} loading={loading} f={f} unitLabel={unitLabel}
+        points={shown} allLines={lines} totalLines={lines.length} loading={loading} f={f} unitLabel={unitLabel}
         activity={activity} onActivity={setActivity}
         selected={line} onSelect={(l) => setLine((cur) => (cur === l ? null : l))}
       />
@@ -107,8 +108,8 @@ export function LeadTimeLineSection({ filters, unit, refreshKey = 0 }: { filters
 
 interface Datum { x: number; y: number; line: string; qty: number }
 
-function LineBubbleCard({ points, totalLines, loading, f, unitLabel, activity, onActivity, selected, onSelect }: {
-  points: LinePoint[]; totalLines: number; loading: boolean; f: number; unitLabel: string;
+function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, activity, onActivity, selected, onSelect }: {
+  points: LinePoint[]; allLines: LinePoint[]; totalLines: number; loading: boolean; f: number; unitLabel: string;
   activity: Activity; onActivity: (a: Activity) => void;
   selected: string | null; onSelect: (line: string) => void;
 }) {
@@ -116,15 +117,15 @@ function LineBubbleCard({ points, totalLines, loading, f, unitLabel, activity, o
     id: "lines",
     data: points.map((p): Datum => ({ x: p.poCount, y: p.avgDays * f, line: p.line, qty: p.qty })),
   }], [points, f]);
-  const meanX = points.length ? points.reduce((s, p) => s + p.poCount, 0) / points.length : 0;
-  const meanY = points.length ? points.reduce((s, p) => s + p.avgDays * f, 0) / points.length : 0;
+  const threshX = allLines.length ? allLines.reduce((s, p) => s + p.poCount, 0) / allLines.length : 0;
+  const threshY = LEAD_TIME_TARGET_DAYS * f;
   const maxQty = Math.max(1, ...points.map((p) => p.qty));
   const size = (qty: number) => 8 + 26 * Math.sqrt(Math.max(qty, 0) / maxQty); // area ∝ volume, 8–34 px
 
-  // Quadrant tints, mean lines and corner labels — behind the bubbles
+  // Quadrant tints, threshold lines and corner labels — behind the bubbles
   const Quadrants = ({ xScale, yScale, innerWidth, innerHeight }: ScatterPlotLayerProps<Datum>) => {
-    const mx = (xScale as (v: number) => number)(meanX);
-    const my = (yScale as (v: number) => number)(meanY);
+    const mx = (xScale as (v: number) => number)(threshX);
+    const my = (yScale as (v: number) => number)(threshY);
     const label = (x: number, y: number, anchor: "start" | "end", text: string, color: string) => (
       <text x={x} y={y} textAnchor={anchor} style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.04em", fill: color }}>{text}</text>
     );
@@ -134,10 +135,10 @@ function LineBubbleCard({ points, totalLines, loading, f, unitLabel, activity, o
         <rect x={mx} y={my} width={Math.max(0, innerWidth - mx)} height={Math.max(0, innerHeight - my)} fill="#EAF6EF" opacity={0.7} />
         <line x1={mx} x2={mx} y1={0} y2={innerHeight} stroke="#98a2b3" strokeWidth={1} strokeDasharray="4 3" />
         <line x1={0} x2={innerWidth} y1={my} y2={my} stroke="#98a2b3" strokeWidth={1} strokeDasharray="4 3" />
-        {label(6, 12, "start", "LOW VOLUME · HIGH LT", "#667085")}
-        {label(innerWidth - 6, 12, "end", "HIGH VOLUME · HIGH LT", "#d92d20")}
-        {label(6, innerHeight - 6, "start", "LOW VOLUME · LOW LT", "#667085")}
-        {label(innerWidth - 6, innerHeight - 6, "end", "HIGH VOLUME · LOW LT", "#067647")}
+        {label(6, 12, "start", "LOW VOLUME · ABOVE TARGET", "#667085")}
+        {label(innerWidth - 6, 12, "end", "HIGH VOLUME · ABOVE TARGET", "#d92d20")}
+        {label(6, innerHeight - 6, "start", "LOW VOLUME · ON TARGET", "#667085")}
+        {label(innerWidth - 6, innerHeight - 6, "end", "HIGH VOLUME · ON TARGET", "#067647")}
       </g>
     );
   };
@@ -151,7 +152,7 @@ function LineBubbleCard({ points, totalLines, loading, f, unitLabel, activity, o
             { label: "Lead time", text: "Average process time at the line per PO: first start → last stop of the activity on that line." },
             { label: "PO count", text: "POs completed in the period that ran on the line." },
             { label: "Bubble size", text: "Volume = released quantity (pcs) of those POs." },
-            { label: "Quadrants", text: "Split at the mean PO count and the mean lead time of the lines shown (dashed lines)." },
+            { label: "Quadrants", text: `X split at avg PO count across all lines in the period; Y split at the ${LEAD_TIME_TARGET_DAYS}-day target.` },
             { label: "Lines shown", text: `Lines with at least ${MIN_PO} POs (${points.length} of ${totalLines}). The table lists every line.` },
             { label: "Click", text: "Click a bubble to show its SKUs in the table; click it again for all lines." },
           ]} />

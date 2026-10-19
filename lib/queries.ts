@@ -38,10 +38,10 @@ const ltWhere = (f: QueryFilters) => {
     AND PROCESS_ORDER_FG IN (
       SELECT PROCESS_ORDER_FG FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME
       GROUP BY PROCESS_ORDER_FG
-      HAVING ${dims.map((d) => `MAX(IFF(${d.column} = ?, 1, 0)) = 1`).join(" AND ")}
+      HAVING ${dims.map((d) => `MAX(IFF(${d.column} IN (${d.values.map(() => "?").join(",")}), 1, 0)) = 1`).join(" AND ")}
     )`);
 };
-const ltBinds = (f: QueryFilters): unknown[] => [...plantBinds(f.plant), ...activeDims(f.lt).map((d) => d.value)];
+const ltBinds = (f: QueryFilters): unknown[] => [...plantBinds(f.plant), ...activeDims(f.lt).flatMap((d) => d.values)];
 
 // Trend granularity for line charts. Only these two literals are ever put into DATE_TRUNC.
 export type TrendGrain = "week" | "month";

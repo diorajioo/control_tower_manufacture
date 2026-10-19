@@ -4,12 +4,12 @@
 
 export interface LtDims {
   po?: string;
-  activity?: string;
-  lineCategory?: string;
-  line?: string;
-  skuGroup?: string;
-  sku?: string;
-  variant?: string;
+  activity?: string[];
+  lineCategory?: string[];
+  line?: string[];
+  skuGroup?: string[];
+  sku?: string[];
+  variant?: string[];
 }
 
 /** Filter key → CT_MANUF_LEADTIME column. Order = query-string order = bind order. */
@@ -24,26 +24,43 @@ export const LT_DIM_COLUMNS: { key: keyof LtDims; column: string; label: string 
 ];
 
 /** Active filters only (empty values dropped), in LT_DIM_COLUMNS order. */
-export function activeDims(d?: LtDims): { column: string; value: string }[] {
+export function activeDims(d?: LtDims): { column: string; values: string[] }[] {
   if (!d) return [];
   return LT_DIM_COLUMNS
-    .map(({ key, column }) => ({ column, value: (d[key] ?? "").trim() }))
-    .filter((x) => x.value !== "" && x.value.length <= 200);
+    .map(({ key, column }) => {
+      const raw = d[key as keyof LtDims];
+      const values: string[] = raw === undefined ? []
+        : Array.isArray(raw) ? raw.filter((v) => v.trim() && v.length <= 200)
+        : [(raw as string)].filter((v) => v.trim() && v.length <= 200);
+      return { column, values };
+    })
+    .filter((x) => x.values.length > 0);
 }
 
 export function dimsFromParams(sp: URLSearchParams): LtDims {
   const d: LtDims = {};
   for (const { key } of LT_DIM_COLUMNS) {
-    const v = sp.get(key);
-    if (v) d[key] = v;
+    if (key === "po") {
+      const v = sp.get(key);
+      if (v) d.po = v;
+    } else {
+      const vals = sp.getAll(key).filter(Boolean);
+      if (vals.length > 0) (d as Record<string, unknown>)[key] = vals;
+    }
   }
   return d;
 }
 
 export function dimsToParams(d: LtDims | undefined, into: URLSearchParams): URLSearchParams {
-  for (const { key } of LT_DIM_COLUMNS) if (d?.[key]) into.set(key, d[key]!);
+  for (const { key } of LT_DIM_COLUMNS) {
+    const val = d?.[key as keyof LtDims];
+    if (!val) continue;
+    if (Array.isArray(val)) { for (const v of val) into.append(key, v); }
+    else into.set(key, val as string);
+  }
   return into;
 }
 
 /** Stable cache-key fragment. */
-export const dimsKey = (d?: LtDims) => JSON.stringify(activeDims(d));
+export const dimsKey = (d?: LtDims) =>
+  JSON.stringify(activeDims(d).map(({ column, values }) => ({ column, values: [...values].sort() })));

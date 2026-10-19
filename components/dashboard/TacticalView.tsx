@@ -13,7 +13,7 @@ import { LINE_THEME, LineTooltip, TOOLTIP_COLORS } from "@/components/charts/Sta
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 import { LeadTimeGaugeBar } from "@/components/ui/LeadTimeGaugeBar";
 import { ResponsiveBar, type BarCustomLayerProps, type BarDatum } from "@nivo/bar";
-import { STAGE_ORDER, stageLabel } from "@/lib/leadTimeStages";
+import { STAGE_ORDER, stageLabel, PROCESS_GROUPS } from "@/lib/leadTimeStages";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 import { FIELD, FIELD_ON, MENU, MENU_ITEM, MENU_ITEM_ON, MENU_ITEM_OFF } from "@/components/ui/FilterField";
 import { LeadTimeHistogram } from "@/components/leadtime/LeadTimeHistogram";
@@ -536,6 +536,11 @@ export function TacticalParetoChart({
   const f = ltFactor(unit);
   const stdMap = useMemo(() => new Map(stageStd.map(s => [s.stage, s.std * f])), [stageStd, f]);
 
+  const stageToProcessGroup = (stage: string): string => {
+    const grp = PROCESS_GROUPS.find((g) => (g.stages as readonly string[]).includes(stage));
+    return grp ? grp.label : stage;
+  };
+
   const rows = useMemo((): ParetoRow[] => {
     const src = (rawStages ?? []).filter((r) => {
       if (onlyActivity && r.activity !== onlyActivity) return false;
@@ -552,7 +557,7 @@ export function TacticalParetoChart({
     const groupKey = (r: ParetoStageData) => {
       if (group !== "group") return r.activity;
       if (showExtendedFilters && wip === "with-wip" && r.stage === "WIP") return r.stage;
-      return r.attached;
+      return stageToProcessGroup(r.attached);
     };
 
     // Seq = process flow: lowest ACTIVITY_SEQUENCE per bar.
@@ -571,7 +576,8 @@ export function TacticalParetoChart({
     }
     const list: ParetoRow[] = Array.from(byKey.entries())
       .map(([stage, v]) => ({
-        stage, label: stageLabel(stage),
+        stage,
+        label: group === "group" ? stage : stageLabel(stage),
         VA: v.VA * f, NNVA: v.NNVA * f, UNVA: v.UNVA * f,
         total: (v.VA + v.NNVA + v.UNVA) * f, cumPct: 0,
       }))
@@ -881,17 +887,20 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
   const nnPct = vanaTotal > 0 && c ? (c.nnvaDays / vanaTotal) * 100 : 0;
   const unPct = vanaTotal > 0 && c ? (c.unvaDays / vanaTotal) * 100 : 0;
 
-  const groupTop = useMemo(() => {
-    const items = [...groupProcess].sort((a, b) => b.avgDays - a.avgDays);
-    const head = items.slice(0, 7);
-    const tail = items.slice(7);
-    if (tail.length === 0) return head;
-    const otherDays = tail.reduce((s, r) => s + r.avgDays, 0);
-    return [...head, { activity: "Other", avgDays: otherDays, pct: 0, poCount: 0 }];
+  const groupByProcess = useMemo(() => {
+    return PROCESS_GROUPS
+      .map((grp) => {
+        const matched = groupProcess.filter((g) => (grp.stages as readonly string[]).includes(g.activity));
+        const avgDays = matched.reduce((s, r) => s + r.avgDays, 0);
+        return { label: grp.label, avgDays, color: "" };
+      })
+      .filter((g) => g.avgDays > 0)
+      .sort((a, b) => b.avgDays - a.avgDays);
   }, [groupProcess]);
-  const groupSegments: DonutSegment[] = groupTop.map((g, i) => ({
+
+  const groupSegments: DonutSegment[] = groupByProcess.map((g, i) => ({
     color: GROUP_PROCESS_PALETTE[i] ?? "#98a2b3",
-    label: g.activity === "Other" ? "Other" : stageLabel(g.activity),
+    label: g.label,
     value: g.avgDays * f,
   }));
   const groupTotal = groupSegments.reduce((s, seg) => s + seg.value, 0);

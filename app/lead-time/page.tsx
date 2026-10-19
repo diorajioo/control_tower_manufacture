@@ -131,6 +131,9 @@ export default function LeadTimePage() {
 
   const a = analysis.data;
   const stats = a ? (basis === "gross" ? a.gross : a.nett) : null;
+  // When exactly one activity is selected, pass it to components that accept a single-value filter;
+  // with 0 or 2+ selections the ltWhere clause already restricts the data, so we show all bars.
+  const singleActivity = dims.activity?.length === 1 ? dims.activity[0] : undefined;
   // Largest group process on the current basis (same values as the sunburst; PO group left out for PO Released)
   const largestBlock = (() => {
     if (!a) return null;
@@ -210,7 +213,7 @@ export default function LeadTimePage() {
                 </div>
                 <div className="col-span-7">
                   <ProcessSunburst activities={a?.activities ?? []} basis={basis} scope={scope} unit={unit}
-                    onlyActivity={dims.activity} loading={analysis.loading} />
+                    onlyActivity={singleActivity} loading={analysis.loading} />
                 </div>
               </div>
               <TacticalParetoChart
@@ -219,7 +222,7 @@ export default function LeadTimePage() {
                 stageStd={[]}
                 stageLoading={false}
                 unit={unit}
-                onlyActivity={dims.activity}
+                onlyActivity={singleActivity}
                 detailHref={null}
               />
               <LeadTimeBoxPlot data={a?.boxPlot ?? null} loading={analysis.loading} unit={unit} />
@@ -243,7 +246,7 @@ export default function LeadTimePage() {
           {tab === "pareto" && (
             <>
               <TacticalParetoChart filters={tacticalFilters} stageStd={stages.data?.stages ?? []} stageLoading={stages.loading}
-                unit={unit} onlyActivity={dims.activity} detailHref={null} />
+                unit={unit} onlyActivity={singleActivity} detailHref={null} />
               <LeadTimePlantTable
                 data={stages.data?.plants ?? null}
                 activities={stages.data?.activities ?? []}
