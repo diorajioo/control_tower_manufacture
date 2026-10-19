@@ -12,6 +12,20 @@ import { trackUserLoggedOut } from "@/lib/analytics/events";
 import { cn } from "@/lib/utils";
 import { SidebarBrand } from "@/components/dashboard/SidebarToggle";
 import { computeAlerts } from "@/lib/alerts";
+import { useT } from "@/lib/i18n";
+
+// Sidebar labels — Indonesian overrides for the few words that should localize.
+// KPI names ("Lead Time", "OEE", "Output", "Productivity", "Yield") are intentionally not translated.
+const SIDEBAR_LABEL_ID: Record<string, string> = {
+  "Overview":            "Overview",
+  "Alert Center":        "Pusat Notifikasi",
+  "Root Cause Analysis": "Analisis Akar Masalah",
+  "Reports":             "Laporan",
+  "AI Fusion":           "AI Fusion",
+  "Settings":            "Pengaturan",
+  "User Management":     "Manajemen Pengguna",
+  "Guide":               "Panduan",
+};
 
 const INACTIVITY_MS = 15 * 60 * 1000;
 
@@ -83,7 +97,9 @@ function useAlertCount() {
 }
 
 function NavRow({ item, pathname, alertCount }: { item: NavItem; pathname: string | null; alertCount: number }) {
-  const { icon: Icon, label, href, badge, accent } = item;
+  const { icon: Icon, label: rawLabel, href, badge, accent } = item;
+  const { lang, t } = useT();
+  const label = lang === "id" ? (SIDEBAR_LABEL_ID[rawLabel] ?? rawLabel) : rawLabel;
   const active = href === "/dashboard"
     ? pathname === "/dashboard"
     : !!href && (pathname === href || (pathname?.startsWith(href + "/") ?? false));
@@ -112,7 +128,7 @@ function NavRow({ item, pathname, alertCount }: { item: NavItem; pathname: strin
   if (!href) {
     return (
       <div
-        title="Coming soon"
+        title={t("empty_coming_soon")}
         aria-disabled="true"
         className={cn(
           base, "cursor-default select-none transition-colors duration-150",
@@ -139,6 +155,7 @@ function NavRow({ item, pathname, alertCount }: { item: NavItem; pathname: strin
 }
 
 export function Sidebar() {
+  const { t } = useT();
   const pathname = usePathname();
   const alertCount = useAlertCount();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -193,7 +210,7 @@ export function Sidebar() {
           className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors duration-150 w-full text-left"
         >
           <LogOut size={15} strokeWidth={1.6} className="shrink-0" />
-          <span className="text-[13px] leading-none">Sign Out</span>
+          <span className="text-[13px] leading-none">{t("nav_signout")}</span>
         </button>
       </div>
       </div>
