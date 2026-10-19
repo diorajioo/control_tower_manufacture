@@ -1280,20 +1280,22 @@ export async function getEtlTimestamp(): Promise<string | null> {
 // Tactical Overview donut (Lead Time tab): avg days per ACTIVITY across completed POs in the period.
 export async function getLeadTimeGroupProcess(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  // Group by POSITION (stage code) so the result matches PROCESS_GROUPS.stages for the DonutCard.
   return executeQuery<{ ACTIVITY: string; AVG_DAYS: number; PO_COUNT: number }>(`
-    SELECT ACTIVITY, AVG(net_lt) AS AVG_DAYS, COUNT(*) AS PO_COUNT
+    SELECT POSITION AS ACTIVITY, AVG(net_lt) AS AVG_DAYS, COUNT(*) AS PO_COUNT
     FROM (
-      SELECT PROCESS_ORDER_FG, ACTIVITY,
+      SELECT PROCESS_ORDER_FG, POSITION,
              SUM(NET_LEADTIME) / 1440.0 AS net_lt
       FROM ${LT_TABLE}
       WHERE ACTIVITY_TYPE = 'ACTUAL'
         AND PO_FG_DONE_DATE IS NOT NULL
         AND ACTIVITY <> 'ADJUST'
+        AND POSITION IS NOT NULL
         AND ${datePred}
         ${ltWhere(filters)}
-      GROUP BY PROCESS_ORDER_FG, ACTIVITY
+      GROUP BY PROCESS_ORDER_FG, POSITION
     ) sub
-    GROUP BY ACTIVITY
+    GROUP BY POSITION
     ORDER BY AVG_DAYS DESC
   `, [...dateBinds, ...ltBinds(filters)]);
 }
@@ -1502,8 +1504,8 @@ export async function getLeadTimeAnalysisStats(filters: QueryFilters, scope: "cr
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const startSql = scope === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
   const rows = await executeQuery<{
-    GROSS_AVG: number | null; GROSS_MEDIAN: number | null; GROSS_P25: number | null; GROSS_P75: number | null; GROSS_MAX: number | null; GROSS_N: number;
-    NETT_AVG: number | null; NETT_MEDIAN: number | null; NETT_P25: number | null; NETT_P75: number | null; NETT_MAX: number | null; NETT_N: number;
+    GROSS_AVG: number | null; GROSS_MEDIAN: number | null; GROSS_P25: number | null; GROSS_P75: number | null; GROSS_P90: number | null; GROSS_MAX: number | null; GROSS_N: number;
+    NETT_AVG: number | null; NETT_MEDIAN: number | null; NETT_P25: number | null; NETT_P75: number | null; NETT_P90: number | null; NETT_MAX: number | null; NETT_N: number;
     ONTIME: number; AT_RISK: number; LATE: number;
   }>(`
     WITH per_po AS (
@@ -1519,10 +1521,12 @@ export async function getLeadTimeAnalysisStats(filters: QueryFilters, scope: "cr
       AVG(gross) AS GROSS_AVG, MEDIAN(gross) AS GROSS_MEDIAN,
       PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY gross) AS GROSS_P25,
       PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY gross) AS GROSS_P75,
+      PERCENTILE_CONT(0.9)  WITHIN GROUP (ORDER BY gross) AS GROSS_P90,
       MAX(gross) AS GROSS_MAX, COUNT(gross) AS GROSS_N,
       AVG(nett) AS NETT_AVG, MEDIAN(nett) AS NETT_MEDIAN,
       PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY nett) AS NETT_P25,
       PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY nett) AS NETT_P75,
+      PERCENTILE_CONT(0.9)  WITHIN GROUP (ORDER BY nett) AS NETT_P90,
       MAX(nett) AS NETT_MAX, COUNT(nett) AS NETT_N,
       -- Same buckets as the Tactical gauge (getLeadTimeTacticalStats): on time ≤ target, at risk ≤ +15%, late above
       COUNT_IF(gross <= ?) AS ONTIME,

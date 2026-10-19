@@ -43,7 +43,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
     const s = stats as unknown as Record<string, unknown>, p = prevStats as unknown as Record<string, unknown>;
     const avg = num(s?.[`${k}_AVG`]);
     return {
-      avg, median: num(s?.[`${k}_MEDIAN`]), p25: num(s?.[`${k}_P25`]), p75: num(s?.[`${k}_P75`]), max: num(s?.[`${k}_MAX`]),
+      avg, median: num(s?.[`${k}_MEDIAN`]), p25: num(s?.[`${k}_P25`]), p75: num(s?.[`${k}_P75`]), p90: num(s?.[`${k}_P90`]), max: num(s?.[`${k}_MAX`]),
       poCount: Number(s?.[`${k}_N`] ?? 0),
       prevAvg: num(p?.[`${k}_AVG`]), trend: trend(avg, num(p?.[`${k}_AVG`])),
     };
@@ -71,7 +71,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   };
 }
 
-const cached = unstable_cache(run, ["lead-time-analysis-v3"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["lead-time-analysis-v4"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);

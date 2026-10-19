@@ -27,6 +27,7 @@ import { ProcessSunburst, type ActivityTime } from "@/components/leadtime/Proces
 import { LeadTimeHistogram } from "@/components/leadtime/LeadTimeHistogram";
 import { LeadTimePoTable, type PoListResponse } from "@/components/leadtime/LeadTimePoTable";
 import { LeadTimeLineSection } from "@/components/leadtime/LeadTimeLineSection";
+import { LeadTimeScorecardBar } from "@/components/leadtime/LeadTimeScorecardBar";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 import { PROCESS_GROUPS } from "@/lib/leadTimeStages";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
@@ -211,7 +212,8 @@ export default function LeadTimePage() {
                     <LeadTimeCompositionCard comp={a?.composition ?? null} unit={unit} loading={analysis.loading} />
                   </KpiHighlightTarget>
                 </div>
-                <div className="col-span-7">
+                <div className="col-span-7 flex flex-col gap-3.5">
+                  <LeadTimeScorecardBar stats={stats} unit={unit} loading={analysis.loading} />
                   <ProcessSunburst activities={a?.activities ?? []} basis={basis} scope={scope} unit={unit}
                     onlyActivity={singleActivity} loading={analysis.loading} />
                 </div>

@@ -13,7 +13,7 @@ import { AiTag } from "@/components/ui/KpiOneLiner";
 import type { LtBasis, LtScope, LtUnit } from "@/components/leadtime/LeadTimeFilterCard";
 
 export interface LtStats {
-  avg: number | null; median: number | null; p25: number | null; p75: number | null; max: number | null;
+  avg: number | null; median: number | null; p25: number | null; p75: number | null; p90: number | null; max: number | null;
   poCount: number; prevAvg: number | null; trend: number | null;
   /** Gross only: POs on time (≤ target), at risk (≤ +15%), late */
   onTimeCount?: number; atRiskCount?: number; lateCount?: number;
