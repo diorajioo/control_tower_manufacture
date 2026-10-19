@@ -330,7 +330,7 @@ export default function DashboardPage() {
           plants={plants}
           onFilterChange={handleFilterChange}
           initialFilters={filters}
-          views={[{ key: "strategic", label: t("toggle_strategic") }, { key: "tactical", label: t("toggle_tactical") }]}
+          views={[{ key: "strategic", label: "Strategic" }, { key: "tactical", label: "Tactical" }]}
           activeView={activeView}
           onViewChange={(v) => {
             const next = v as "strategic" | "tactical";

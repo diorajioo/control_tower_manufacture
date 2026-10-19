@@ -8,19 +8,6 @@ import { useEffect, useState } from "react";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { FIELD_LABEL, SelectField, MultiSelectField, type FieldOption } from "@/components/ui/FilterField";
 import { LT_DIM_COLUMNS, type LtDims } from "@/lib/leadTimeFilters";
-import { useT } from "@/lib/i18n";
-
-// Indonesian overrides for the dimension column labels (from LT_DIM_COLUMNS).
-const DIM_LABEL_ID: Record<string, string> = {
-  "Activity":      "Aktivitas",
-  "Line category": "Kategori Line",
-  "Line":          "Line",
-  "SKU group":     "SKU Group",
-  "SKU":           "SKU",
-  "Variant":       "Varian",
-  "PO":            "PO",
-  "PO No.":        "No. PO",
-};
 
 export type LtScope = "created" | "released";
 export type LtBasis = "gross" | "nett";
@@ -42,7 +29,6 @@ export function LeadTimeFilterCard({ base, scope, onScope, basis, onBasis, unit,
   unit: LtUnit; onUnit: (v: LtUnit) => void;
   dims: LtDims; onDims: (d: LtDims) => void;
 }) {
-  const { t, lang } = useT();
   const [options, setOptions] = useState<Options | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -64,31 +50,30 @@ export function LeadTimeFilterCard({ base, scope, onScope, basis, onBasis, unit,
   return (
     <div className="rounded-lg border border-[#EBEBEB] bg-white px-3 py-2.5 flex items-end gap-2.5 flex-wrap">
       <div className="shrink-0">
-        <span className={FIELD_LABEL}>{t("filter_scope")}</span>
+        <span className={FIELD_LABEL}>Scope</span>
         <SegmentedToggle<LtScope> ariaLabel="Lead time start"
-          options={[{ key: "created", label: t("toggle_po_created") }, { key: "released", label: t("toggle_po_released") }]}
+          options={[{ key: "created", label: "PO Created" }, { key: "released", label: "PO Released" }]}
           value={scope} onChange={onScope} />
       </div>
       <div className="shrink-0">
-        <span className={FIELD_LABEL}>{t("filter_basis")}</span>
+        <span className={FIELD_LABEL}>Basis</span>
         <SegmentedToggle<LtBasis> ariaLabel="Gross or nett"
-          options={[{ key: "gross", label: t("toggle_gross") }, { key: "nett", label: t("toggle_nett") }]}
+          options={[{ key: "gross", label: "Gross" }, { key: "nett", label: "Nett" }]}
           value={basis} onChange={onBasis} />
       </div>
-      <SelectField label={t("filter_unit")} value={unit} width={84}
-        options={[{ value: "days", label: t("toggle_days") }, { value: "hours", label: t("toggle_hours") }]}
+      <SelectField label="Unit" value={unit} width={84}
+        options={[{ value: "days", label: "Days" }, { value: "hours", label: "Hours" }]}
         onChange={(v) => onUnit(v as LtUnit)} />
 
       <div className="w-px self-stretch bg-slate-100 mx-0.5" />
 
-      <SelectField label={t("filter_po_no")} value={dims.po ?? ""} width={WIDTH.po}
+      <SelectField label="No. PO" value={dims.po ?? ""} width={WIDTH.po}
         options={options?.po ?? []} loading={!options} allLabel={ALL_LABEL.po}
         onChange={(v) => onDims({ ...dims, po: v || undefined })} />
       {(["activity", "lineCategory", "line", "skuGroup", "sku", "variant"] as const).map((key) => {
         const col = LT_DIM_COLUMNS.find((c) => c.key === key)!;
-        const label = lang === "id" ? (DIM_LABEL_ID[col.label] ?? col.label) : col.label;
         return (
-          <MultiSelectField key={key} label={label} value={dims[key] ?? []} width={WIDTH[key]}
+          <MultiSelectField key={key} label={col.label} value={dims[key] ?? []} width={WIDTH[key]}
             options={options?.[key] ?? []} loading={!options} allLabel={ALL_LABEL[key]}
             onChange={(v) => onDims({ ...dims, [key]: v.length ? v : undefined })} />
         );
@@ -97,7 +82,7 @@ export function LeadTimeFilterCard({ base, scope, onScope, basis, onBasis, unit,
       {active > 0 && (
         <button onClick={() => onDims({})}
           className="h-7 px-2 rounded-md text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40">
-          {t("action_clear_selection")} ({active})
+          Clear {active} filter{active > 1 ? "s" : ""}
         </button>
       )}
     </div>

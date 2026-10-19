@@ -108,7 +108,7 @@ export function Header({
   ltBasis, onLtBasisChange, initialFilters,
 }: HeaderProps) {
   const { data: session } = useSession();
-  const { t, lang, setLang } = useI18n();
+  const { t } = useI18n();
   const resolvedViews: Array<{ key: string; label: string; locked?: boolean }> = views ?? [
     { key: "strategic", label: t("header_view_strategic") },
     { key: "tactical",  label: t("header_view_tactical") },
@@ -294,35 +294,9 @@ export function Header({
           <span className="flex flex-col leading-tight">
             <span className="text-[11.5px] font-bold text-white">{etlAt ? t("header_data_updated") : "Live"}</span>
             <span className="text-[9.5px] text-white/60 tabular-nums">
-              {isLoading ? t("empty_loading") : etlAt ? `${fmtElapsed(nowMs - etlAt.getTime())} ${t("header_ago")}` : lastUpdated ? fmtCountdown(countdown) : ""}
+              {isLoading ? "Loading..." : etlAt ? `${fmtElapsed(nowMs - etlAt.getTime())} ${t("header_ago")}` : lastUpdated ? fmtCountdown(countdown) : ""}
             </span>
           </span>
-        </div>
-
-        {/* Language toggle — pill with ID | EN, active one highlighted */}
-        <div
-          className="flex items-center h-8 rounded-[9px] border border-white/25 bg-white/5 overflow-hidden shrink-0"
-          role="group"
-          aria-label={`${t("lang_toggle_switch_to")} ID / EN`}
-        >
-          {(["id", "en"] as const).map((code) => {
-            const active = lang === code;
-            return (
-              <button
-                key={code}
-                type="button"
-                onClick={() => setLang(code)}
-                aria-pressed={active}
-                title={`${t("lang_toggle_switch_to")} ${code === "id" ? "Bahasa Indonesia" : "English"}`}
-                className={cn(
-                  "w-8 h-full flex items-center justify-center text-[11px] font-bold tracking-wider transition-colors",
-                  active ? "bg-white text-[#1E4076]" : "text-white/80 hover:bg-white/10"
-                )}
-              >
-                {code.toUpperCase()}
-              </button>
-            );
-          })}
         </div>
 
         {/* Monitor mode */}
@@ -330,7 +304,7 @@ export function Header({
           <button
             onClick={onMonitorMode}
             className="w-8 h-8 rounded-[9px] flex items-center justify-center border border-white/25 text-white/85 hover:bg-white/10 hover:text-white transition-colors shrink-0"
-            title={t("monitor_mode_full")}
+            title="Monitor mode — full screen view"
           >
             <Monitor size={14} />
           </button>
@@ -359,7 +333,7 @@ export function Header({
             <div className="absolute right-0 top-full mt-2 z-50 w-[340px] bg-white rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.14)] border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <span className="text-[12px] font-bold text-gray-800">
-                  {alertCount > 0 ? `${alertCount} KPI${alertCount > 1 ? "s" : ""} ${t("teams_need_attention")}` : t("teams_no_active")}
+                  {alertCount > 0 ? `${alertCount} KPI${alertCount > 1 ? "s" : ""} Need Attention` : "No active alerts"}
                 </span>
                 <button onClick={() => setAlertOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
                   <X size={14} />
@@ -368,7 +342,7 @@ export function Header({
 
               <div className="max-h-[300px] overflow-y-auto divide-y divide-gray-50">
                 {alerts.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-[12px] text-gray-400">{t("status_all_normal")}</div>
+                  <div className="px-4 py-6 text-center text-[12px] text-gray-400">All KPIs within normal range</div>
                 ) : (
                   alerts.map((a) => (
                     <div key={a.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
@@ -408,10 +382,10 @@ export function Header({
                     )}
                   >
                     {teamsState === "sending" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                    {teamsState === "ok"      ? t("teams_sent") :
-                     teamsState === "err"     ? t("teams_failed") :
-                     teamsState === "sending" ? t("teams_sending") :
-                     t("teams_send")}
+                    {teamsState === "ok"      ? "Sent to Teams!" :
+                     teamsState === "err"     ? "Failed — check config" :
+                     teamsState === "sending" ? "Sending..." :
+                     "Send to Teams"}
                   </button>
                 </div>
               )}
@@ -434,10 +408,10 @@ export function Header({
 
         {/* Period */}
         <div className="relative shrink-0" ref={periodRef}>
-          <span className={FIELD_LABEL}>{t("filter_period")}</span>
+          <span className={FIELD_LABEL}>Period</span>
           <button onClick={() => setPeriodOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={periodOpen}
             className={cn(FIELD, FIELD_ON, "w-[128px] justify-between")}>
-            <span className="truncate">{PERIOD_PRESETS.find((p) => p.key === period)?.label ?? t("empty_select_period")}</span>
+            <span className="truncate">{PERIOD_PRESETS.find((p) => p.key === period)?.label ?? "Select period"}</span>
             <ChevronDown size={11} className={cn("text-slate-400 shrink-0 transition-transform duration-150", periodOpen && "rotate-180")} />
           </button>
           {periodOpen && (
@@ -455,13 +429,13 @@ export function Header({
 
         {/* Start / end date — editable for Custom Range, otherwise they show the preset's dates */}
         <label className="shrink-0">
-          <span className={FIELD_LABEL}>{t("filter_start")}</span>
+          <span className={FIELD_LABEL}>Start date</span>
           <input type="date" value={startDate} onChange={(e) => handleStart(e.target.value)}
             disabled={period !== "Custom"}
             className={cn(FIELD, period === "Custom" ? FIELD_ON : FIELD_OFF, "w-[118px] focus:outline-none focus:ring-2 focus:ring-[#1E4076]/30")} />
         </label>
         <label className="shrink-0">
-          <span className={FIELD_LABEL}>{t("filter_end")}</span>
+          <span className={FIELD_LABEL}>End date</span>
           <input type="date" value={endDate} onChange={(e) => handleEnd(e.target.value)}
             disabled={period !== "Custom"}
             className={cn(FIELD, period === "Custom" ? FIELD_ON : FIELD_OFF, "w-[118px] focus:outline-none focus:ring-2 focus:ring-[#1E4076]/30")} />
@@ -469,7 +443,7 @@ export function Header({
 
         {/* Plant */}
         <div className="relative shrink-0" ref={plantRef}>
-          <span className={FIELD_LABEL}>{t("filter_plant")}</span>
+          <span className={FIELD_LABEL}>Plant</span>
           <button onClick={() => setPlantOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={plantOpen}
             className={cn(FIELD, FIELD_ON, "w-[112px] justify-between")}>
             <span className="truncate">{plant}</span>
@@ -496,7 +470,7 @@ export function Header({
           const fixed = availableLevels.length === 1;
           return (
             <div className="relative shrink-0" ref={resolutionRef}>
-              <span className={FIELD_LABEL}>{t("filter_resolution")}</span>
+              <span className={FIELD_LABEL}>Resolution</span>
               <button onClick={() => { if (!fixed) setResolutionOpen((o) => !o); }} disabled={fixed}
                 title={fixed ? "Only one resolution fits this period" : undefined}
                 aria-haspopup="listbox" aria-expanded={resolutionOpen}
@@ -532,16 +506,16 @@ export function Header({
                 : "border-slate-200 bg-white text-slate-400 cursor-not-allowed"
             )}
           >
-            {t("action_apply")}
+            Apply
             <ArrowRight size={12} />
           </button>
           {dirty && (
             <button onClick={discardFilters}
               className="h-7 px-2 rounded-md text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40">
-              {t("action_discard")}
+              Discard
             </button>
           )}
-          {invalidRange && <span className="text-[10.5px] text-red-600">{t("filter_start")} &gt; {t("filter_end")}</span>}
+          {invalidRange && <span className="text-[10.5px] text-red-600">Start date is after end date</span>}
         </div>
 
         {/* Spacer — pushes view/basis toggles to the far right */}
@@ -551,7 +525,7 @@ export function Header({
 
         {ltBasis && onLtBasisChange && (
           <div className="shrink-0">
-            <span className={FIELD_LABEL}>{t("filter_lt_from")}</span>
+            <span className={FIELD_LABEL}>Lead time from</span>
             <div className={SEG}>
               {(["created", "released"] as const).map((b) => (
                 <button key={b} onClick={() => onLtBasisChange(b)} aria-pressed={ltBasis === b}
@@ -560,7 +534,7 @@ export function Header({
                     <motion.span layoutId="lt-basis-pill" className={SEG_PILL} style={{ zIndex: -1 }}
                       transition={{ type: "spring", stiffness: 380, damping: 32 }} />
                   )}
-                  {b === "created" ? t("toggle_po_created") : t("toggle_po_released")}
+                  {b === "created" ? "PO Created" : "PO Released"}
                 </button>
               ))}
             </div>
@@ -569,7 +543,7 @@ export function Header({
 
         {resolvedViews.length >= 2 && (
           <div className="shrink-0">
-            <span className={FIELD_LABEL}>{t("filter_view")}</span>
+            <span className={FIELD_LABEL}>View</span>
             <div className={SEG}>
               {resolvedViews.map(({ key, label, locked }) => (
                 <button key={key} onClick={() => { if (!locked) onViewChange(key); }}

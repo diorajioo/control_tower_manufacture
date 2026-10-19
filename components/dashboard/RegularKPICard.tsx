@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
 import { Fade } from "@/components/ui/Fade";
 import { KpiLabel, KpiTargetLine, StatusPill, KpiPriorLine, KpiSparkline, KpiFooter } from "@/components/ui/KpiCardParts";
-import { useT } from "@/lib/i18n";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Regular KPI card — generic version of the KPI Card standard (docs/UI_UX.md):
@@ -13,13 +12,11 @@ import { useT } from "@/lib/i18n";
 // `compact` shrinks padding/gaps/sparkline to ≈80% (fonts stay regular).
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ToneLabelKey = "status_on_track" | "status_at_risk" | "status_off_track" | "status_no_data";
-
 const TONES = {
-  on:      { color: "#067647", bg: "#f0fdf6", border: "#bbf0d2", labelKey: "status_on_track"  as ToneLabelKey },
-  risk:    { color: "#b45309", bg: "#fffaeb", border: "#f0d58a", labelKey: "status_at_risk"   as ToneLabelKey },
-  off:     { color: "#d92d20", bg: "#fef4f3", border: "#fbd5d1", labelKey: "status_off_track" as ToneLabelKey },
-  neutral: { color: "#667085", bg: "#f8f9fb", border: "#e4e7ec", labelKey: "status_no_data"   as ToneLabelKey },
+  on:      { color: "#067647", bg: "#f0fdf6", border: "#bbf0d2", label: "On Track"  },
+  risk:    { color: "#b45309", bg: "#fffaeb", border: "#f0d58a", label: "At Risk"   },
+  off:     { color: "#d92d20", bg: "#fef4f3", border: "#fbd5d1", label: "Off Track" },
+  neutral: { color: "#667085", bg: "#f8f9fb", border: "#e4e7ec", label: "No Data"   },
 };
 
 type ToneKey = keyof typeof TONES;
@@ -83,13 +80,12 @@ export function RegularKPICard({
   toggle,
   insightId,
 }: RegularKPICardProps) {
-  const { t } = useT();
   // Size scale for spacing/sparkline: 1 = regular, 0.8 = compact. Font sizes are always regular.
   const z = (n: number) => (compact ? Math.round(n * 0.8 * 2) / 2 : n);
 
   const tone = TONES[noData ? "neutral" : toneFromTrend(trend, inverse)];
   // Value exists but the prior period is empty (trend = null) → not "No Data"
-  const statusLabel = !noData && trend === null ? t("status_no_data") : t(tone.labelKey);
+  const statusLabel = !noData && trend === null ? "No Prior Data" : tone.label;
   const spark = noData ? [] : sparkline;
 
   return (

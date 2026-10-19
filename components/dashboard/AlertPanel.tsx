@@ -7,7 +7,6 @@ import type { KPIAlert } from "@/lib/alerts";
 import type { RiskPoResult } from "@/lib/riskScore";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { activityLabel } from "@/lib/leadTimeStages";
-import { useT } from "@/lib/i18n";
 
 interface AlertPanelProps {
   alerts: KPIAlert[];
@@ -47,7 +46,6 @@ const SEVERITY_CONFIG = {
 type SendState = "idle" | "sending" | "sent" | "error";
 
 export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDate, riskScores = [], riskLoading = false }: AlertPanelProps) {
-  const { t } = useT();
   const [collapsed, setCollapsed] = useState(true);
   const [sendState, setSendState] = useState<SendState>("idle");
   const [sendError, setSendError] = useState<string | null>(null);
@@ -62,8 +60,8 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
     return (
       <div className="rounded-lg border border-[#EBEBEB] bg-white px-4 py-2.5 flex items-center gap-2 shrink-0">
         <AlertTriangle size={13} className="text-gray-300 shrink-0" />
-        <span className="text-xs font-semibold text-gray-400">{t("section_kpi_alerts")}</span>
-        <span className="ml-auto text-[11px] text-emerald-600 font-semibold">✓ {t("status_all_normal")}</span>
+        <span className="text-xs font-semibold text-gray-400">KPI Alerts</span>
+        <span className="ml-auto text-[11px] text-emerald-600 font-semibold">✓ All KPIs within normal range</span>
       </div>
     );
   }
@@ -118,10 +116,10 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
           className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
         >
           <AlertTriangle size={14} className="text-amber-500" />
-          <span className="text-xs font-semibold text-gray-700">{t("section_kpi_alerts")}</span>
+          <span className="text-xs font-semibold text-gray-700">KPI Alerts</span>
           <div className="flex gap-1.5">
             {alerts.length === 0 ? (
-              <span className="text-[11px] text-emerald-600 font-semibold">✓ {t("status_all_normal")}</span>
+              <span className="text-[11px] text-emerald-600 font-semibold">✓ All KPIs within normal range</span>
             ) : (
               <>
                 {criticalCount > 0 && (
@@ -317,7 +315,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
                     open={atRiskOpen}
                     onToggle={() => setAtRiskOpen((v) => !v)}
                     icon={<TrendingUp size={11} className="text-amber-500" />}
-                    label={t("section_predicted_risk")}
+                    label="Predicted at risk"
                     count={atRisk.length}
                     badgeCls="bg-amber-100 text-amber-700"
                     rows={atRisk}
@@ -328,7 +326,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
                     open={lateOpen}
                     onToggle={() => setLateOpen((v) => !v)}
                     icon={<AlertTriangle size={11} className="text-red-500" />}
-                    label={t("section_already_late")}
+                    label="Already late — still in production"
                     count={confirmed.length}
                     badgeCls="bg-red-100 text-red-700"
                     rows={confirmed}

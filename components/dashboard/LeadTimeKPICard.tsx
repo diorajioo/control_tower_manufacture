@@ -5,19 +5,17 @@ import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
 import { Fade } from "@/components/ui/Fade";
 import { KpiLabel, KpiTargetLine, StatusPill, KpiPriorLine, KpiSparkline, KpiFooter } from "@/components/ui/KpiCardParts";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
-import { useT } from "@/lib/i18n";
 
 const TARGET = LEAD_TIME_TARGET_DAYS;
 
-type ToneKey = "on" | "risk" | "off" | "neutral";
-type ToneLabelKey = "status_on_track" | "status_at_risk" | "status_off_track" | "status_no_data";
-
-const TONES: Record<ToneKey, { color: string; bg: string; border: string; labelKey: ToneLabelKey }> = {
-  on:      { color: "#067647", bg: "#f0fdf6", border: "#bbf0d2", labelKey: "status_on_track"  },
-  risk:    { color: "#b45309", bg: "#fffaeb", border: "#f0d58a", labelKey: "status_at_risk"   },
-  off:     { color: "#d92d20", bg: "#fef4f3", border: "#fbd5d1", labelKey: "status_off_track" },
-  neutral: { color: "#667085", bg: "#f8f9fb", border: "#e4e7ec", labelKey: "status_no_data"   },
+const TONES = {
+  on:      { color: "#067647", bg: "#f0fdf6", border: "#bbf0d2", label: "On Track"     },
+  risk:    { color: "#b45309", bg: "#fffaeb", border: "#f0d58a", label: "At Risk"      },
+  off:     { color: "#d92d20", bg: "#fef4f3", border: "#fbd5d1", label: "Off Track"    },
+  neutral: { color: "#667085", bg: "#f8f9fb", border: "#e4e7ec", label: "No Data"      },
 };
+
+type ToneKey = "on" | "risk" | "off" | "neutral";
 
 function toneFromDays(days: number, tgt = TARGET): ToneKey {
   if (days === 0) return "neutral";
@@ -109,7 +107,6 @@ export function LeadTimeKPICard({
   insightId,
   onSparkClick,
 }: LeadTimeKPICardProps) {
-  const { t } = useT();
   const [unit, setUnit] = useState<"days" | "hours">("days");
   const [type, setType] = useState<"gross" | "nett">("gross");
 
@@ -124,7 +121,7 @@ export function LeadTimeKPICard({
   const fmtVal    = (d: number) => unit === "hours"
     ? Math.round(toDisp(d)).toLocaleString("en-US")
     : toDisp(d).toFixed(2);
-  const unitLabel = unit === "hours" ? t("toggle_hours").toLowerCase() : t("toggle_days").toLowerCase();
+  const unitLabel = unit === "hours" ? "hours" : "days";
 
   // Delta vs target — always gross-based (target is defined on gross)
   const delta        = grossDays - target;
@@ -150,13 +147,13 @@ export function LeadTimeKPICard({
             />
             <div style={{ display: "flex", gap: z(6) }}>
               <SegToggle
-                options={[{ label: t("toggle_days"), value: "days" }, { label: t("toggle_hours"), value: "hours" }]}
+                options={[{ label: "Days", value: "days" }, { label: "Hours", value: "hours" }]}
                 value={unit}
                 onChange={setUnit}
                 z={z}
               />
               <SegToggle
-                options={[{ label: t("toggle_gross"), value: "gross" }, { label: t("toggle_nett"), value: "nett" }]}
+                options={[{ label: "Gross", value: "gross" }, { label: "Nett", value: "nett" }]}
                 value={type}
                 onChange={setType}
                 z={z}
@@ -187,7 +184,7 @@ export function LeadTimeKPICard({
                     text={`vs gross ${fmtVal(grossDays)} ${unitLabel} (non-process time)`}
                   />
                 )}
-                <StatusPill color={tone.color} bg={tone.bg} border={tone.border} label={t(tone.labelKey)} />
+                <StatusPill color={tone.color} bg={tone.bg} border={tone.border} label={tone.label} />
                 <KpiPriorLine pct={primaryTrend} color={trendColor(primaryTrend)} />
               </div>
             </Fade>
@@ -230,7 +227,7 @@ export function LeadTimeKPICard({
         </div>
       </div>
 
-      <KpiFooter href="/lead-time" right={`${t("label_target")} ≤ ${target.toFixed(2)} ${t("toggle_days").toLowerCase()}`} z={z} />
+      <KpiFooter href="/lead-time" right={`Target ≤ ${target.toFixed(2)} days`} z={z} />
     </div>
   );
 }

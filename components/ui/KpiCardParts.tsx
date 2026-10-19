@@ -4,7 +4,6 @@ import Link from "next/link";
 import { ResponsiveLine } from "@nivo/line";
 import { LineDraw } from "@/components/charts/LineDraw";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
-import { useT } from "@/lib/i18n";
 
 // Shared blocks for every KPI card (KPI Card standard, docs/UI_UX.md):
 // label + ⓘ · value · target line · status pill · prior-period line · clickable sparkline · "Open page →" footer.
@@ -50,12 +49,11 @@ export function StatusPill({ color, bg, border, label }: { color: string; bg: st
 
 /** "↑ 3.9% vs prior period" — tone color; gray "No prior period data" when there is no comparison. */
 export function KpiPriorLine({ pct, color, suffix }: { pct: number | null; color: string; suffix?: string }) {
-  const { t } = useT();
-  if (pct === null) return <div style={{ fontSize: 11, color: GRAY }}>{t("empty_no_data")}</div>;
+  if (pct === null) return <div style={{ fontSize: 11, color: GRAY }}>No prior period data</div>;
   const arrow = pct > 0 ? "↑" : pct < 0 ? "↓" : "→";
   return (
     <div style={{ fontSize: 11, color: GRAY, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-      <span style={{ fontWeight: 700, color }}>{arrow} {Math.abs(pct).toFixed(1)}%</span> {t("label_vs_prior")}{suffix ? ` ${suffix}` : ""}
+      <span style={{ fontWeight: 700, color }}>{arrow} {Math.abs(pct).toFixed(1)}%</span> vs prior period{suffix ? ` ${suffix}` : ""}
     </div>
   );
 }
@@ -121,15 +119,14 @@ export function KpiSparkline({ data, caption, z, onClick, label }: {
 
 /** Footer: "Open page →" link to the KPI's detail page, or a muted note when the page does not exist yet. */
 export function KpiFooter({ href, right, z }: { href?: string; right?: string; z: Z }) {
-  const { t } = useT();
   return (
     <div style={{ background: "white", borderTop: "1px solid #eceef2", display: "flex", alignItems: "center", justifyContent: "space-between", gap: z(8), padding: `${z(7)}px ${z(16)}px`, borderRadius: "0 0 7px 7px" }}>
       {href ? (
         <Link href={href} className="kpi-open-link" style={{ fontSize: 11.5, fontWeight: 700, color: "#1E4076", textDecoration: "none", whiteSpace: "nowrap" }}>
-          {t("action_open_page")} →
+          Open page →
         </Link>
       ) : (
-        <span style={{ fontSize: 11, color: "#a3a8b5", whiteSpace: "nowrap" }}>—</span>
+        <span style={{ fontSize: 11, color: "#a3a8b5", whiteSpace: "nowrap" }}>No detail page yet</span>
       )}
       {right && <span style={{ fontSize: 10, color: "#a3a8b5", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{right}</span>}
     </div>

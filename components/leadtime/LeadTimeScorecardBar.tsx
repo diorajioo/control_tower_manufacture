@@ -6,15 +6,14 @@
 import type { LtUnit } from "@/components/leadtime/LeadTimeFilterCard";
 import type { LtStats } from "@/components/leadtime/LeadTimeSummaryCards";
 import { fmtLt } from "@/components/leadtime/LeadTimeSummaryCards";
-import { useT, type TranslationKey } from "@/lib/i18n";
 
-const CHIPS: { labelKey: TranslationKey; key: keyof LtStats; unit?: true }[] = [
-  { labelKey: "sc_total_pos", key: "poCount" },
-  { labelKey: "sc_median",    key: "median",  unit: true },
-  { labelKey: "sc_p25",       key: "p25",     unit: true },
-  { labelKey: "sc_p75",       key: "p75",     unit: true },
-  { labelKey: "sc_p90",       key: "p90",     unit: true },
-  { labelKey: "sc_max",       key: "max",     unit: true },
+const CHIPS: { label: string; key: keyof LtStats; unit?: true }[] = [
+  { label: "Total POs",    key: "poCount" },
+  { label: "Median",       key: "median",  unit: true },
+  { label: "Percentile 25",key: "p25",     unit: true },
+  { label: "Percentile 75",key: "p75",     unit: true },
+  { label: "Percentile 90",key: "p90",     unit: true },
+  { label: "Maximum",      key: "max",     unit: true },
 ];
 
 export function LeadTimeScorecardBar({ stats, unit, loading }: {
@@ -22,11 +21,9 @@ export function LeadTimeScorecardBar({ stats, unit, loading }: {
   unit: LtUnit;
   loading: boolean;
 }) {
-  const { t } = useT();
   return (
     <div className="rounded-lg border border-[#EBEBEB] bg-white grid grid-cols-6 divide-x divide-[#EBEBEB] overflow-hidden shrink-0">
-      {CHIPS.map(({ labelKey, key, unit: hasUnit }) => {
-        const label = t(labelKey);
+      {CHIPS.map(({ label, key, unit: hasUnit }) => {
         const raw = stats?.[key];
         let display: string;
         if (loading) {
