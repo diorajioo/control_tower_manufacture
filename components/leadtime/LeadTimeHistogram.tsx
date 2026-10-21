@@ -235,7 +235,7 @@ export function LeadTimeHistogram({ filters, basis, metric, unit, detailHref = "
                 grid: { line: { stroke: "#eef0f3", strokeDasharray: "3 3" } },
                 axis: {
                   ticks: { text: { fontSize: 10, fill: "#667085", fontFamily: "Lato, sans-serif" } },
-                  legend: { text: { fontSize: 10.5, fill: "#667085", fontFamily: "Lato, sans-serif", fontWeight: 700 } },
+                  legend: { text: { fontSize: 10.5, fill: "#667085", fontFamily: "Lato, sans-serif", fontWeight: 400, letterSpacing: 1 } },
                 },
               }}
               layers={["grid", "axes", "bars", Overlay, "markers", "legends"]}
