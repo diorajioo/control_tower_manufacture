@@ -3,7 +3,7 @@
 // then computed on those whole POs (decided 2026-10-13). Shared by the page (query string) and the API routes.
 
 export interface LtDims {
-  po?: string;
+  po?: string[];
   activity?: string[];
   lineCategory?: string[];
   line?: string[];
@@ -40,13 +40,8 @@ export function activeDims(d?: LtDims): { column: string; values: string[] }[] {
 export function dimsFromParams(sp: URLSearchParams): LtDims {
   const d: LtDims = {};
   for (const { key } of LT_DIM_COLUMNS) {
-    if (key === "po") {
-      const v = sp.get(key);
-      if (v) d.po = v;
-    } else {
-      const vals = sp.getAll(key).filter(Boolean);
-      if (vals.length > 0) (d as Record<string, unknown>)[key] = vals;
-    }
+    const vals = sp.getAll(key).filter(Boolean);
+    if (vals.length > 0) (d as Record<string, unknown>)[key] = vals;
   }
   return d;
 }

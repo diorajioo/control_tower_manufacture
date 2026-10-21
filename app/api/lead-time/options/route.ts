@@ -3,7 +3,10 @@ import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { getLeadTimeFilterOptions } from "@/lib/queries";
-import { activityLabel } from "@/lib/leadTimeStages";
+import { activityLabel, PROCESS_GROUPS } from "@/lib/leadTimeStages";
+
+const posToGroup = (pos: string | null): string | undefined =>
+  pos ? PROCESS_GROUPS.find((g) => (g.stages as readonly string[]).includes(pos))?.label : undefined;
 
 export const maxDuration = 60;
 
@@ -13,7 +16,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   const plain = (rows: { V: string }[]) => rows.map((r) => ({ value: String(r.V), label: String(r.V) }));
   return {
     po:           plain(o.po),
-    activity:     [...o.activity].sort((a, b) => (a.S ?? 999) - (b.S ?? 999)).map((r) => ({ value: String(r.V), label: activityLabel(String(r.V)) })),
+    activity:     [...o.activity].sort((a, b) => (a.S ?? 999) - (b.S ?? 999)).map((r) => ({ value: String(r.V), label: activityLabel(String(r.V)), group: posToGroup(r.P ?? null) })),
     lineCategory: plain(o.lineCategory),
     line:         plain(o.line),
     skuGroup:     plain(o.skuGroup),
@@ -22,7 +25,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   };
 }
 
-const cached = unstable_cache(run, ["lead-time-options-v1"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["lead-time-options-v2"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);

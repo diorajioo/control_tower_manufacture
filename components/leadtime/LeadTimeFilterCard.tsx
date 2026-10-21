@@ -81,9 +81,9 @@ export function LeadTimeFilterCard({ base, scope, onScope, basis, onBasis, unit,
 
       <div className="w-px self-stretch bg-slate-100 mx-0.5" />
 
-      <SelectField label={t("filter_po_no")} value={dims.po ?? ""} width={WIDTH.po}
+      <MultiSelectField label={t("filter_po_no")} value={dims.po ?? []} width={WIDTH.po}
         options={options?.po ?? []} loading={!options} allLabel={ALL_LABEL.po}
-        onChange={(v) => onDims({ ...dims, po: v || undefined })} />
+        onChange={(v) => onDims({ ...dims, po: v.length ? v : undefined })} />
       {(["activity", "lineCategory", "line", "skuGroup", "sku", "variant"] as const).map((key) => {
         const col = LT_DIM_COLUMNS.find((c) => c.key === key)!;
         const label = lang === "id" ? (DIM_LABEL_ID[col.label] ?? col.label) : col.label;

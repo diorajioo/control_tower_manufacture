@@ -20,7 +20,7 @@ export const MENU_ITEM = "w-full flex items-center justify-between gap-2 px-3 py
 export const MENU_ITEM_ON = "bg-[#EEF4FB] text-[#16305C] font-semibold";
 export const MENU_ITEM_OFF = "text-slate-700 hover:bg-slate-50";
 
-export interface FieldOption { value: string; label: string }
+export interface FieldOption { value: string; label: string; group?: string }
 
 const SHOW_MAX = 200; // long lists (20k POs) are searched, not scrolled
 
@@ -141,6 +141,32 @@ export function MultiSelectField({ label, value, options, onChange, allLabel, wi
     onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
   };
 
+  const grouped = useMemo(() => {
+    if (!matches.shown.some((o) => o.group)) return null;
+    const map = new Map<string, FieldOption[]>();
+    for (const o of matches.shown) {
+      const g = o.group ?? "";
+      if (!map.has(g)) map.set(g, []);
+      map.get(g)!.push(o);
+    }
+    return Array.from(map.entries()).filter(([, opts]) => opts.length > 0).map(([group, opts]) => ({ group, opts }));
+  }, [matches.shown]);
+
+  const renderItem = (o: FieldOption) => {
+    const on = value.includes(o.value);
+    return (
+      <button key={o.value} onClick={() => toggle(o.value)} role="option" aria-selected={on}
+        className={cn(MENU_ITEM, on ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={cn("w-3 h-3 rounded-[3px] border shrink-0 flex items-center justify-center transition-colors", on ? "bg-[#1E4076] border-[#1E4076]" : "border-slate-300 bg-white")}>
+            {on && <Check size={8} className="text-white" strokeWidth={3} />}
+          </div>
+          <span className="truncate">{o.label}</span>
+        </div>
+      </button>
+    );
+  };
+
   return (
     <div className="relative shrink-0" ref={ref} style={{ width }}>
       <span className={FIELD_LABEL}>{label}</span>
@@ -160,23 +186,29 @@ export function MultiSelectField({ label, value, options, onChange, allLabel, wi
               </div>
             </div>
           )}
-          <div className="overflow-y-auto py-0.5">
-            {allLabel && hasValue && (
-              <button onClick={() => onChange([])} role="option" aria-selected={false}
-                className={cn(MENU_ITEM, MENU_ITEM_OFF, "text-[#16305C] font-semibold")}>
-                <span>Clear selection</span>
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-100">
+            <button onClick={() => onChange(options.map((o) => o.value))}
+              className="text-[11px] font-semibold text-[#1E4076] hover:underline focus:outline-none">
+              Select all
+            </button>
+            {hasValue && (
+              <button onClick={() => onChange([])}
+                className="text-[11px] font-semibold text-slate-500 hover:underline focus:outline-none">
+                Clear
               </button>
             )}
-            {matches.shown.map((o) => {
-              const on = value.includes(o.value);
-              return (
-                <button key={o.value} onClick={() => toggle(o.value)} role="option" aria-selected={on}
-                  className={cn(MENU_ITEM, on ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
-                  <span className="truncate">{o.label}</span>
-                  {on && <Check size={10} className="text-[#1E4076] shrink-0" />}
-                </button>
-              );
-            })}
+          </div>
+          <div className="overflow-y-auto py-0.5">
+            {grouped ? (
+              grouped.map(({ group, opts }) => (
+                <div key={group}>
+                  <p className="px-3 pt-2 pb-0.5 text-[9.5px] font-bold uppercase tracking-[0.08em] text-slate-400">{group}</p>
+                  {opts.map(renderItem)}
+                </div>
+              ))
+            ) : (
+              matches.shown.map(renderItem)
+            )}
             {matches.total === 0 && <p className="px-3 py-2 text-[11px] text-slate-400">No match</p>}
             {matches.total > SHOW_MAX && (
               <p className="px-3 py-1.5 text-[10.5px] text-slate-400">{matches.total - SHOW_MAX} more — type to narrow</p>
