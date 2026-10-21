@@ -74,13 +74,17 @@ const STICKY = [
 ] as const;
 const stickyStyle = (i: 0 | 1 | 2) => ({ position: "sticky" as const, left: STICKY[i].left, minWidth: STICKY[i].w, width: STICKY[i].w, zIndex: 2 });
 
-export function LeadTimePlantTable({ data, activities = [], targetDays, loading, basis = "created", unit = "days" }: {
+export function LeadTimePlantTable({ data, activities = [], targetDays, loading, basis = "created", unit = "days", onRowClick, selectedPlant }: {
   data: PlantBreakdown[] | null;
   activities?: PlantActivity[];
   targetDays: number;
   loading: boolean;
   basis?: "created" | "released";
   unit?: "days" | "hours";
+  /** Called with the plant name when a plant row is clicked; null = deselect (network row clicked) */
+  onRowClick?: (plant: string | null) => void;
+  /** Highlights this plant row as selected */
+  selectedPlant?: string | null;
 }) {
   const [view, setView] = useState<View>("group");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -153,8 +157,8 @@ export function LeadTimePlantTable({ data, activities = [], targetDays, loading,
   return (
     <ChartCard
       title="Lead time breakdown per plant"
-      subtitle={`${unit === "hours" ? "Hours" : "Days"} per PO per ${view === "group" ? "group process" : "process"}. Red cell = above the network value for that column (darker = further above).`}
-      info={`Cell = net time of the process ÷ POs of that plant (POs completed in the period). Group Process: Mixing = Processing + Processing Cleaning, Filpac = Packing 1 + Packing 2 + Packing Cleaning, WIP = all waiting. Process: one column per activity in process order; WIP shows the ${WIP_TOP} largest + the rest as Others. Red compares each plant with the network row, not with a standard. Gross LT and On-time follow the PO Created / PO Released toggle (now ${basisLabel}). On-time = share of POs with gross lead time ≤ ${targetDays} days; there is no due-date column yet.`}
+      subtitle={`${unit === "hours" ? "Hours" : "Days"} per PO · ${basisLabel}`}
+      info={`Each cell = net time of that process ÷ POs completed in the period. Red = plant is above the network value for that column (darker = further above). On-time = POs with gross lead time ≤ ${targetDays} days.`}
       actions={actions}
       fadeKey={`${view}|${unit}|${hidden.size}|${network?.poCount ?? 0}|${network?.gross ?? ""}`}
     >
@@ -203,10 +207,16 @@ export function LeadTimePlantTable({ data, activities = [], targetDays, loading,
               <tbody className="divide-y divide-gray-50">
                 {[network, ...plants].map((row) => {
                   const isNetwork = row.plant == null;
-                  const stickyBg = isNetwork ? "#F8FAFC" : "#FFFFFF";
+                  const isSelected = !isNetwork && selectedPlant === row.plant;
+                  const stickyBg = isSelected ? "#EEF4FB" : isNetwork ? "#F8FAFC" : "#FFFFFF";
+                  const clickable = !isNetwork && onRowClick;
                   return (
-                    <tr key={row.plant ?? "network"} className={cn(isNetwork && "bg-[#F8FAFC]")}>
-                      <td style={{ ...stickyStyle(0), background: stickyBg }} className={cn(TD, "text-left", isNetwork ? "font-bold text-slate-900" : "text-slate-700")}>
+                    <tr
+                      key={row.plant ?? "network"}
+                      className={cn(isNetwork && "bg-[#F8FAFC]", isSelected && "bg-[#EEF4FB]", clickable && "cursor-pointer hover:bg-slate-50")}
+                      onClick={clickable ? () => onRowClick(isSelected ? null : row.plant) : undefined}
+                    >
+                      <td style={{ ...stickyStyle(0), background: stickyBg }} className={cn(TD, "text-left", isNetwork ? "font-bold text-slate-900" : isSelected ? "font-bold text-[#1E4076]" : "text-slate-700")}>
                         {isNetwork ? "Network (all plants)" : row.plant}
                       </td>
                       <td style={{ ...stickyStyle(1), background: stickyBg }} className={cn(TD, "font-bold text-slate-900")}>{fmt(row.gross)}</td>

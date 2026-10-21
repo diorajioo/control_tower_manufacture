@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, ArrowRight, ChevronDown, Check, Loader2, X, Send, Monitor, Lock } from "lucide-react";
+import { Bell, ArrowRight, ChevronDown, Check, Loader2, X, Send, Monitor, Lock, User, Settings, LogOut } from "lucide-react";
 
 const EN_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const EN_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -25,7 +25,7 @@ function useClock() {
   }, []);
   return { time, date };
 }
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { FIELD_LABEL, FIELD, FIELD_ON, FIELD_OFF, SEG, SEG_ITEM, SEG_PILL, MENU, MENU_ITEM, MENU_ITEM_ON, MENU_ITEM_OFF } from "@/components/ui/FilterField";
@@ -99,13 +99,15 @@ interface HeaderProps {
   onMonitorMode?: () => void;
   ltBasis?: "created" | "released";
   onLtBasisChange?: (b: "created" | "released") => void;
+  /** Page title shown above the filter bar */
+  pageTitle?: string;
 }
 
 export function Header({
   plants, onFilterChange, activeView, onViewChange, views,
   onRefresh, isLoading, lastUpdated, alertCount = 0, onBellClick,
   alerts = [], onDismiss, onMonitorMode,
-  ltBasis, onLtBasisChange, initialFilters,
+  ltBasis, onLtBasisChange, initialFilters, pageTitle,
 }: HeaderProps) {
   const { data: session } = useSession();
   const { t, lang, setLang } = useI18n();
@@ -132,10 +134,12 @@ export function Header({
   const [resolutionOpen, setResolutionOpen] = useState(false);
   const [alertOpen,      setAlertOpen]      = useState(false);
   const [teamsState,     setTeamsState]     = useState<"idle"|"sending"|"ok"|"err">("idle");
+  const [avatarOpen,     setAvatarOpen]     = useState(false);
   const plantRef      = useRef<HTMLDivElement>(null);
   const periodRef     = useRef<HTMLDivElement>(null);
   const resolutionRef = useRef<HTMLDivElement>(null);
   const alertRef      = useRef<HTMLDivElement>(null);
+  const avatarRef     = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -143,6 +147,7 @@ export function Header({
       if (periodRef.current     && !periodRef.current.contains(e.target as Node))     setPeriodOpen(false);
       if (resolutionRef.current && !resolutionRef.current.contains(e.target as Node)) setResolutionOpen(false);
       if (alertRef.current      && !alertRef.current.contains(e.target as Node))      setAlertOpen(false);
+      if (avatarRef.current     && !avatarRef.current.contains(e.target as Node))     setAvatarOpen(false);
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
@@ -419,17 +424,92 @@ export function Header({
           )}
         </div>
 
-        {/* Avatar */}
-        <div
-          className="w-8 h-8 bg-white/15 rounded-full flex items-center justify-center cursor-pointer shrink-0"
-          title={session?.user?.name ?? ""}
-          onClick={onRefresh}
-        >
-          <span className="text-white text-[11px] font-bold tracking-tight">{initials}</span>
+        {/* Avatar + dropdown */}
+        <div className="relative shrink-0" ref={avatarRef}>
+          <div
+            className="w-8 h-8 bg-white/15 rounded-full flex items-center justify-center cursor-pointer hover:bg-white/25 transition-colors"
+            title={session?.user?.name ?? ""}
+            onClick={() => setAvatarOpen((o) => !o)}
+          >
+            <span className="text-white text-[11px] font-bold tracking-tight">{initials}</span>
+          </div>
+          {avatarOpen && (
+            <div style={{
+              position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 200,
+              background: "white", border: "1px solid #e5e7eb", borderRadius: 12,
+              boxShadow: "0 12px 32px -8px rgba(16,24,40,0.22)",
+              minWidth: 240, fontFamily: "Lato, sans-serif",
+              overflow: "hidden",
+            }}>
+              {/* Account info — centred avatar */}
+              <div style={{ padding: "20px 16px 16px", textAlign: "center", borderBottom: "1px solid #f3f4f6" }}>
+                <div style={{
+                  width: 52, height: 52, borderRadius: "50%", background: "#1E4076",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  margin: "0 auto 10px",
+                }}>
+                  <span style={{ color: "white", fontSize: 18, fontWeight: 700 }}>{initials}</span>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#101828" }}>
+                  {session?.user?.name ?? "—"}
+                </div>
+                {(session?.user as { jobTitle?: string })?.jobTitle && (
+                  <div style={{ fontSize: 11.5, color: "#667085", marginTop: 2 }}>
+                    {(session.user as { jobTitle?: string }).jobTitle}
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: "#98a2b3", marginTop: 3, wordBreak: "break-all" }}>
+                  {session?.user?.email ?? ""}
+                </div>
+              </div>
+
+              {/* Menu items */}
+              {[
+                { icon: <User size={15} strokeWidth={1.75} />, label: "My profile",  href: "/settings" },
+                { icon: <Settings size={15} strokeWidth={1.75} />, label: "Settings", href: "/settings" },
+              ].map(({ icon, label, href }) => (
+                <a key={label} href={href}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "11px 16px", fontSize: 13, color: "#101828",
+                    textDecoration: "none", cursor: "pointer",
+                    transition: "background 0.1s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <span style={{ color: "#667085" }}>{icon}</span>
+                  {label}
+                </a>
+              ))}
+
+              {/* Divider + Sign out */}
+              <div style={{ borderTop: "1px solid #f3f4f6" }}>
+                <button
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  style={{
+                    width: "100%", padding: "11px 16px", textAlign: "left", background: "none", border: "none",
+                    fontSize: 13, color: "#d92d20", fontWeight: 600, cursor: "pointer", fontFamily: "Lato, sans-serif",
+                    display: "flex", alignItems: "center", gap: 10, transition: "background 0.1s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#fff5f5")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  <LogOut size={15} strokeWidth={1.75} />
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── Row 2: Filter bar — labelled fields (PERIOD · START DATE · END DATE · PLANT · RESOLUTION) + Apply ── */}
+      {pageTitle && (
+        <div className="px-5 pt-2 pb-0 bg-white">
+          <span className="text-[13px] font-bold text-slate-800">{pageTitle}</span>
+        </div>
+      )}
       <div className="flex items-end gap-2.5 px-5 pt-1.5 pb-2 bg-white border-b border-gray-100 flex-wrap shadow-[0_1px_0_rgba(0,0,0,0.03)]">
 
         {/* Period */}

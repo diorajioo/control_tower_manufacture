@@ -182,8 +182,8 @@ export function LeadTimeHistogram({ filters, basis, metric, unit, detailHref = "
 
   return (
     <div className="rounded-lg border border-[#EBEBEB] bg-white p-4">
-      <div className="flex items-start justify-between mb-3 gap-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start mb-3 gap-3">
+        <div className="flex items-center gap-1.5 flex-1">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead Time Distribution per PO</p>
           <InfoTooltip
             text={(metric === "nett"
@@ -193,12 +193,12 @@ export function LeadTimeHistogram({ filters, basis, metric, unit, detailHref = "
             size={13}
             width={240}
           />
+          {detailHref && (
+            <a href={detailHref} className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">
+              Open detail →
+            </a>
+          )}
         </div>
-        {detailHref && (
-          <a href={detailHref} className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">
-            Open detail →
-          </a>
-        )}
       </div>
 
       {loading ? (

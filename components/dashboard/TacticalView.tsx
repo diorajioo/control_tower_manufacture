@@ -83,11 +83,11 @@ const fmtLt = (days: number, u: LtUnit) => (days * ltFactor(u)).toFixed(u === "h
 
 const TABS = [
   { id: "leadtime",     label: "Lead Time"   },
-  { id: "productivity", label: "Productivity" },
   { id: "output",       label: "Output"       },
+  { id: "productivity", label: "Productivity" },
+  { id: "yield",        label: "Yield"        },
   { id: "oee",          label: "OEE"          },
   { id: "energy",       label: "Energy",   locked: true },
-  { id: "yield",        label: "Yield"        },
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
@@ -382,7 +382,7 @@ function PieChart({ segments, size = 120 }: { segments: DonutSegment[]; size?: n
           <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
             <span style={{ width: 6, height: 6, borderRadius: 999, background: hovSeg.color, flexShrink: 0 }} />
             <span style={{ fontSize: 11.5, fontWeight: 700, color: TOOLTIP_COLORS.title, flex: 1 }}>
-              {hovSeg.label}
+              {hovSeg.label}{hovSeg.sub ? <span style={{ fontWeight: 400, color: TOOLTIP_COLORS.muted, fontSize: 10.5 }}> · {hovSeg.sub}</span> : null}
             </span>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: TOOLTIP_COLORS.value, fontVariantNumeric: "tabular-nums" }}>
               {hovSeg.value.toFixed(2)}
@@ -433,8 +433,9 @@ function DonutCard({
               return (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
-                  <span style={{ color: "#334155", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {seg.label}
+                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                    <span style={{ color: "#334155", fontWeight: 700, display: "block" }}>{seg.label}</span>
+                    {seg.sub && <span style={{ color: "#98a2b3", fontSize: 9.5, display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{seg.sub}</span>}
                   </span>
                   <span style={{ color: "#101828", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
                     {seg.value.toFixed(unitSuffix === "h" ? 1 : 2)}{unitSuffix}
@@ -492,7 +493,7 @@ const paretoSeq = (stage: string) => {
 };
 
 export function TacticalParetoChart({
-  filters, stageStd, stageLoading, unit = "days", onlyActivity, detailHref = "/lead-time",
+  filters, stageStd, stageLoading, unit = "days", onlyActivity, detailHref = "/lead-time?tab=pareto",
   showExtendedFilters = false,
 }: {
   filters: TacticalFilters; stageStd: StageStdPoint[]; stageLoading: boolean; unit?: LtUnit;
@@ -656,8 +657,11 @@ export function TacticalParetoChart({
     <div className="rounded-lg border border-[#EBEBEB] bg-white p-4">
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Pareto Lead Time</p>
-          {detailHref && <a href={detailHref} className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">Open detail →</a>}
+          <div className="flex items-center gap-1.5">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Pareto Lead Time</p>
+            <InfoTooltip text="Net time per PO per process, summed over POs completed in the period. Bars represent average days (or hours); the standard line is the engineering estimate. Group Process merges related activities into 6 groups." size={13} width={260} />
+            {detailHref && <a href={detailHref} className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">Open detail →</a>}
+          </div>
           <SegmentedToggle<"group" | "process">
             options={[{ key: "group", label: "Group Process" }, { key: "process", label: "Process" }]}
             value={group}
@@ -858,6 +862,12 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
   // Toggles next to the title — they apply to this section only (unit everywhere, gross/nett on the card and histogram)
   const [unit, setUnit] = useState<LtUnit>("days");
   const [measure, setMeasure] = useState<LtMeasure>("gross");
+  const [selectedPlant, setSelectedPlant] = useState<string | null>(null);
+  // Reset plant selection when global filters change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const filtersKey = `${tacticalFilters.plant}|${tacticalFilters.startDate}|${tacticalFilters.endDate}`;
+  useEffect(() => { setSelectedPlant(null); }, [filtersKey]);
+  const plantFilters = { ...tacticalFilters, plant: selectedPlant ?? tacticalFilters.plant };
   const f = ltFactor(unit);
   const sfx = unit === "hours" ? "h" : "d";
 
@@ -873,9 +883,9 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
   const groupProcess = kpi?.leadTime.groupProcess ?? [];
 
   const vanaSegments: DonutSegment[] = c ? [
-    { color: "#067647", label: "VA",   value: c.vaDays * f },
-    { color: "#f59e0b", label: "NNVA", value: c.nnvaDays * f },
-    { color: "#d92d20", label: "UNVA", value: c.unvaDays * f },
+    { color: "#067647", label: "VA",   sub: "Value Added",                 value: c.vaDays * f },
+    { color: "#f59e0b", label: "NNVA", sub: "Necessary Non-Value Added",   value: c.nnvaDays * f },
+    { color: "#d92d20", label: "UNVA", sub: "Unnecessary Non-Value Added", value: c.unvaDays * f },
   ] : [];
   const vanaTotal = vanaSegments.reduce((s, seg) => s + seg.value, 0);
   const vaPct = vanaTotal > 0 && c ? (c.vaDays   / vanaTotal) * 100 : 0;
@@ -990,11 +1000,17 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
         )}
       </div>
 
-      <LeadTimeHistogram filters={tacticalFilters} basis={ltBasis} metric={measure} unit={unit} />
+      <LeadTimeHistogram filters={plantFilters} basis={ltBasis} metric={measure} unit={unit} />
 
-      <TacticalParetoChart filters={tacticalFilters} stageStd={stageStd} stageLoading={stageLoading} unit={unit} />
+      <TacticalParetoChart filters={plantFilters} stageStd={stageStd} stageLoading={stageLoading} unit={unit} />
 
       {/* The table is its own card (ChartCard) with the Group Process / Process toggle */}
+      {selectedPlant && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: "#1E4076", fontWeight: 600, fontFamily: "Lato, sans-serif" }}>
+          <span>Filtered by plant: {selectedPlant}</span>
+          <button onClick={() => setSelectedPlant(null)} style={{ color: "#98a2b3", background: "none", border: "none", cursor: "pointer", lineHeight: 1, fontSize: 14 }} aria-label="Clear plant filter">×</button>
+        </div>
+      )}
       <LeadTimePlantTable
         data={plantLT?.plants ?? null}
         activities={plantLT?.activities ?? []}
@@ -1002,6 +1018,8 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
         loading={stageLoading}
         basis={ltBasis}
         unit={unit}
+        selectedPlant={selectedPlant}
+        onRowClick={(p) => setSelectedPlant(p)}
       />
     </div>
   );

@@ -345,6 +345,7 @@ export default function DashboardPage() {
           alerts={visibleAlerts}
           onDismiss={handleDismissAlert}
           onMonitorMode={() => router.push(monitorUrl)}
+          pageTitle="Manufacturing Overview"
         />
 
         <main className="flex-1 px-5 py-4 overflow-y-auto min-h-0 flex flex-col gap-3.5">

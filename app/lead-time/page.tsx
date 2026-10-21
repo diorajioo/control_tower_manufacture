@@ -124,6 +124,10 @@ export default function LeadTimePage() {
   const poBinReset = `${JSON.stringify(filters)}|${dimsKey(dims)}|${scope}|${basis}|${refreshKey}`;
   useEffect(() => { setPoBin(null); }, [poBinReset]);
 
+  // Plant row click → filter LeadTimeLineSection; clears when global filters change
+  const [selectedPlant, setSelectedPlant] = useState<string | null>(null);
+  useEffect(() => { setSelectedPlant(null); }, [poBinReset]);
+
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F7F8FA]">
@@ -170,11 +174,10 @@ export default function LeadTimePage() {
           alertCount={0}
           alerts={[]}
           onMonitorMode={() => router.push("/monitor?page=lead-time")}
+          pageTitle="Lead Time"
         />
 
         <main className="flex-1 overflow-y-auto min-h-0 px-5 py-4 flex flex-col gap-3.5">
-          <h1 className="text-[20px] font-bold text-slate-900 leading-tight">Lead Time</h1>
-
           <LeadTimeFilterCard
             base={filters}
             scope={scope} onScope={(v) => { setScope(v); trackFilterApplied("lead_time", "apply", { lt_basis: v }); }}
@@ -242,8 +245,20 @@ export default function LeadTimePage() {
                 loading={stages.loading}
                 basis={scope}
                 unit={unit}
+                selectedPlant={selectedPlant}
+                onRowClick={(p) => setSelectedPlant(p)}
               />
-              <LeadTimeLineSection filters={tacticalFilters} unit={unit} refreshKey={refreshKey} />
+              {selectedPlant && (
+                <div className="flex items-center gap-2 text-[11.5px] text-[#1E4076] font-semibold">
+                  <span>Filtered by plant: {selectedPlant}</span>
+                  <button onClick={() => setSelectedPlant(null)} className="text-slate-400 hover:text-slate-700 leading-none" aria-label="Clear plant filter">×</button>
+                </div>
+              )}
+              <LeadTimeLineSection
+                filters={{ ...tacticalFilters, plant: selectedPlant ?? tacticalFilters.plant }}
+                unit={unit}
+                refreshKey={refreshKey}
+              />
             </>
           )}
 

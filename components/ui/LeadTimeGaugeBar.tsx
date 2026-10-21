@@ -28,9 +28,9 @@ export function LeadTimeGaugeBar({
   if (total === 0) return null;
 
   const segments = [
-    { key: "onTime" as const, color: "#067647", label: "On-time", detail: `≤ ${LEAD_TIME_TARGET_DAYS}d`,                                          count: counts.onTime },
-    { key: "atRisk" as const, color: "#f59e0b", label: "At risk", detail: `${LEAD_TIME_TARGET_DAYS}–${(LEAD_TIME_TARGET_DAYS * 1.15).toFixed(1)}d`, count: counts.atRisk },
-    { key: "late"   as const, color: "#d92d20", label: "Late",    detail: `> ${(LEAD_TIME_TARGET_DAYS * 1.15).toFixed(1)}d`,                       count: counts.late  },
+    { key: "onTime" as const, color: "#1E4076", bg: "#1E4076",                                                                                                     label: "On-time", detail: `≤ ${LEAD_TIME_TARGET_DAYS}d`,                                          count: counts.onTime },
+    { key: "atRisk" as const, color: "#f59e0b", bg: "repeating-linear-gradient(45deg, #f59e0b 0px, #f59e0b 3px, #fef3c7 3px, #fef3c7 8px)",                       label: "At risk", detail: `${LEAD_TIME_TARGET_DAYS}–${(LEAD_TIME_TARGET_DAYS * 1.15).toFixed(1)}d`, count: counts.atRisk },
+    { key: "late"   as const, color: "#f97316", bg: "repeating-linear-gradient(45deg, #f97316 0px, #f97316 3px, #fee2e2 3px, #fee2e2 8px)",                       label: "Late",    detail: `> ${(LEAD_TIME_TARGET_DAYS * 1.15).toFixed(1)}d`,                       count: counts.late  },
   ];
 
   const barHeight = compact ? 7 : 12;
@@ -65,7 +65,7 @@ export function LeadTimeGaugeBar({
               <div
                 key={seg.key}
                 style={{
-                  height: "100%", width: `${pct}%`, background: seg.color,
+                  height: "100%", width: `${pct}%`, background: seg.bg,
                   transition: "opacity 0.12s",
                   opacity: hovered?.key && hovered.key !== seg.key ? 0.35 : 1,
                 }}
