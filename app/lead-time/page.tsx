@@ -33,6 +33,7 @@ import { PROCESS_GROUPS } from "@/lib/leadTimeStages";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 import { trackFilterApplied, trackTabSwitched } from "@/lib/analytics/events";
 import { cn } from "@/lib/utils";
+import { useT, type TranslationKey } from "@/lib/i18n";
 
 type BaseFilters = { plant: string; startDate: string; endDate: string; period: string };
 
@@ -44,12 +45,12 @@ const DEFAULT_FILTERS: BaseFilters = {
   period:    "YTD",
 };
 
-const TABS = [
-  { id: "analysis", label: "Analysis" },
-  { id: "pareto",   label: "Pareto" },
-  { id: "ranking",  label: "Ranking" },
-] as const;
-type TabId = typeof TABS[number]["id"];
+const TABS: { id: "analysis" | "pareto" | "ranking"; labelKey: TranslationKey }[] = [
+  { id: "analysis", labelKey: "tab_analysis" },
+  { id: "pareto",   labelKey: "tab_pareto" },
+  { id: "ranking",  labelKey: "tab_ranking" },
+];
+type TabId = (typeof TABS)[number]["id"];
 
 interface Analysis {
   targetDays: number;
@@ -82,6 +83,7 @@ function useFetch<T>(path: string | null, base: BaseFilters, dims: LtDims, extra
 }
 
 export default function LeadTimePage() {
+  const { t: tr } = useT();
   const { status } = useSession();
   const router = useRouter();
   const [lastUpdated, setLastUpdated] = useState<Date>();
@@ -183,12 +185,12 @@ export default function LeadTimePage() {
 
           {/* Tabs — same minimal style as the Overview Tactical tab bar */}
           <div className="border-b border-slate-200 flex items-center gap-5" role="tablist">
-            {TABS.map((t) => (
-              <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => { setTab(t.id); trackTabSwitched({ report: "lead_time", tab: t.id }); }}
+            {TABS.map((tabDef) => (
+              <button key={tabDef.id} role="tab" aria-selected={tab === tabDef.id} onClick={() => { setTab(tabDef.id); trackTabSwitched({ report: "lead_time", tab: tabDef.id }); }}
                 className={cn("relative py-2 text-[12px] transition-colors focus:outline-none focus-visible:text-[#1E4076]",
-                  tab === t.id ? "text-slate-900 font-semibold" : "text-slate-500 hover:text-slate-800")}>
-                {t.label}
-                {tab === t.id && <span className="absolute -bottom-px left-0 right-0 h-[2px] bg-[#1E4076] rounded-full" />}
+                  tab === tabDef.id ? "text-slate-900 font-semibold" : "text-slate-500 hover:text-slate-800")}>
+                {tr(tabDef.labelKey)}
+                {tab === tabDef.id && <span className="absolute -bottom-px left-0 right-0 h-[2px] bg-[#1E4076] rounded-full" />}
               </button>
             ))}
           </div>
