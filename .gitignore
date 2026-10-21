@@ -18,3 +18,4 @@ data/risk-score/report.json
 # macOS
 .DS_Store
 .env*
+*.log
