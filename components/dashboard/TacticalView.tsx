@@ -505,7 +505,7 @@ export function TacticalParetoChart({
 }) {
   const [rawStages, setRawStages] = useState<ParetoStageData[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sort, setSort] = useState<"pareto" | "sequence">("pareto");
+  const sort = "pareto" as const;
   const [group, setGroup] = useState<"group" | "process">("group");
   const [wip, setWip] = useState<"tahap" | "with-wip">("with-wip");
   const [categoryFilter, setCategoryFilter] = useState<"all" | "VA" | "NNVA" | "UNVA">("all");
@@ -697,11 +697,6 @@ export function TacticalParetoChart({
               onChange={setWip}
             />
           )}
-          <SegmentedToggle<"pareto" | "sequence">
-            options={[{ key: "pareto", label: "Par" }, { key: "sequence", label: "Seq" }]}
-            value={sort}
-            onChange={setSort}
-          />
         </div>
       </div>
 

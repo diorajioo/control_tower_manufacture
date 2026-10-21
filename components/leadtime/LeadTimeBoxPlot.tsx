@@ -117,7 +117,7 @@ export function LeadTimeBoxPlot({
 }) {
   const [fokus, setFokus] = useState<FokusKey>("median");
   const [fokusOpen, setFokusOpen] = useState(false);
-  const [sort, setSort] = useState<"pareto" | "sequence">("pareto");
+  const sort = "sequence" as const;
   const [hoveredStage, setHoveredStage] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{ clientX: number; clientY: number; stage: string } | null>(null);
   const fokusRef = useRef<HTMLDivElement>(null);
@@ -167,11 +167,7 @@ export function LeadTimeBoxPlot({
 
   // Sort and build Nivo rows
   const rows: BoxRow[] = useMemo(() => {
-    const sorted = [...stages].sort((a, b) =>
-      sort === "pareto"
-        ? (b[fokus] as number) - (a[fokus] as number)
-        : a.sequence - b.sequence
-    );
+    const sorted = [...stages].sort((a, b) => a.sequence - b.sequence);
     return sorted.map((s) => ({
       stage:    s.stage,
       label:    s.label,
@@ -347,12 +343,6 @@ export function LeadTimeBoxPlot({
               </div>
             )}
           </div>
-          <SegmentedToggle<"pareto" | "sequence">
-            options={[{ key: "pareto", label: "Pareto" }, { key: "sequence", label: "Process order" }]}
-            value={sort}
-            onChange={setSort}
-            ariaLabel="Column order"
-          />
         </div>
       </div>
 
@@ -370,7 +360,7 @@ export function LeadTimeBoxPlot({
             data={rows}
             keys={["_base", "_box"]}
             indexBy="label"
-            theme={LINE_THEME}
+            theme={{ ...LINE_THEME, axis: { ...LINE_THEME.axis, legend: { text: { fontSize: 10, fill: "#667085", fontWeight: 400, letterSpacing: 1 } } } }}
             margin={{ top: 10, right: RIGHT_PAD, bottom: 52, left: LABEL_COL }}
             padding={PADDING}
             groupMode="stacked"
@@ -436,7 +426,7 @@ export function LeadTimeBoxPlot({
                     return (
                       <th key={r.stage} onMouseEnter={() => setHoveredStage(r.stage)}
                         className="text-center px-1 py-1.5 font-bold text-white text-[9.5px] truncate last:rounded-tr-md transition-colors"
-                        style={{ background: hov ? "#2E5390" : "#1E4076", boxShadow: hov ? `inset 0 -2px 0 ${FOKUS_COLOR}` : undefined }}>
+                        style={{ background: hov ? "#16305C" : "#1E4076", boxShadow: hov ? `inset 0 -2px 0 ${FOKUS_COLOR}` : undefined }}>
                         {r.label}
                       </th>
                     );
@@ -493,16 +483,16 @@ export function LeadTimeBoxPlot({
           <div style={{ position: "fixed", zIndex: 9999, pointerEvents: "none", left: tooltip.clientX + 14, top: tooltip.clientY - 8, transform: "translateY(-100%)" }}>
             <div className="rounded-lg px-3 py-2.5 shadow-[0_10px_28px_rgba(16,24,40,0.28)]" style={{ background: TOOLTIP_BG, fontFamily: "Lato, sans-serif", minWidth: 160 }}>
               <div className="text-[11.5px] font-bold text-white leading-tight">{d.label}</div>
-              <div className="text-[9.5px] text-[#A3B1C6] mb-2">{d.poCount.toLocaleString("en-US")} PO</div>
+              <div className="text-[9.5px] text-[#98a2b3] mb-2">{d.poCount.toLocaleString("en-US")} PO</div>
               <div className="grid grid-cols-2 gap-x-1.5 gap-y-1">
                 {cells.map((c) => {
                   const on = c.key === fokus;
                   return (
                     <div key={c.label} className="rounded px-1.5 py-1"
                       style={on ? { border: `1px solid ${FOKUS_COLOR}`, background: "rgba(245,158,11,0.12)" } : { border: "1px solid transparent" }}>
-                      <div className="text-[9px] leading-tight" style={{ color: on ? FOKUS_COLOR : "#A3B1C6", fontWeight: on ? 700 : 400 }}>{c.label}</div>
+                      <div className="text-[9px] leading-tight" style={{ color: on ? FOKUS_COLOR : "#98a2b3", fontWeight: on ? 700 : 400 }}>{c.label}</div>
                       <div className="text-[12px] font-bold text-white tabular-nums whitespace-nowrap leading-tight">
-                        {fmtVal(c.value, unit)} <span className="text-[9px] font-normal text-[#A3B1C6]">{unitLabel}</span>
+                        {fmtVal(c.value, unit)} <span className="text-[9px] font-normal text-[#98a2b3]">{unitLabel}</span>
                       </div>
                     </div>
                   );
