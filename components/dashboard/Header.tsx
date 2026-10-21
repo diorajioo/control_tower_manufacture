@@ -453,9 +453,9 @@ export function Header({
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#101828" }}>
                   {session?.user?.name ?? "—"}
                 </div>
-                {(session?.user as { jobTitle?: string })?.jobTitle && (
+                {(session?.user as { jobTitle?: string } | undefined)?.jobTitle && (
                   <div style={{ fontSize: 11.5, color: "#667085", marginTop: 2 }}>
-                    {(session.user as { jobTitle?: string }).jobTitle}
+                    {(session?.user as { jobTitle?: string } | undefined)?.jobTitle}
                   </div>
                 )}
                 <div style={{ fontSize: 11, color: "#98a2b3", marginTop: 3, wordBreak: "break-all" }}>
