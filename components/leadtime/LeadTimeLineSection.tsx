@@ -31,8 +31,8 @@ const PAGE = 200;
 const HEIGHT = 300;
 
 interface Filters { plant: string; startDate: string; endDate: string; period?: string; lt?: LtDims }
-interface ApiResponse { skus: Record<string, string>; rows: [string, string | null, number, number | null, number | null][] }
-interface LinePoint { line: string; poCount: number; avgDays: number; qty: number }
+interface ApiResponse { skus: Record<string, string>; rows: [string, string | null, number, number | null, number | null, number | null][] }
+interface LinePoint { line: string; poCount: number; avgDays: number; avgGrossDays: number; qty: number }
 interface SkuRow { key: string; line: string; sku: string | null; name: string; poCount: number; avgDays: number; qty: number }
 
 const NODE = "rgba(30,64,118,0.55)";
@@ -79,13 +79,19 @@ export function LeadTimeLineSection({ filters, unit, refreshKey = 0 }: { filters
   })), [data]);
 
   const lines: LinePoint[] = useMemo(() => {
-    const m = new Map<string, { n: number; span: number; qty: number }>();
-    for (const [ln, , n, span, qty] of data?.rows ?? []) {
-      const x = m.get(ln) ?? { n: 0, span: 0, qty: 0 };
-      x.n += n; x.span += span ?? 0; x.qty += qty ?? 0;
+    // Per-line: aggregate span/count from SKU rows; avgGrossDays comes directly (already per-PO avg from API).
+    const m = new Map<string, { n: number; span: number; grossSum: number; qty: number }>();
+    for (const [ln, , n, span, qty, avgGross] of data?.rows ?? []) {
+      const x = m.get(ln) ?? { n: 0, span: 0, grossSum: 0, qty: 0 };
+      x.n += n; x.span += span ?? 0; x.grossSum += (avgGross ?? 0) * n; x.qty += qty ?? 0;
       m.set(ln, x);
     }
-    return Array.from(m, ([ln, x]) => ({ line: ln, poCount: x.n, avgDays: x.n > 0 ? x.span / x.n : 0, qty: x.qty }));
+    return Array.from(m, ([ln, x]) => ({
+      line: ln, poCount: x.n,
+      avgDays: x.n > 0 ? x.span / x.n : 0,
+      avgGrossDays: x.n > 0 ? x.grossSum / x.n : 0,
+      qty: x.qty,
+    }));
   }, [data]);
   const shown = useMemo(() => lines.filter((l) => l.poCount >= MIN_PO), [lines]);
 
@@ -115,7 +121,7 @@ function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, a
 }) {
   const data = useMemo(() => [{
     id: "lines",
-    data: points.map((p): Datum => ({ x: p.poCount, y: p.avgDays * f, line: p.line, qty: p.qty })),
+    data: points.map((p): Datum => ({ x: p.poCount, y: p.avgGrossDays * f, line: p.line, qty: p.qty })),
   }], [points, f]);
   const threshX = allLines.length ? allLines.reduce((s, p) => s + p.poCount, 0) / allLines.length : 0;
   const threshY = LEAD_TIME_TARGET_DAYS * f;
@@ -149,10 +155,9 @@ function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, a
         <div className="flex items-center gap-2">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead Time per Line</p>
           <InfoTooltip size={13} width={300} rows={[
-            { label: "Lead time", text: "Average process time at the line per PO: first start → last stop of the activity on that line." },
-            { label: "PO count", text: "POs completed in the period that ran on the line." },
+            { label: "Lead time", text: `Average gross lead time (PO Released → NDC) per PO that ran on this line. Horizontal line = ${LEAD_TIME_TARGET_DAYS}-day target.` },
+            { label: "PO count", text: "POs completed in the period that ran on the line. Vertical line = avg across all lines." },
             { label: "Bubble size", text: "Volume = released quantity (pcs) of those POs." },
-            { label: "Quadrants", text: `X split at avg PO count across all lines in the period; Y split at the ${LEAD_TIME_TARGET_DAYS}-day target.` },
             { label: "Lines shown", text: `Lines with at least ${MIN_PO} POs (${points.length} of ${totalLines}). The table lists every line.` },
             { label: "Click", text: "Click a bubble to show its SKUs in the table; click it again for all lines." },
           ]} />
@@ -172,14 +177,14 @@ function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, a
           <div style={{ height: HEIGHT }}>
             <ResponsiveScatterPlot<Datum>
               data={data}
-              theme={{ ...LINE_THEME, axis: { ...LINE_THEME.axis, legend: { text: { fontSize: 10, fill: "#667085", fontWeight: 700 } } } }}
-              margin={{ top: 8, right: 12, bottom: 40, left: 52 }}
+              theme={{ ...LINE_THEME, axis: { ...LINE_THEME.axis, legend: { text: { fontSize: 10, fill: "#667085", fontWeight: 400, letterSpacing: 1 } } } }}
+              margin={{ top: 8, right: 12, bottom: 40, left: 64 }}
               xScale={{ type: "linear", min: 0, max: "auto", nice: true }}
               yScale={{ type: "linear", min: 0, max: "auto", nice: true }}
               nodeSize={({ data: d }) => size(d.qty)}
               enableGridX
               enableGridY
-              axisLeft={{ tickSize: 0, tickPadding: 6, tickValues: 5, legend: `Lead time (${unitLabel})`, legendPosition: "middle", legendOffset: -40 }}
+              axisLeft={{ tickSize: 0, tickPadding: 6, tickValues: 5, legend: `Avg lead time (${unitLabel})`, legendPosition: "middle", legendOffset: -52 }}
               axisBottom={{ tickSize: 0, tickPadding: 6, tickValues: 6, legend: "PO count", legendPosition: "middle", legendOffset: 32 }}
               layers={["grid", Quadrants, "axes", "nodes", "mesh"]}
               nodeComponent={({ node, onMouseEnter, onMouseMove, onMouseLeave, onClick }) => {
@@ -198,7 +203,7 @@ function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, a
                 <LineTooltip
                   title={node.data.line}
                   rows={[
-                    { label: "Lead time", value: node.data.y.toFixed(2), unit: unitLabel, strong: true },
+                    { label: "Avg lead time", value: node.data.y.toFixed(2), unit: unitLabel, strong: true },
                     { label: "POs completed", value: node.data.x.toLocaleString("en-US") },
                     { label: "Volume", value: compact(node.data.qty), unit: "pcs" },
                   ]}

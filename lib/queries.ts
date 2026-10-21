@@ -1438,10 +1438,24 @@ const LINE_POSITIONS: Record<LineActivity, string[]> = { mixing: ["OLAH"], filpa
 export async function getLeadTimeByLineSku(filters: QueryFilters, activity: LineActivity = "filpac") {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const positions = LINE_POSITIONS[activity].map((p) => `'${p}'`).join(", ");
-  return executeQuery<{ LINE_NAME: string; PRODUCT_CODE: string | null; PRODUCT_NAME: string | null; PO_COUNT: number; SPAN_DAYS: number; QTY: number | null }>(`
-    WITH per_po AS (
-      SELECT LINE_NAME, PROCESS_ORDER_FG,
-        MAX(PRODUCT_CODE) AS PRODUCT_CODE,
+  // Two CTEs: gross reads all rows per PO so PO+NDC rows are visible (same pattern as getLeadTimeAnalysisStats);
+  // per_sku uses ACTUAL+POSITION filter like the original to get LINE_NAME and span.
+  return executeQuery<{ LINE_NAME: string; PRODUCT_CODE: string | null; PRODUCT_NAME: string | null; PO_COUNT: number; SPAN_DAYS: number; QTY: number | null; AVG_GROSS_DAYS: number | null }>(`
+    WITH gross AS (
+      SELECT
+        PROCESS_ORDER_FG,
+        DATEDIFF('minute', ${PO_RELEASED_AT_SQL}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 AS gross_days
+      FROM ${LT_TABLE}
+      WHERE ${datePred}
+        ${ltWhere(filters)}
+      GROUP BY PROCESS_ORDER_FG
+      HAVING ${PO_RELEASED_AT_SQL} IS NOT NULL AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
+    ),
+    per_sku AS (
+      SELECT
+        PROCESS_ORDER_FG,
+        LINE_NAME,
+        PRODUCT_CODE,
         MAX(PRODUCT_NAME) AS PRODUCT_NAME,
         GREATEST(COALESCE(DATEDIFF('minute', MIN(ACTIVITY_START), MAX(ACTIVITY_STOP)), 0), 0) / 1440.0 AS span_days,
         MAX(RELEASE_QTY) AS qty
@@ -1452,13 +1466,20 @@ export async function getLeadTimeByLineSku(filters: QueryFilters, activity: Line
         AND LINE_NAME IS NOT NULL
         AND ${datePred}
         ${ltWhere(filters)}
-      GROUP BY LINE_NAME, PROCESS_ORDER_FG
+      GROUP BY PROCESS_ORDER_FG, LINE_NAME, PRODUCT_CODE
     )
-    SELECT LINE_NAME, PRODUCT_CODE, MAX(PRODUCT_NAME) AS PRODUCT_NAME,
-      COUNT(*) AS PO_COUNT, SUM(span_days) AS SPAN_DAYS, SUM(qty) AS QTY
-    FROM per_po
-    GROUP BY LINE_NAME, PRODUCT_CODE
-  `, [...dateBinds, ...ltBinds(filters)]);
+    SELECT
+      s.LINE_NAME,
+      s.PRODUCT_CODE,
+      MAX(s.PRODUCT_NAME) AS PRODUCT_NAME,
+      COUNT(*) AS PO_COUNT,
+      SUM(s.span_days) AS SPAN_DAYS,
+      SUM(s.qty) AS QTY,
+      AVG(g.gross_days) AS AVG_GROSS_DAYS
+    FROM per_sku s
+    LEFT JOIN gross g ON g.PROCESS_ORDER_FG = s.PROCESS_ORDER_FG
+    GROUP BY s.LINE_NAME, s.PRODUCT_CODE
+  `, [...dateBinds, ...ltBinds(filters), ...dateBinds, ...ltBinds(filters)]);
 }
 
 // Tactical Overview gauge stats (Lead Time tab): max gross LT (gauge right end), avg PO-stage days, PO count.
@@ -1600,9 +1621,16 @@ export async function getLeadTimeFilterOptions(filters: QueryFilters) {
     ORDER BY ${col}
     LIMIT 30000
   `, binds);
+  const activityList = () => executeQuery<{ V: string; L: string | null; S: number | null; P: string | null }>(`
+    SELECT ACTIVITY AS V, NULL AS L, MIN(ACTIVITY_SEQUENCE) AS S, MAX(POSITION) AS P
+    FROM ${LT_TABLE} ${where} AND ACTIVITY IS NOT NULL
+    GROUP BY ACTIVITY
+    ORDER BY ACTIVITY
+    LIMIT 30000
+  `, binds);
   const [po, activity, lineCategory, line, skuGroup, sku, variant] = await Promise.all([
     list("PROCESS_ORDER_FG"),
-    list("ACTIVITY"),
+    activityList(),
     list("LINE_CATEGORY"),
     list("LINE_NAME"),
     list("SKU_GROUP"),
