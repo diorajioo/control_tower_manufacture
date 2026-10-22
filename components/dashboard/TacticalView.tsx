@@ -1093,7 +1093,134 @@ function ProductivitySection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "
   );
 }
 
-function OutputSection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "loading">) {
+// ── Output Trend chart ────────────────────────────────────────────────────────
+
+type OutputBarDatum = { label: string; Actual: number; theoretical: number } & BarDatum;
+const ACTUAL_BAR_COLOR = "#4A6BA3";
+const THEO_LINE_COLOR  = "#667085";
+
+function TheoreticalLineLayer({ bars, yScale }: BarCustomLayerProps<OutputBarDatum>) {
+  const visible = bars.filter((b) => String(b.key).endsWith("Actual"));
+  if (!visible.length) return null;
+  const pts = visible.map((b) => ({
+    x: b.x + b.width / 2,
+    y: (yScale as (v: number) => number)(b.data.data.theoretical),
+  }));
+  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  return (
+    <g>
+      <path d={d} fill="none" stroke={THEO_LINE_COLOR} strokeWidth={1.5} strokeDasharray="6 3" />
+      {pts.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={3.5} fill="white" stroke={THEO_LINE_COLOR} strokeWidth={1.5} />
+      ))}
+    </g>
+  );
+}
+
+function TacticalOutputTrendChart({ filters }: { filters: TacticalFilters }) {
+  const [metric, setMetric]   = useState<"fg" | "bulk">("fg");
+  const [rawData, setRawData] = useState<{ date: string; value: number }[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (metric === "bulk") { setRawData([]); setLoading(false); return; }
+    setLoading(true);
+    const params = new URLSearchParams({ kpiType: "output", grain: "month", plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate });
+    if (filters.period) params.set("period", filters.period);
+    fetch(`/api/dashboard/trends?${params}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setRawData((d?.trendSeries ?? []).map((row: Record<string, unknown>) => ({ date: String(row.date), value: Number(row["All plants"] ?? 0) }))))
+      .catch(() => setRawData([]))
+      .finally(() => setLoading(false));
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric]);
+
+  const barData: OutputBarDatum[] = rawData.map((p) => ({
+    label: new Date(p.date + "T00:00:00Z").toLocaleString("en-US", { month: "short", timeZone: "UTC" }),
+    Actual: Number((p.value / 1_000_000).toFixed(2)),
+    theoretical: 0,
+  }));
+  const maxVal = Math.max(...barData.map((d) => d.Actual), 1);
+
+  return (
+    <div className="rounded-lg border border-[#EBEBEB] bg-white p-4" style={{ fontFamily: "Lato, sans-serif" }}>
+      <div className="flex items-center justify-between mb-3 gap-3">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Output Trend (Actual vs Theoretical)</p>
+          <InfoTooltip text="Monthly finished goods output in million pcs. The theoretical (target) line will appear once planning data is connected." size={13} width={240} />
+        </div>
+        <SegmentedToggle<"fg" | "bulk">
+          ariaLabel="Output metric"
+          options={[{ key: "fg", label: "FG" }, { key: "bulk", label: "Bulk" }]}
+          value={metric}
+          onChange={setMetric}
+        />
+      </div>
+
+      {metric === "bulk" ? (
+        <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <p style={{ fontSize: 11, color: "#98a2b3", fontWeight: 600 }}>Bulk output trend — coming soon</p>
+        </div>
+      ) : loading ? (
+        <div style={{ height: 260, borderRadius: 6, background: "#f9fafb" }} className="animate-pulse" />
+      ) : barData.length === 0 ? (
+        <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <p style={{ fontSize: 11, color: "#98a2b3" }}>No data for selected period</p>
+        </div>
+      ) : (
+        <Fade depKey={`${metric}|${filters.plant}|${filters.startDate}|${filters.endDate}`}>
+          <div style={{ height: 260 }}>
+            <ResponsiveBar<OutputBarDatum>
+              data={barData}
+              keys={["Actual"]}
+              indexBy="label"
+              theme={LINE_THEME}
+              margin={{ top: 8, right: 16, bottom: 36, left: 52 }}
+              padding={0.3}
+              colors={[ACTUAL_BAR_COLOR]}
+              borderRadius={2}
+              enableLabel={false}
+              enableGridX={false}
+              valueScale={{ type: "linear", min: 0, max: maxVal * 1.2 }}
+              axisLeft={{
+                tickSize: 0, tickPadding: 8,
+                format: (v) => Number(v).toFixed(1),
+                legend: "juta pcs", legendOffset: -44, legendPosition: "middle",
+              }}
+              axisBottom={{ tickSize: 0, tickPadding: 8 }}
+              layers={["grid", "axes", "bars", TheoreticalLineLayer]}
+              tooltip={({ data: d }) => (
+                <LineTooltip
+                  title={d.label}
+                  rows={[
+                    { label: "Actual",      color: ACTUAL_BAR_COLOR, value: `${d.Actual.toFixed(2)}M pcs` },
+                    { label: "Theoretical", color: THEO_LINE_COLOR,  value: "No data" },
+                  ]}
+                />
+              )}
+              animate={false}
+            />
+          </div>
+        </Fade>
+      )}
+
+      <div style={{ display: "flex", gap: 16, marginTop: 8, justifyContent: "center", fontSize: 10.5, color: "#667085" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: ACTUAL_BAR_COLOR, display: "inline-block" }} />
+          Actual
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <svg width={18} height={10}>
+            <line x1={0} y1={5} x2={18} y2={5} stroke={THEO_LINE_COLOR} strokeWidth={1.5} strokeDasharray="5 3" />
+            <circle cx={9} cy={5} r={3} fill="white" stroke={THEO_LINE_COLOR} strokeWidth={1.5} />
+          </svg>
+          Theoretical output
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps, "kpi" | "loading"> & { tacticalFilters: TacticalFilters }) {
   return (
     <div className="flex flex-col gap-4">
       <SectionHeading title="Output" />
@@ -1131,8 +1258,8 @@ function OutputSection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "loadin
         )}
       </div>
 
+      <TacticalOutputTrendChart filters={tacticalFilters} />
       <ChartPlaceholder title="Pareto Output" subtitle="Contribution per plant vs target, sorted descending" />
-      <ChartPlaceholder title="Output Trend (Actual vs Plan)" subtitle="Finished goods, million pcs per month" />
       <ChartPlaceholder title="Top SKU by Output" subtitle="Actual qty vs plan qty, gap %" height={240} />
     </div>
   );
@@ -1246,11 +1373,14 @@ export function TacticalView(props: TacticalViewProps) {
           <section ref={setRef("leadtime")}>
             <LeadTimeSection {...props} />
           </section>
+          <section ref={setRef("output")}>
+            <OutputSection kpi={kpi} loading={loading} tacticalFilters={props.tacticalFilters} />
+          </section>
           <section ref={setRef("productivity")}>
             <ProductivitySection kpi={kpi} loading={loading} />
           </section>
-          <section ref={setRef("output")}>
-            <OutputSection kpi={kpi} loading={loading} />
+          <section ref={setRef("yield")}>
+            <YieldSection />
           </section>
           <section ref={setRef("oee")}>
             <OEESection />
@@ -1262,9 +1392,6 @@ export function TacticalView(props: TacticalViewProps) {
                 <p className="text-[12px] text-gray-300 font-semibold">Energy data coming soon</p>
               </div>
             </div>
-          </section>
-          <section ref={setRef("yield")}>
-            <YieldSection />
           </section>
         </div>
       </div>
