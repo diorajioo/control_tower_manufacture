@@ -28,6 +28,10 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig = {
+  // Self-contained server in .next/standalone for the Docker image (Kubernetes); Vercel ignores it
+  output: "standalone",
+  // No next/image in the app — turning the Image Optimization API off closes its advisories on Next 14
+  images: { unoptimized: true },
   experimental: {
     serverComponentsExternalPackages: ["snowflake-sdk"],
   },

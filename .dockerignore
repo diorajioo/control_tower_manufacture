@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.env*
+.claude
+*.log
+*.tsbuildinfo
+data/notifications.json
+data/teams-settings.json
+data/risk-score/po_steps.json
+data/risk-score/report.json
+scripts/loadtest
+k8s

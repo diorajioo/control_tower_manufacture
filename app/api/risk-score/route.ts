@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { unstable_cache } from "next/cache";
 import { executeQuery } from "@/lib/db";
 import { loadModel, scoreActivePOs, type ActivePoRow } from "@/lib/riskScore";
@@ -60,6 +62,8 @@ const fetchAllScores = unstable_cache(
 );
 
 export async function GET(req: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { searchParams } = new URL(req.url);
     const plant = searchParams.get("plant") ?? "All Plant";

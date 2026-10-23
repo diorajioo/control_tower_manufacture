@@ -1,0 +1,67 @@
+# Web app. Replace <REGISTRY> with the internal image registry.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-tower
+  labels: { app: control-tower }
+spec:
+  # 1 replica: the notification store is a JSON file on a ReadWriteOnce volume
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: control-tower }
+  template:
+    metadata:
+      labels: { app: control-tower }
+    spec:
+      securityContext: { fsGroup: 1000 }
+      containers:
+        - name: web
+          image: <REGISTRY>/control-tower:latest
+          ports: [{ containerPort: 3000 }]
+          envFrom:
+            - secretRef: { name: control-tower }
+            - configMapRef: { name: control-tower }
+          volumeMounts:
+            - { name: notif-store, mountPath: /data/notifications }
+          readinessProbe:
+            httpGet: { path: /login, port: 3000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /login, port: 3000 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits:   { memory: 1Gi }
+      volumes:
+        - name: notif-store
+          persistentVolumeClaim: { claimName: control-tower-notifications }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-tower
+data:
+  NEXTAUTH_URL: "https://<DOMAIN>"
+  DATA_SOURCE: "clickhouse"
+  NOTIF_RUNNER: "frequent"
+  NOTIF_STORE_DIR: "/data/notifications"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: control-tower-notifications
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests: { storage: 1Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-tower
+spec:
+  selector: { app: control-tower }
+  ports: [{ port: 80, targetPort: 3000 }]
