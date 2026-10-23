@@ -689,6 +689,79 @@ export async function getYieldKPI(filters: QueryFilters) {
   };
 }
 
+// Output by production line — Line name, PO count, total released qty (pcs), % contribution.
+// Theoretical Output and Gap are not in the DB yet; the API returns null for those.
+export async function getOutputByLine(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const pw = plantWhere(filters.plant);
+  const pb = plantBinds(filters.plant);
+  return executeQuery<{ LINE_NAME: string; QTY_PO: number; QTY_REAL: number; PCT_CONTRIBUTION: number }>(`
+    WITH per_po AS (
+      SELECT
+        LINE_NAME,
+        PROCESS_ORDER_FG,
+        MAX(RELEASE_QTY) AS qty
+      FROM ${LT_TABLE}
+      WHERE ${datePred}
+        AND LINE_NAME IS NOT NULL
+        AND RELEASE_QTY IS NOT NULL
+        ${pw}
+      GROUP BY LINE_NAME, PROCESS_ORDER_FG
+    ),
+    totals AS (SELECT NULLIF(SUM(qty), 0) AS grand_total FROM per_po)
+    SELECT
+      p.LINE_NAME,
+      COUNT(DISTINCT p.PROCESS_ORDER_FG)           AS QTY_PO,
+      SUM(p.qty)                                   AS QTY_REAL,
+      SUM(p.qty) * 100.0 / MAX(t.grand_total)      AS PCT_CONTRIBUTION
+    FROM per_po p CROSS JOIN totals t
+    GROUP BY p.LINE_NAME
+    ORDER BY QTY_REAL DESC
+  `, [...dateBinds, ...pb]);
+}
+
+// Output detail stats: distinct SKU + PO counts, and output quantity split by SEDIAAN (pharmaceutical form).
+// Uses LT_TABLE date column (PO_FG_DONE_DATE) — slightly different population than getOutputKPI's CORRECTION_DATE;
+// counts are approximate but consistent with the Lead Time page's PO population.
+export async function getOutputDetailStats(filters: QueryFilters) {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const pb = plantBinds(filters.plant);
+  const pw = plantWhere(filters.plant);
+  const [countRows, formRows] = await Promise.all([
+    executeQuery<{ SKU_COUNT: number; PO_COUNT: number }>(`
+      SELECT
+        COUNT(DISTINCT PRODUCT_CODE)    AS SKU_COUNT,
+        COUNT(DISTINCT PROCESS_ORDER_FG) AS PO_COUNT
+      FROM ${LT_TABLE}
+      WHERE ${datePred}
+        AND PRODUCT_CODE IS NOT NULL
+        ${pw}
+    `, [...dateBinds, ...pb]),
+    executeQuery<{ FORM: string; TOTAL_QTY: number }>(`
+      WITH per_po AS (
+        SELECT PROCESS_ORDER_FG,
+          MAX(SEDIAAN)     AS sediaan_val,
+          MAX(RELEASE_QTY) AS qty
+        FROM ${LT_TABLE}
+        WHERE ${datePred}
+          AND SEDIAAN IS NOT NULL
+          AND RELEASE_QTY IS NOT NULL
+          ${pw}
+        GROUP BY PROCESS_ORDER_FG
+      )
+      SELECT sediaan_val AS FORM, SUM(qty) AS TOTAL_QTY
+      FROM per_po
+      GROUP BY sediaan_val
+      ORDER BY TOTAL_QTY DESC
+    `, [...dateBinds, ...pb]),
+  ]);
+  return {
+    skuCount: Number(countRows[0]?.SKU_COUNT ?? 0),
+    poCount:  Number(countRows[0]?.PO_COUNT  ?? 0),
+    byForm: formRows.map((r) => ({ form: r.FORM ?? "Other", qty: Number(r.TOTAL_QTY ?? 0) })),
+  };
+}
+
 // Output (Bulk) → DATAMART_PRODUCTION_OUTPUT_OLAH.REALIZATION_QUANTITY filtered on CORRECTION_DATE
 // Output (FG)   → DATAMART_PRODUCTION_OUTPUT_FG.QUANTITY filtered on CORRECTION_DATE
 export async function getOutputKPI(filters: QueryFilters) {

@@ -7,6 +7,7 @@ import {
   getYieldKPI,
   getRightFirstTime,
   getOutputKPI,
+  getOutputDetailStats,
   getE2EProductivity,
   getUpstreamProductivity,
   getDownstreamProductivity,
@@ -127,6 +128,7 @@ async function runKPIQueries(
     mixingRes, prevMixingRes, mixingWeeklyRes, filpacRes, prevFilpacRes, filpacWeeklyRes,
     plantDriversRes, prevPlantDriversRes,
     groupProcessRes, tacticalStatsRes,
+    outputDetailRes,
   ] = await Promise.allSettled([
     getLeadTimeKPI(filters),
     getYieldKPI(filters),
@@ -168,11 +170,12 @@ async function runKPIQueries(
     plant === "All Plant" ? getPlantDrivers(prev)    : Promise.resolve(null),
     getLeadTimeGroupProcess(filters),
     getLeadTimeTacticalStats(filters),
+    getOutputDetailStats(filters),
   ]);
 
   const failures = [
     ["leadTime", leadTimeRes], ["yield", yieldRes], ["rft", rftRes],
-    ["output", outputRes], ["e2e", e2eRes], ["upstream", upstreamRes],
+    ["output", outputRes], ["outputDetail", outputDetailRes], ["e2e", e2eRes], ["upstream", upstreamRes],
     ["downstream", downstreamRes], ["oee", oeeRes],
   ].filter(([, r]) => (r as PromiseSettledResult<unknown>).status === "rejected");
   if (failures.length > 0) {
@@ -211,6 +214,7 @@ async function runKPIQueries(
   const ltCompMonthly    = val(ltCompMonthlyRes,     [] as { MONTH: string; VA: number; NNVA: number; UNVA: number; WIP: number }[]);
   const ltCompWeekly     = val(ltCompWeeklyRes,      [] as { WEEK: string;  VA: number; NNVA: number; UNVA: number; WIP: number }[]);
   const ltReleasedGross  = val(ltReleasedGrossRes, null as { AVG_GROSS: number | null } | null);
+  const outputDetail     = val(outputDetailRes,    { skuCount: 0, poCount: 0, byForm: [] as { form: string; qty: number }[] });
   const groupProcessRows = val(groupProcessRes,    [] as { ACTIVITY: string; AVG_DAYS: number; PO_COUNT: number }[]);
   const tacticalStats    = val(tacticalStatsRes,   { MAX_GROSS_DAYS: null as number | null, AVG_PO_STAGE_DAYS: null as number | null, PO_COUNT: 0, ON_TIME_COUNT: 0, AT_RISK_COUNT: 0, LATE_COUNT: 0 });
   const groupProcessTotal = groupProcessRows.reduce((s, r) => s + (Number(r.AVG_DAYS) || 0), 0);
@@ -292,6 +296,9 @@ async function runKPIQueries(
       sparkline:     outputWeekly.map((r) => Number((r.TOTAL_FG   ?? 0).toFixed(0))),
       bulkSparkline: bulkOutputWeekly.map((r) => Number((r.TOTAL_BULK ?? 0).toFixed(0))),
       plantDrivers:  plantFg(val(plantDriversRes, null), val(prevPlantDriversRes, null)),
+      skuCount:  outputDetail.skuCount,
+      poCount:   outputDetail.poCount,
+      byForm:    outputDetail.byForm,
     },
     oee: {
       value:       Number(avgOEE.toFixed(1)),

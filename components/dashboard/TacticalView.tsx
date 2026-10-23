@@ -10,10 +10,12 @@ import { LeadTimePlantTable, type PlantBreakdown, type PlantActivity } from "@/c
 import type { StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { LINE_THEME, LineTooltip, TOOLTIP_COLORS } from "@/components/charts/StandardLine";
+import { PLANT_COLORS, SERIES_COLORS } from "@/lib/chartConfig";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 import { LeadTimeGaugeBar } from "@/components/ui/LeadTimeGaugeBar";
 import { ResponsiveBar, type BarCustomLayerProps, type BarDatum } from "@nivo/bar";
 import { STAGE_ORDER, stageLabel, PROCESS_GROUPS } from "@/lib/leadTimeStages";
+import { useT } from "@/lib/i18n";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 import { FIELD, FIELD_ON, MENU, MENU_ITEM, MENU_ITEM_ON, MENU_ITEM_OFF } from "@/components/ui/FilterField";
 import { LeadTimeHistogram } from "@/components/leadtime/LeadTimeHistogram";
@@ -43,7 +45,14 @@ interface KPI {
     atRiskCount?: number;
     lateCount?: number;
   };
-  output: { fgQty: number; fgPrev?: number; bulkQty: number; bulkPrev?: number; fgTrend: number | null; bulkTrend: number | null; sparkline: number[]; bulkSparkline: number[] };
+  output: {
+    fgQty: number; fgPrev?: number; bulkQty: number; bulkPrev?: number;
+    fgTrend: number | null; bulkTrend: number | null;
+    sparkline: number[]; bulkSparkline: number[];
+    skuCount?: number; poCount?: number;
+    byForm?: { form: string; qty: number }[];
+    plantDrivers?: { plant: string; fg: number; fgPrev?: number | null }[];
+  };
   productivity: {
     e2e: number; e2ePrev?: number; e2eTrend?: number | null; sparkline: number[];
     stages?: Record<"mixing" | "filpac", { value: number; prev?: number; trend: number | null; sparkline: number[] }>;
@@ -308,7 +317,11 @@ function TKpiCard({
 
 interface DonutSegment { color: string; value: number; label: string; sub?: string }
 
-function PieChart({ segments, size = 120 }: { segments: DonutSegment[]; size?: number }) {
+function PieChart({ segments, size = 120, unit = "days", fmt }: {
+  segments: DonutSegment[]; size?: number;
+  unit?: string;
+  fmt?: (v: number) => string;
+}) {
   const cx = 50, cy = 50, r = 46;
   const total = segments.reduce((s, seg) => s + Math.max(0, seg.value), 0);
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
@@ -385,9 +398,9 @@ function PieChart({ segments, size = 120 }: { segments: DonutSegment[]; size?: n
               {hovSeg.label}{hovSeg.sub ? <span style={{ fontWeight: 400, color: TOOLTIP_COLORS.muted, fontSize: 10.5 }}> · {hovSeg.sub}</span> : null}
             </span>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: TOOLTIP_COLORS.value, fontVariantNumeric: "tabular-nums" }}>
-              {hovSeg.value.toFixed(2)}
+              {fmt ? fmt(hovSeg.value) : hovSeg.value.toFixed(2)}
             </span>
-            <span style={{ fontSize: 10.5, color: TOOLTIP_COLORS.muted }}>days</span>
+            {unit && <span style={{ fontSize: 10.5, color: TOOLTIP_COLORS.muted }}>{unit}</span>}
           </div>
           <p style={{ margin: "2px 0 0 14px", fontSize: 9.5, color: TOOLTIP_COLORS.muted, fontVariantNumeric: "tabular-nums" }}>
             {hovPct.toFixed(1)}% of total
@@ -1117,58 +1130,67 @@ function TheoreticalLineLayer({ bars, yScale }: BarCustomLayerProps<OutputBarDat
   );
 }
 
-function TacticalOutputTrendChart({ filters }: { filters: TacticalFilters }) {
-  const [metric, setMetric]   = useState<"fg" | "bulk">("fg");
+function TacticalOutputTrendChart({ filters, metric }: { filters: TacticalFilters; metric: "fg" | "bulk" }) {
+  const { t } = useT();
+  const [grain, setGrain] = useState<"month" | "week">("month");
   const [rawData, setRawData] = useState<{ date: string; value: number }[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (metric === "bulk") { setRawData([]); setLoading(false); return; }
     setLoading(true);
-    const params = new URLSearchParams({ kpiType: "output", grain: "month", plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate });
+    const params = new URLSearchParams({ kpiType: "output", grain, plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate });
     if (filters.period) params.set("period", filters.period);
     fetch(`/api/dashboard/trends?${params}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setRawData((d?.trendSeries ?? []).map((row: Record<string, unknown>) => ({ date: String(row.date), value: Number(row["All plants"] ?? 0) }))))
       .catch(() => setRawData([]))
       .finally(() => setLoading(false));
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric]);
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric, grain]);
 
-  const barData: OutputBarDatum[] = rawData.map((p) => ({
-    label: new Date(p.date + "T00:00:00Z").toLocaleString("en-US", { month: "short", timeZone: "UTC" }),
-    Actual: Number((p.value / 1_000_000).toFixed(2)),
-    theoretical: 0,
-  }));
+  const barData: OutputBarDatum[] = rawData.map((p) => {
+    const dt = new Date(p.date + "T00:00:00Z");
+    const label = grain === "week"
+      ? `W${String(Math.ceil(dt.getUTCDate() / 7)).padStart(2, "0")} ${dt.toLocaleString("en-US", { month: "short", timeZone: "UTC" })}`
+      : dt.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+    return { label, Actual: Number((p.value / 1_000_000).toFixed(2)), theoretical: 0 };
+  });
   const maxVal = Math.max(...barData.map((d) => d.Actual), 1);
 
   return (
     <div className="rounded-lg border border-[#EBEBEB] bg-white p-4" style={{ fontFamily: "Lato, sans-serif" }}>
       <div className="flex items-center justify-between mb-3 gap-3">
         <div className="flex items-center gap-1.5">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Output Trend (Actual vs Theoretical)</p>
-          <InfoTooltip text="Monthly finished goods output in million pcs. The theoretical (target) line will appear once planning data is connected." size={13} width={240} />
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{t("output_trend_title")}</p>
+          <InfoTooltip text={t("output_trend_tooltip")} size={13} width={240} />
         </div>
-        <SegmentedToggle<"fg" | "bulk">
-          ariaLabel="Output metric"
-          options={[{ key: "fg", label: "FG" }, { key: "bulk", label: "Bulk" }]}
-          value={metric}
-          onChange={setMetric}
-        />
+        <select
+          value={grain}
+          onChange={(e) => setGrain(e.target.value as "month" | "week")}
+          style={{
+            fontSize: 11, fontFamily: "Lato, sans-serif", fontWeight: 600, color: "#344054",
+            border: "1px solid #D0D5DD", borderRadius: 6, padding: "3px 8px",
+            background: "white", cursor: "pointer", outline: "none",
+          }}
+        >
+          <option value="month">{t("toggle_monthly")}</option>
+          <option value="week">{t("toggle_weekly")}</option>
+        </select>
       </div>
 
       {metric === "bulk" ? (
-        <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <p style={{ fontSize: 11, color: "#98a2b3", fontWeight: 600 }}>Bulk output trend — coming soon</p>
+        <div style={{ height: 240, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <p style={{ fontSize: 11, color: "#98a2b3", fontWeight: 600 }}>{t("output_bulk_coming_soon")}</p>
         </div>
       ) : loading ? (
-        <div style={{ height: 260, borderRadius: 6, background: "#f9fafb" }} className="animate-pulse" />
+        <div style={{ height: 240, borderRadius: 6, background: "#f9fafb" }} className="animate-pulse" />
       ) : barData.length === 0 ? (
-        <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <p style={{ fontSize: 11, color: "#98a2b3" }}>No data for selected period</p>
+        <div style={{ height: 240, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <p style={{ fontSize: 11, color: "#98a2b3" }}>{t("output_trend_no_data")}</p>
         </div>
       ) : (
-        <Fade depKey={`${metric}|${filters.plant}|${filters.startDate}|${filters.endDate}`}>
-          <div style={{ height: 260 }}>
+        <Fade depKey={`${metric}|${grain}|${filters.plant}|${filters.startDate}|${filters.endDate}`}>
+          <div style={{ height: 240 }}>
             <ResponsiveBar<OutputBarDatum>
               data={barData}
               keys={["Actual"]}
@@ -1184,7 +1206,7 @@ function TacticalOutputTrendChart({ filters }: { filters: TacticalFilters }) {
               axisLeft={{
                 tickSize: 0, tickPadding: 8,
                 format: (v) => Number(v).toFixed(1),
-                legend: "juta pcs", legendOffset: -44, legendPosition: "middle",
+                legend: t("output_fg_unit_mpcs"), legendOffset: -44, legendPosition: "middle",
               }}
               axisBottom={{ tickSize: 0, tickPadding: 8 }}
               layers={["grid", "axes", "bars", TheoreticalLineLayer]}
@@ -1192,8 +1214,8 @@ function TacticalOutputTrendChart({ filters }: { filters: TacticalFilters }) {
                 <LineTooltip
                   title={d.label}
                   rows={[
-                    { label: "Actual",      color: ACTUAL_BAR_COLOR, value: `${d.Actual.toFixed(2)}M pcs` },
-                    { label: "Theoretical", color: THEO_LINE_COLOR,  value: "No data" },
+                    { label: t("chart_actual"),            color: ACTUAL_BAR_COLOR, value: `${d.Actual.toFixed(2)}M pcs` },
+                    { label: t("output_legend_theoretical"), color: THEO_LINE_COLOR, value: t("empty_no_data") },
                   ]}
                 />
               )}
@@ -1205,62 +1227,331 @@ function TacticalOutputTrendChart({ filters }: { filters: TacticalFilters }) {
 
       <div style={{ display: "flex", gap: 16, marginTop: 8, justifyContent: "center", fontSize: 10.5, color: "#667085" }}>
         <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span style={{ width: 10, height: 10, borderRadius: 2, background: ACTUAL_BAR_COLOR, display: "inline-block" }} />
-          Actual
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
           <svg width={18} height={10}>
             <line x1={0} y1={5} x2={18} y2={5} stroke={THEO_LINE_COLOR} strokeWidth={1.5} strokeDasharray="5 3" />
             <circle cx={9} cy={5} r={3} fill="white" stroke={THEO_LINE_COLOR} strokeWidth={1.5} />
           </svg>
-          Theoretical output
+          {t("output_legend_theoretical")}
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: ACTUAL_BAR_COLOR, display: "inline-block" }} />
+          {t("chart_actual")}
         </span>
       </div>
     </div>
   );
 }
 
+// ── Top Line by Output table ──────────────────────────────────────────────────
+
+interface OutputLineRow { line: string; qtyPo: number; qtyReal: number; theoretical: number | null; gap: number | null; pctContrib: number }
+
+function TopLineByOutputTable({ filters, metric }: { filters: TacticalFilters; metric: "fg" | "bulk" }) {
+  const { t } = useT();
+  const [rows, setRows] = useState<OutputLineRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sortCol, setSortCol] = useState<keyof OutputLineRow>("qtyReal");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  useEffect(() => {
+    if (metric === "bulk") { setRows([]); setLoading(false); return; }
+    setLoading(true);
+    const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate });
+    if (filters.period) params.set("period", filters.period);
+    fetch(`/api/dashboard/output-line?${params}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setRows(d?.lines ?? []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric]);
+
+  const sorted = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      const av = a[sortCol] ?? -Infinity, bv = b[sortCol] ?? -Infinity;
+      return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+    });
+  }, [rows, sortCol, sortDir]);
+
+  const toggleSort = (col: keyof OutputLineRow) => {
+    if (col === sortCol) setSortDir((d) => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("desc"); }
+  };
+
+  const TH = ({ col, label, right }: { col: keyof OutputLineRow; label: string; right?: boolean }) => (
+    <th
+      onClick={() => toggleSort(col)}
+      style={{
+        padding: "7px 10px", fontSize: 10.5, fontWeight: 700, color: "white",
+        textAlign: right ? "right" : "left", cursor: "pointer",
+        background: "#1E4076", whiteSpace: "nowrap", userSelect: "none",
+      }}
+    >
+      {label}{" "}
+      <span style={{ opacity: sortCol === col ? 1 : 0.4 }}>{sortCol === col ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>
+    </th>
+  );
+
+  return (
+    <div className="rounded-lg border border-[#EBEBEB] bg-white overflow-hidden" style={{ fontFamily: "Lato, sans-serif" }}>
+      <div style={{ padding: "11px 13px 8px", display: "flex", alignItems: "center", gap: 6 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", flex: 1 }}>
+          {t("output_line_title")}
+        </p>
+        <InfoTooltip text={t("output_line_tooltip")} size={13} width={220} />
+      </div>
+      {loading ? (
+        <div style={{ height: 260, background: "#f9fafb" }} className="animate-pulse" />
+      ) : metric === "bulk" ? (
+        <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a2b3", fontSize: 11, fontWeight: 600 }}>
+          {t("output_line_bulk_coming_soon")}
+        </div>
+      ) : rows.length === 0 ? (
+        <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a2b3", fontSize: 11 }}>
+          {t("output_trend_no_data")}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 320 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
+              <tr>
+                <TH col="line"        label={t("th_line")} />
+                <TH col="qtyPo"       label={t("output_line_th_qty_po")}      right />
+                <TH col="qtyReal"     label={t("output_line_th_qty_real")}    right />
+                <TH col="theoretical" label={t("output_line_th_theoretical")} right />
+                <TH col="gap"         label={t("output_line_th_gap")}         right />
+                <TH col="pctContrib"  label={t("output_line_th_pct_contrib")} right />
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((row, i) => (
+                <tr key={row.line} style={{ background: i % 2 === 0 ? "white" : "#fafafa", borderBottom: "1px solid #f0f1f3" }}>
+                  <td style={{ padding: "6px 10px", fontWeight: 700, color: "#1E4076" }}>{row.line}</td>
+                  <td style={{ padding: "6px 10px", textAlign: "right", color: "#344054", fontVariantNumeric: "tabular-nums" }}>
+                    {row.qtyPo.toLocaleString()}
+                  </td>
+                  <td style={{ padding: "6px 10px", textAlign: "right", color: "#344054", fontVariantNumeric: "tabular-nums" }}>
+                    {row.qtyReal.toLocaleString()}
+                  </td>
+                  <td style={{ padding: "6px 10px", textAlign: "right", color: "#98a2b3" }}>—</td>
+                  <td style={{ padding: "6px 10px", textAlign: "right", color: "#98a2b3" }}>—</td>
+                  <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700, color: "#344054", fontVariantNumeric: "tabular-nums" }}>
+                    {row.pctContrib.toFixed(1)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Output KPI mini-cards ─────────────────────────────────────────────────────
+
+function OutputFGCard({ fgQty, fgTrend, noData }: {
+  fgQty: number; fgTrend: number | null; noData?: boolean;
+}) {
+  const { t } = useT();
+  const toneKey = noData ? "neutral" : trendToneKey(fgTrend, false);
+  const tone = TONE_TREND[toneKey];
+  const fgM = fgQty / 1_000_000;
+  return (
+    <div style={{
+      background: "white", border: "1px solid #EBEBEB", borderRadius: 8,
+      padding: "11px 13px", display: "flex", flexDirection: "column",
+      height: "100%", fontFamily: "Lato, sans-serif",
+    }}>
+      <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.06em", color: "#64748b", textTransform: "uppercase" }}>
+        {t("output_fg_card_title")}
+      </span>
+      <div style={{ flex: 1, display: "flex", gap: 10, marginTop: 10, alignItems: "flex-start" }}>
+        {/* Left: total */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 10, color: "#98a2b3", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("output_fg_label_total")}</span>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+            <span style={{
+              fontSize: 28, fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums",
+              color: noData ? "#d0d5dd" : "#101828",
+            }}>
+              {noData ? "—" : fgM.toFixed(2)}
+            </span>
+          </div>
+          <span style={{ fontSize: 10.5, color: "#98a2b3" }}>{t("output_fg_unit_mpcs")}</span>
+          <StatusDot color={noData ? "#667085" : tone.color} label={noData ? t("status_no_data") : tone.label} />
+        </div>
+        {/* Divider */}
+        <div style={{ width: 1, background: "#EBEBEB", alignSelf: "stretch", flexShrink: 0 }} />
+        {/* Right: achievement */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 10, color: "#98a2b3", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("output_fg_label_achievement")}</span>
+          <span style={{ fontSize: 22, fontWeight: 700, color: "#d0d5dd", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>—</span>
+          <span style={{ fontSize: 11, color: "#98a2b3" }}>{t("output_line_th_gap")} —</span>
+        </div>
+      </div>
+      <div style={{
+        borderTop: "1px solid #eceef2", marginTop: 10, paddingTop: 6,
+        fontSize: 11, color: "#667085",
+      }}>
+        {t("output_fg_footer")}
+      </div>
+    </div>
+  );
+}
+
+function OutputCountCard({ skuCount, poCount, noData }: {
+  skuCount?: number; poCount?: number; noData?: boolean;
+}) {
+  const { t } = useT();
+  const avgPo = (skuCount && skuCount > 0 && poCount) ? (poCount / skuCount).toFixed(0) : null;
+  return (
+    <div style={{
+      background: "white", border: "1px solid #EBEBEB", borderRadius: 8,
+      padding: "11px 13px", display: "flex", flexDirection: "column",
+      height: "100%", fontFamily: "Lato, sans-serif",
+    }}>
+      <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.06em", color: "#64748b", textTransform: "uppercase" }}>
+        {t("output_count_title")}
+      </span>
+      {noData ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a2b3", fontSize: 11 }}>
+          {t("empty_no_data")}
+        </div>
+      ) : (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", marginTop: 10 }}>
+          <div style={{ flex: 1, display: "flex", alignItems: "baseline", justifyContent: "center", gap: 5 }}>
+            <span style={{ fontSize: 30, fontWeight: 700, color: "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+              {(skuCount ?? 0).toLocaleString()}
+            </span>
+            <span style={{ fontSize: 13, color: "#98a2b3", fontWeight: 700 }}>SKU</span>
+          </div>
+          <div style={{ width: 1, height: 48, background: "#EBEBEB", flexShrink: 0 }} />
+          <div style={{ flex: 1, display: "flex", alignItems: "baseline", justifyContent: "center", gap: 5 }}>
+            <span style={{ fontSize: 30, fontWeight: 700, color: "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+              {(poCount ?? 0).toLocaleString()}
+            </span>
+            <span style={{ fontSize: 13, color: "#98a2b3", fontWeight: 700 }}>PO</span>
+          </div>
+        </div>
+      )}
+      <div style={{ borderTop: "1px solid #eceef2", marginTop: 10, paddingTop: 6, fontSize: 11, color: "#667085" }}>
+        {avgPo ? `${t("output_count_avg")} ${avgPo} PO / SKU` : "—"}
+      </div>
+    </div>
+  );
+}
+
+function OutputPieCard({ title, segments, noData }: {
+  title: string;
+  segments: { label: string; qty: number; color: string }[];
+  noData?: boolean;
+}) {
+  const { t } = useT();
+  const total = segments.reduce((s, seg) => s + Math.max(0, seg.qty), 0);
+  const fmtM = (v: number) => (v / 1_000_000).toFixed(2);
+  const donutSegs: DonutSegment[] = segments.map((s) => ({ label: s.label, value: s.qty, color: s.color }));
+  return (
+    <div style={{
+      background: "white", border: "1px solid #EBEBEB", borderRadius: 8,
+      padding: "11px 13px", display: "flex", flexDirection: "column",
+      height: "100%", fontFamily: "Lato, sans-serif",
+    }}>
+      <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.06em", color: "#64748b", textTransform: "uppercase" }}>
+        {title}
+      </span>
+      {noData || total <= 0 ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a2b3", fontSize: 11 }}>
+          {t("empty_no_data")}
+        </div>
+      ) : (
+        <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center", flex: 1 }}>
+          <div style={{ flexShrink: 0 }}>
+            <PieChart segments={donutSegs} size={90} unit="M pcs" fmt={fmtM} />
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+            {segments.map((seg, i) => {
+              const pct = (Math.max(0, seg.qty) / total * 100);
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1, color: "#334155", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {seg.label}
+                  </span>
+                  <span style={{ color: "#101828", fontWeight: 700, fontVariantNumeric: "tabular-nums", minWidth: 34, textAlign: "right" }}>
+                    {pct.toFixed(0)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps, "kpi" | "loading"> & { tacticalFilters: TacticalFilters }) {
+  const { t } = useT();
+  const [metric, setMetric] = useState<"fg" | "bulk">("fg");
+
+  const plantSegs = useMemo<{ label: string; qty: number; color: string }[]>(() => {
+    if (metric !== "fg") return [];
+    const drivers = kpi?.output?.plantDrivers;
+    if (!drivers || drivers.length === 0) return [];
+    return [...drivers]
+      .filter((d) => d.fg > 0)
+      .sort((a, b) => b.fg - a.fg)
+      .map((d, i) => ({ label: d.plant, qty: d.fg, color: PLANT_COLORS[i % PLANT_COLORS.length] as string }));
+  }, [kpi?.output?.plantDrivers, metric]);
+
+  const formSegs = useMemo<{ label: string; qty: number; color: string }[]>(() => {
+    if (metric !== "fg") return [];
+    const forms = kpi?.output?.byForm;
+    if (!forms || forms.length === 0) return [];
+    return forms
+      .filter((f) => f.qty > 0)
+      .map((f, i) => ({ label: f.form, qty: f.qty, color: SERIES_COLORS[i % SERIES_COLORS.length] as string }));
+  }, [kpi?.output?.byForm, metric]);
+
   return (
     <div className="flex flex-col gap-4">
-      <SectionHeading title="Output" />
+      <SectionHeading
+        title={t("card_output")}
+        right={
+          <SegmentedToggle<"fg" | "bulk">
+            ariaLabel="Output metric"
+            options={[{ key: "fg", label: "FG" }, { key: "bulk", label: "Bulk" }]}
+            value={metric}
+            onChange={setMetric}
+          />
+        }
+      />
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         {loading ? (
-          Array.from({ length: 2 }).map((_, i) => <SkeletonCard key={i} />)
+          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
-            <TKpiCard
-              label="FG Output"
-              value={kpi ? (kpi.output.fgQty / 1_000_000).toFixed(2) : null}
-              unit="million pcs"
-              trend={kpi?.output.fgTrend ?? null}
-              deltaAbsValue={kpi?.output.fgPrev != null ? (kpi.output.fgQty - kpi.output.fgPrev) / 1_000_000 : null}
-              deltaUnit="M pcs"
-              sparkline={kpi?.output.sparkline}
-              sparkUnit="weeks"
-              footerLeft="Finished goods"
+            <OutputFGCard
+              fgQty={kpi?.output.fgQty ?? 0}
+              fgTrend={kpi?.output.fgTrend ?? null}
               noData={!kpi}
             />
-            <TKpiCard
-              label="Bulk Output"
-              value={kpi ? (kpi.output.bulkQty / 1_000).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : null}
-              unit="thousand kg"
-              trend={kpi?.output.bulkTrend ?? null}
-              deltaAbsValue={kpi?.output.bulkPrev != null ? (kpi.output.bulkQty - kpi.output.bulkPrev) / 1_000 : null}
-              deltaUnit="K kg"
-              sparkline={kpi?.output.bulkSparkline}
-              sparkUnit="weeks"
-              footerLeft="Bulk production"
+            <OutputCountCard
+              skuCount={kpi?.output.skuCount}
+              poCount={kpi?.output.poCount}
               noData={!kpi}
             />
+            <OutputPieCard title={t("output_pie_plant")} segments={plantSegs} noData={!kpi || metric !== "fg"} />
+            <OutputPieCard title={t("output_pie_form")}  segments={formSegs}  noData={!kpi || metric !== "fg"} />
           </>
         )}
       </div>
 
-      <TacticalOutputTrendChart filters={tacticalFilters} />
-      <ChartPlaceholder title="Pareto Output" subtitle="Contribution per plant vs target, sorted descending" />
-      <ChartPlaceholder title="Top SKU by Output" subtitle="Actual qty vs plan qty, gap %" height={240} />
+      <div className="grid grid-cols-[3fr_2fr] gap-4">
+        <TacticalOutputTrendChart filters={tacticalFilters} metric={metric} />
+        <TopLineByOutputTable filters={tacticalFilters} metric={metric} />
+      </div>
     </div>
   );
 }
