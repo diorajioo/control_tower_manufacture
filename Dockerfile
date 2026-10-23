@@ -22,7 +22,7 @@ COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
 # Risk Score model, read at runtime from data/risk-score/model.json
-COPY --from=build --chown=app:app /app/data/risk-score/model.json ./data/risk-score/model.json
+COPY --from=build --chown=app:app /app/models/risk-score/model.json ./models/risk-score/model.json
 USER app
 EXPOSE 3000
 CMD ["node", "server.js"]

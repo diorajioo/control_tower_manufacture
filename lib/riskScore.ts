@@ -7,7 +7,7 @@ import { join } from "node:path";
 
 const H = 3600e3, D = 24 * H;
 const K_ROUTE = 3;
-const MODEL_PATH = join(process.cwd(), "data", "risk-score", "model.json");
+const MODEL_PATH = join(process.cwd(), "models", "risk-score", "model.json");
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

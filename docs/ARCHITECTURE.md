@@ -311,7 +311,7 @@ Rules: alerts go only to recipients of the same plant; `instant` alerts are dedu
 
 **Runner cadence**
 - Vercel Hobby: `vercel.json` cron `0 0 * * *` (07:00 WIB, once a day — plan limit). A schedule at another time goes out at the next 07:00 run.
-- Kubernetes (planned; image + manifests in `Dockerfile` and `k8s/`, see `k8s/README.md`): a CronJob every 15 minutes, set `NOTIF_RUNNER=frequent` and a persistent `NOTIF_STORE_DIR` volume (or keep Blob):
+- Kubernetes (planned; image + manifests in `Dockerfile` and `k8s/`, see `k8s/README.md`): a CronJob every 15 minutes, set `NOTIF_RUNNER=frequent` and keep the Blob store (`BLOB_READ_WRITE_TOKEN`) — the platform requires stateless pods, so no volume; health check `GET /healthz`:
 
 ```yaml
 apiVersion: batch/v1
