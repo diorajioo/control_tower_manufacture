@@ -1,12 +1,12 @@
 # Control Tower Manufacturing — production image for the internal Kubernetes cluster.
 #   docker build -t <registry>/control-tower:<tag> .
-FROM node:22-alpine AS deps
+FROM node:22.23.4-alpine AS deps
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.18.3 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
-FROM node:22-alpine AS build
+FROM node:22.23.4-alpine AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.18.3 --activate
 COPY --from=deps /app/node_modules ./node_modules
@@ -14,7 +14,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
-FROM node:22-alpine AS run
+FROM node:22.23.4-alpine AS run
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 RUN addgroup -S app && adduser -S app -G app
