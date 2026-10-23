@@ -3,13 +3,15 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { Fade } from "@/components/ui/Fade";
+import { FloatingTooltip } from "@/components/ui/FloatingTooltip";
+import { outputParams, togglePick, pickOpacity, type OutputPick, type OutputPickDim } from "@/components/dashboard/outputPick";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { cn } from "@/lib/utils";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { LeadTimePlantTable, type PlantBreakdown, type PlantActivity } from "@/components/dashboard/LeadTimePlantTable";
 import type { StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
-import { LINE_THEME, LineTooltip, TOOLTIP_COLORS } from "@/components/charts/StandardLine";
+import { LINE_THEME, LineTooltip, TOOLTIP_COLORS, hexToRgba } from "@/components/charts/StandardLine";
 import { PLANT_COLORS, SERIES_COLORS } from "@/lib/chartConfig";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
 import { LeadTimeGaugeBar } from "@/components/ui/LeadTimeGaugeBar";
@@ -19,6 +21,7 @@ import { useT } from "@/lib/i18n";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 import { FIELD, FIELD_ON, MENU, MENU_ITEM, MENU_ITEM_ON, MENU_ITEM_OFF } from "@/components/ui/FilterField";
 import { LeadTimeHistogram } from "@/components/leadtime/LeadTimeHistogram";
+import { OutputMixRow } from "@/components/dashboard/OutputMixRow";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -317,10 +320,14 @@ function TKpiCard({
 
 interface DonutSegment { color: string; value: number; label: string; sub?: string }
 
-function PieChart({ segments, size = 120, unit = "days", fmt }: {
+function PieChart({ segments, size = 120, unit = "days", fmt, onSelect, opacityOf }: {
   segments: DonutSegment[]; size?: number;
   unit?: string;
   fmt?: (v: number) => string;
+  /** Cross-filter: click a slice */
+  onSelect?: (label: string) => void;
+  /** Cross-filter: dim slices that are not picked */
+  opacityOf?: (label: string) => number;
 }) {
   const cx = 50, cy = 50, r = 46;
   const total = segments.reduce((s, seg) => s + Math.max(0, seg.value), 0);
@@ -360,7 +367,9 @@ function PieChart({ segments, size = 120, unit = "days", fmt }: {
         fill={seg.color}
         stroke="white"
         strokeWidth={1.2}
-        style={{ cursor: "pointer", transition: "d 0.12s ease" }}
+        opacity={opacityOf ? opacityOf(seg.label) : 1}
+        style={{ cursor: "pointer", transition: "d 0.12s ease, opacity 0.15s ease" }}
+        onClick={onSelect ? () => onSelect(seg.label) : undefined}
         onMouseEnter={(e) => { setHoveredIdx(i); setTooltip({ x: e.clientX, y: e.clientY }); }}
         onMouseMove={(e) => setTooltip({ x: e.clientX, y: e.clientY })}
         onMouseLeave={() => { setHoveredIdx(null); setTooltip(null); }}
@@ -376,17 +385,13 @@ function PieChart({ segments, size = 120, unit = "days", fmt }: {
     <>
       <svg width={size} height={size} viewBox="0 0 100 100">{slices}</svg>
       {tooltip && hovSeg && (
+        <FloatingTooltip x={tooltip.x} y={tooltip.y}>
         <div style={{
-          position: "fixed",
-          left: tooltip.x + 12,
-          top: tooltip.y - 8,
-          zIndex: 9999,
           background: TOOLTIP_COLORS.bg,
           border: `1px solid ${TOOLTIP_COLORS.border}`,
           backdropFilter: "blur(4px)",
           borderRadius: 8,
           padding: "8px 10px",
-          pointerEvents: "none",
           minWidth: 140,
           boxShadow: "0 6px 20px -6px rgba(16,24,40,0.28)",
           fontFamily: "Lato, sans-serif",
@@ -406,6 +411,7 @@ function PieChart({ segments, size = 120, unit = "days", fmt }: {
             {hovPct.toFixed(1)}% of total
           </p>
         </div>
+        </FloatingTooltip>
       )}
     </>
   );
@@ -1108,7 +1114,7 @@ function ProductivitySection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "
 
 // ── Output Trend chart ────────────────────────────────────────────────────────
 
-type OutputBarDatum = { label: string; Actual: number; theoretical: number } & BarDatum;
+type OutputBarDatum = { label: string; date: string; Actual: number; theoretical: number } & BarDatum;
 const ACTUAL_BAR_COLOR = "#4A6BA3";
 const THEO_LINE_COLOR  = "#667085";
 
@@ -1130,7 +1136,16 @@ function TheoreticalLineLayer({ bars, yScale }: BarCustomLayerProps<OutputBarDat
   );
 }
 
-function TacticalOutputTrendChart({ filters, metric }: { filters: TacticalFilters; metric: "fg" | "bulk" }) {
+function bucketEnd(date: string, grain: "month" | "week"): string {
+  const d = new Date(date + "T00:00:00Z");
+  if (grain === "week") d.setUTCDate(d.getUTCDate() + 6);
+  else { d.setUTCMonth(d.getUTCMonth() + 1); d.setUTCDate(0); }
+  return d.toISOString().slice(0, 10);
+}
+
+function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
+  filters: TacticalFilters; metric: "fg" | "bulk"; pick: OutputPick | null; onPick: (p: OutputPick) => void;
+}) {
   const { t } = useT();
   const [grain, setGrain] = useState<"month" | "week">("month");
   const [rawData, setRawData] = useState<{ date: string; value: number }[]>([]);
@@ -1139,21 +1154,22 @@ function TacticalOutputTrendChart({ filters, metric }: { filters: TacticalFilter
   useEffect(() => {
     if (metric === "bulk") { setRawData([]); setLoading(false); return; }
     setLoading(true);
-    const params = new URLSearchParams({ kpiType: "output", grain, plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate });
-    if (filters.period) params.set("period", filters.period);
+    const params = outputParams(filters, pick, "bucket");
+    params.set("kpiType", "output");
+    params.set("grain", grain);
     fetch(`/api/dashboard/trends?${params}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setRawData((d?.trendSeries ?? []).map((row: Record<string, unknown>) => ({ date: String(row.date), value: Number(row["All plants"] ?? 0) }))))
       .catch(() => setRawData([]))
       .finally(() => setLoading(false));
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric, grain]);
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric, grain, pick]);
 
   const barData: OutputBarDatum[] = rawData.map((p) => {
     const dt = new Date(p.date + "T00:00:00Z");
     const label = grain === "week"
       ? `W${String(Math.ceil(dt.getUTCDate() / 7)).padStart(2, "0")} ${dt.toLocaleString("en-US", { month: "short", timeZone: "UTC" })}`
       : dt.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-    return { label, Actual: Number((p.value / 1_000_000).toFixed(2)), theoretical: 0 };
+    return { label, date: p.date, Actual: Number((p.value / 1_000_000).toFixed(2)), theoretical: 0 };
   });
   const maxVal = Math.max(...barData.map((d) => d.Actual), 1);
 
@@ -1189,8 +1205,8 @@ function TacticalOutputTrendChart({ filters, metric }: { filters: TacticalFilter
           <p style={{ fontSize: 11, color: "#98a2b3" }}>{t("output_trend_no_data")}</p>
         </div>
       ) : (
-        <Fade depKey={`${metric}|${grain}|${filters.plant}|${filters.startDate}|${filters.endDate}`}>
-          <div style={{ height: 240 }}>
+        <Fade depKey={`${metric}|${grain}|${filters.plant}|${filters.startDate}|${filters.endDate}|${pick?.dim === "bucket" ? "" : `${pick?.dim}:${pick?.value}`}`}>
+          <div style={{ height: 240 }} className="[&_svg_rect]:cursor-pointer">
             <ResponsiveBar<OutputBarDatum>
               data={barData}
               keys={["Actual"]}
@@ -1198,7 +1214,12 @@ function TacticalOutputTrendChart({ filters, metric }: { filters: TacticalFilter
               theme={LINE_THEME}
               margin={{ top: 8, right: 16, bottom: 36, left: 52 }}
               padding={0.3}
-              colors={[ACTUAL_BAR_COLOR]}
+              colors={(bar) => hexToRgba(ACTUAL_BAR_COLOR, pickOpacity(pick, "bucket", bar.data.date))}
+              onClick={(bar) => onPick({
+                dim: "bucket", value: bar.data.date,
+                label: `${t(grain === "week" ? "output_pick_week" : "output_pick_month")}: ${bar.data.label} ${bar.data.date.slice(0, 4)}`,
+                start: bar.data.date, end: bucketEnd(bar.data.date, grain),
+              })}
               borderRadius={2}
               enableLabel={false}
               enableGridX={false}
@@ -1246,7 +1267,9 @@ function TacticalOutputTrendChart({ filters, metric }: { filters: TacticalFilter
 
 interface OutputLineRow { line: string; qtyPo: number; qtyReal: number; theoretical: number | null; gap: number | null; pctContrib: number }
 
-function TopLineByOutputTable({ filters, metric }: { filters: TacticalFilters; metric: "fg" | "bulk" }) {
+function TopLineByOutputTable({ filters, metric, pick, onPick }: {
+  filters: TacticalFilters; metric: "fg" | "bulk"; pick: OutputPick | null; onPick: (p: OutputPick) => void;
+}) {
   const { t } = useT();
   const [rows, setRows] = useState<OutputLineRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1256,14 +1279,13 @@ function TopLineByOutputTable({ filters, metric }: { filters: TacticalFilters; m
   useEffect(() => {
     if (metric === "bulk") { setRows([]); setLoading(false); return; }
     setLoading(true);
-    const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate });
-    if (filters.period) params.set("period", filters.period);
+    const params = outputParams(filters, pick, "line");
     fetch(`/api/dashboard/output-line?${params}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setRows(d?.lines ?? []))
       .catch(() => setRows([]))
       .finally(() => setLoading(false));
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric]);
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric, pick]);
 
   const sorted = useMemo(() => {
     return [...rows].sort((a, b) => {
@@ -1324,7 +1346,16 @@ function TopLineByOutputTable({ filters, metric }: { filters: TacticalFilters; m
             </thead>
             <tbody>
               {sorted.map((row, i) => (
-                <tr key={row.line} style={{ background: i % 2 === 0 ? "white" : "#fafafa", borderBottom: "1px solid #f0f1f3" }}>
+                <tr
+                  key={row.line}
+                  onClick={() => onPick({ dim: "line", value: row.line, label: `${t("th_line")}: ${row.line}` })}
+                  className="cursor-pointer hover:bg-[#EEF4FB]"
+                  style={{
+                    background: pick?.dim === "line" && pick.value === row.line ? "#EEF4FB" : i % 2 === 0 ? "white" : "#fafafa",
+                    borderBottom: "1px solid #f0f1f3",
+                    opacity: pickOpacity(pick, "line", row.line), transition: "opacity 0.15s ease",
+                  }}
+                >
                   <td style={{ padding: "6px 10px", fontWeight: 700, color: "#1E4076" }}>{row.line}</td>
                   <td style={{ padding: "6px 10px", textAlign: "right", color: "#344054", fontVariantNumeric: "tabular-nums" }}>
                     {row.qtyPo.toLocaleString()}
@@ -1441,10 +1472,15 @@ function OutputCountCard({ skuCount, poCount, noData }: {
   );
 }
 
-function OutputPieCard({ title, segments, noData }: {
+function OutputPieCard({ title, pickLabel, segments, noData, pickDim, pick, onPick }: {
   title: string;
+  /** Short name for the filter chip, e.g. "Plant" */
+  pickLabel: string;
   segments: { label: string; qty: number; color: string }[];
   noData?: boolean;
+  pickDim: OutputPickDim;
+  pick: OutputPick | null;
+  onPick: (p: OutputPick) => void;
 }) {
   const { t } = useT();
   const total = segments.reduce((s, seg) => s + Math.max(0, seg.qty), 0);
@@ -1466,13 +1502,23 @@ function OutputPieCard({ title, segments, noData }: {
       ) : (
         <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center", flex: 1 }}>
           <div style={{ flexShrink: 0 }}>
-            <PieChart segments={donutSegs} size={90} unit="M pcs" fmt={fmtM} />
+            <PieChart
+              segments={donutSegs} size={90} unit="M pcs" fmt={fmtM}
+              onSelect={(label) => onPick({ dim: pickDim, value: label, label: `${pickLabel}: ${label}` })}
+              opacityOf={(label) => pickOpacity(pick, pickDim, label)}
+            />
           </div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
             {segments.map((seg, i) => {
               const pct = (Math.max(0, seg.qty) / total * 100);
               return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => onPick({ dim: pickDim, value: seg.label, label: `${pickLabel}: ${seg.label}` })}
+                  className="rounded-sm hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1E4076]"
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, textAlign: "left", opacity: pickOpacity(pick, pickDim, seg.label), transition: "opacity 0.15s ease" }}
+                >
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: seg.color, flexShrink: 0 }} />
                   <span style={{ flex: 1, color: "#334155", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {seg.label}
@@ -1480,7 +1526,7 @@ function OutputPieCard({ title, segments, noData }: {
                   <span style={{ color: "#101828", fontWeight: 700, fontVariantNumeric: "tabular-nums", minWidth: 34, textAlign: "right" }}>
                     {pct.toFixed(0)}%
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -1493,6 +1539,17 @@ function OutputPieCard({ title, segments, noData }: {
 function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps, "kpi" | "loading"> & { tacticalFilters: TacticalFilters }) {
   const { t } = useT();
   const [metric, setMetric] = useState<"fg" | "bulk">("fg");
+  // Cross-filter inside Output (CLAUDE.md → Chart cross-filter): one pick, cleared by the same click, ✕ or Esc,
+  // and reset when the header filters or FG / Bulk change.
+  const [pick, setPick] = useState<OutputPick | null>(null);
+  const onPick = useCallback((p: OutputPick) => setPick((cur) => togglePick(cur, p)), []);
+  useEffect(() => { setPick(null); }, [tacticalFilters.plant, tacticalFilters.startDate, tacticalFilters.endDate, tacticalFilters.period, metric]);
+  useEffect(() => {
+    if (!pick) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setPick(null); };
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [pick]);
 
   const plantSegs = useMemo<{ label: string; qty: number; color: string }[]>(() => {
     if (metric !== "fg") return [];
@@ -1518,12 +1575,32 @@ function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps
       <SectionHeading
         title={t("card_output")}
         right={
-          <SegmentedToggle<"fg" | "bulk">
-            ariaLabel="Output metric"
-            options={[{ key: "fg", label: "FG" }, { key: "bulk", label: "Bulk" }]}
-            value={metric}
-            onChange={setMetric}
-          />
+          <>
+            <SegmentedToggle<"fg" | "bulk">
+              ariaLabel="Output metric"
+              options={[{ key: "fg", label: "FG" }, { key: "bulk", label: "Bulk" }]}
+              value={metric}
+              onChange={setMetric}
+            />
+            {pick && (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#C3CEE3] bg-[#EEF4FB] pl-2.5 pr-1 py-0.5 text-[11px] text-[#16305C]"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                <span className="text-slate-500">{t("output_pick_filtered")}</span>
+                <span className="font-bold max-w-[320px] truncate">{pick.label}</span>
+                <button
+                  type="button"
+                  onClick={() => setPick(null)}
+                  aria-label={t("output_pick_clear")}
+                  title={t("output_pick_clear")}
+                  className="rounded-full w-4 h-4 inline-flex items-center justify-center hover:bg-[#C3CEE3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1E4076]"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+          </>
         }
       />
 
@@ -1542,16 +1619,18 @@ function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps
               poCount={kpi?.output.poCount}
               noData={!kpi}
             />
-            <OutputPieCard title={t("output_pie_plant")} segments={plantSegs} noData={!kpi || metric !== "fg"} />
-            <OutputPieCard title={t("output_pie_form")}  segments={formSegs}  noData={!kpi || metric !== "fg"} />
+            <OutputPieCard title={t("output_pie_plant")} pickLabel={t("output_pick_plant")} segments={plantSegs} noData={!kpi || metric !== "fg"} pickDim="plant" pick={pick} onPick={onPick} />
+            <OutputPieCard title={t("output_pie_form")}  pickLabel={t("output_pick_form")}  segments={formSegs}  noData={!kpi || metric !== "fg"} pickDim="form"  pick={pick} onPick={onPick} />
           </>
         )}
       </div>
 
       <div className="grid grid-cols-[3fr_2fr] gap-4">
-        <TacticalOutputTrendChart filters={tacticalFilters} metric={metric} />
-        <TopLineByOutputTable filters={tacticalFilters} metric={metric} />
+        <TacticalOutputTrendChart filters={tacticalFilters} metric={metric} pick={pick} onPick={onPick} />
+        <TopLineByOutputTable filters={tacticalFilters} metric={metric} pick={pick} onPick={onPick} />
       </div>
+
+      <OutputMixRow filters={tacticalFilters} metric={metric} pick={pick} onPick={onPick} />
     </div>
   );
 }

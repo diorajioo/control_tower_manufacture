@@ -27,6 +27,18 @@ globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
       try { calls++; await (fn as (...a: unknown[]) => Promise<unknown>)(...args); }
       catch (e) { failures.push(`${name} [${period}]: ${(e as Error).message}`); }
     }
+    // Output cross-filter paths (fdim / fval → PO-level IN subquery)
+    for (const sel of [{ dim: "brand", value: "WARDAH" }, { dim: "line", value: "(Not set)" }, { dim: "form", value: "EMULSI" }] as const) {
+      const checks: [string, () => Promise<unknown>][] = [
+        ["getOutputMix", () => q.getOutputMix(f, "variant", sel)],
+        ["getOutputByLine", () => q.getOutputByLine(f, sel)],
+        ["getTrendKPIByPlant output", () => q.getTrendKPIByPlant({ ...f, kpiType: "output", grain: "month", outputSel: sel })],
+      ];
+      for (const [name, run] of checks) {
+        try { calls++; await run(); }
+        catch (e) { failures.push(`${name} ${sel.dim} [${period}]: ${(e as Error).message}`); }
+      }
+    }
     for (const kpiType of ["leadtime", "upstream", "downstream", "e2e", "output", "oee", "rft", "bulkloss"])
       for (const grain of ["week", "month"] as const) {
         try { calls++; await q.getTrendKPIByPlant({ ...f, kpiType, grain }); }

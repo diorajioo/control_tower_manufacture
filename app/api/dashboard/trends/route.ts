@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { getTrendKPIByPlant, type TrendGrain } from "@/lib/queries";
+import { parseOutputSel, type OutputSel } from "@/lib/outputSel";
 
 function daysAgo(n: number): string {
   const d = new Date();
@@ -23,8 +24,8 @@ function resolvePeriodDates(period: string): { startDate: string; endDate: strin
   }
 }
 
-async function runTrendQuery(plant: string, startDate: string, endDate: string, kpiType: string, period: string | undefined, grain: TrendGrain) {
-  const rows = await getTrendKPIByPlant({ plant, startDate, endDate, kpiType, period, grain });
+async function runTrendQuery(plant: string, startDate: string, endDate: string, kpiType: string, period: string | undefined, grain: TrendGrain, outputSel: OutputSel | null = null) {
+  const rows = await getTrendKPIByPlant({ plant, startDate, endDate, kpiType, period, grain, outputSel });
 
   const plantsSet = new Set<string>();
   const weekMap   = new Map<string, Record<string, number>>();
@@ -58,20 +59,20 @@ async function runTrendQuery(plant: string, startDate: string, endDate: string, 
   };
 }
 
-// Cache key: [plant, period, kpiType, grain] for presets — stable regardless of exact dates.
+// Cache key: [plant, period, kpiType, grain, Output cross-filter] for presets — stable regardless of exact dates.
 const fetchTrendByPeriod = unstable_cache(
-  async (plant: string, period: string, kpiType: string, grain: TrendGrain) => {
+  async (plant: string, period: string, kpiType: string, grain: TrendGrain, fdim = "", fval = "") => {
     const { startDate, endDate } = resolvePeriodDates(period);
-    return runTrendQuery(plant, startDate, endDate, kpiType, period, grain);
+    return runTrendQuery(plant, startDate, endDate, kpiType, period, grain, fdim ? { dim: fdim, value: fval } as OutputSel : null);
   },
   ["trends-by-period-v7"],
   { revalidate: 3600, tags: ["trends"] }
 );
 
-// Cache key: [plant, startDate, endDate, kpiType, grain] for custom date ranges.
+// Cache key: [plant, startDate, endDate, kpiType, grain, Output cross-filter] for custom date ranges.
 const fetchTrendByDates = unstable_cache(
-  async (plant: string, startDate: string, endDate: string, kpiType: string, grain: TrendGrain) => {
-    return runTrendQuery(plant, startDate, endDate, kpiType, undefined, grain);
+  async (plant: string, startDate: string, endDate: string, kpiType: string, grain: TrendGrain, fdim = "", fval = "") => {
+    return runTrendQuery(plant, startDate, endDate, kpiType, undefined, grain, fdim ? { dim: fdim, value: fval } as OutputSel : null);
   },
   ["trends-by-dates-v7"],
   { revalidate: 3600, tags: ["trends"] }
@@ -90,11 +91,13 @@ export async function GET(req: NextRequest) {
   const kpiType   = searchParams.get("kpiType")   ?? "leadtime";
   const period    = searchParams.get("period")    ?? "";
   const grain: TrendGrain = searchParams.get("grain") === "month" ? "month" : "week";
+  // Output cross-filter (brand / line / …) — only the Output trend uses it
+  const sel = kpiType === "output" ? parseOutputSel(searchParams) : null;
 
   try {
     const data = KNOWN_PERIODS.has(period)
-      ? await fetchTrendByPeriod(plant, period, kpiType, grain)
-      : await fetchTrendByDates(plant, startDate, endDate, kpiType, grain);
+      ? await fetchTrendByPeriod(plant, period, kpiType, grain, sel?.dim ?? "", sel?.value ?? "")
+      : await fetchTrendByDates(plant, startDate, endDate, kpiType, grain, sel?.dim ?? "", sel?.value ?? "");
     return NextResponse.json(data);
   } catch (err) {
     console.error("Trends query error:", err);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getOutputByLine } from "@/lib/queries";
+import { parseOutputSel } from "@/lib/outputSel";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
   const period    = sp.get("period")    ?? undefined;
 
   try {
-    const rows = await getOutputByLine({ plant, startDate, endDate, period });
+    const rows = await getOutputByLine({ plant, startDate, endDate, period }, parseOutputSel(sp));
     return NextResponse.json({
       lines: rows.map((r) => ({
         line:          r.LINE_NAME,

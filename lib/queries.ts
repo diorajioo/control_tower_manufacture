@@ -1,3 +1,4 @@
+import type { OutputSel, OutputSelDim } from "@/lib/outputSel";
 import { executeQuery } from "@/lib/db";
 import { activeDims, type LtDims } from "@/lib/leadTimeFilters";
 import { LEAD_TIME_START_SQL, NDC_RECEIVED_AT_SQL, PO_CREATED_AT_SQL, PO_RELEASED_AT_SQL, LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
@@ -691,10 +692,11 @@ export async function getYieldKPI(filters: QueryFilters) {
 
 // Output by production line — Line name, PO count, total released qty (pcs), % contribution.
 // Theoretical Output and Gap are not in the DB yet; the API returns null for those.
-export async function getOutputByLine(filters: QueryFilters) {
+export async function getOutputByLine(filters: QueryFilters, sel?: OutputSel | null) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const pw = plantWhere(filters.plant);
-  const pb = plantBinds(filters.plant);
+  const sw = outputSelWhere(sel);
+  const pb = [...plantBinds(filters.plant), ...sw.binds];
   return executeQuery<{ LINE_NAME: string; QTY_PO: number; QTY_REAL: number; PCT_CONTRIBUTION: number }>(`
     WITH per_po AS (
       SELECT
@@ -706,6 +708,7 @@ export async function getOutputByLine(filters: QueryFilters) {
         AND LINE_NAME IS NOT NULL
         AND RELEASE_QTY IS NOT NULL
         ${pw}
+        ${sw.sql}
       GROUP BY LINE_NAME, PROCESS_ORDER_FG
     ),
     totals AS (SELECT NULLIF(SUM(qty), 0) AS grand_total FROM per_po)
@@ -718,6 +721,82 @@ export async function getOutputByLine(filters: QueryFilters) {
     GROUP BY p.LINE_NAME
     ORDER BY QTY_REAL DESC
   `, [...dateBinds, ...pb]);
+}
+
+// Output mix (Tactical → Output): FG released per group (brand / variant / SKU group) for the treemap,
+// and the top 10 SKU by released quantity. Same PO population as getOutputByLine (PO_FG_DONE_DATE,
+// one quantity per PO = MAX(RELEASE_QTY)).
+export type OutputGroupDim = "brand" | "variant" | "su_group";
+
+const OUTPUT_GROUP_COL: Record<OutputGroupDim, string> = {
+  brand:    "PRODUCT_BRAND",
+  variant:  "PRODUCT_VARIANT",
+  su_group: "SKU_GROUP",
+};
+
+// Output cross-filter (Tactical → Output): a click on one Output chart filters the others (CLAUDE.md →
+// Chart cross-filter). Applied at PO level, so every Output query keeps its own population and date column.
+export type { OutputSel, OutputSelDim } from "@/lib/outputSel";
+
+const OUTPUT_NOT_SET = "(Not set)";
+const OUTPUT_SEL_COL: Record<OutputSelDim, string> = { ...OUTPUT_GROUP_COL, line: "LINE_NAME", form: "SEDIAAN" };
+
+function outputSelWhere(sel?: OutputSel | null, poCol = "PROCESS_ORDER_FG"): { sql: string; binds: unknown[] } {
+  if (!sel) return { sql: "", binds: [] };
+  const col = OUTPUT_SEL_COL[sel.dim];
+  const pred = sel.value === OUTPUT_NOT_SET ? `${col} IS NULL` : `${col} = ?`;
+  return {
+    sql: `AND ${poCol} IN (SELECT PROCESS_ORDER_FG FROM MIGRATION.CONTROL_TOWER.CT_MANUF_LEADTIME WHERE ${pred})`,
+    binds: sel.value === OUTPUT_NOT_SET ? [] : [sel.value],
+  };
+}
+
+export async function getOutputMix(filters: QueryFilters, dim: OutputGroupDim = "brand", sel?: OutputSel | null, part: "all" | "groups" | "skus" = "all") {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const pw = plantWhere(filters.plant);
+  const pb = [...plantBinds(filters.plant), ...outputSelWhere(sel).binds];
+  const sw = outputSelWhere(sel).sql;
+  const col = OUTPUT_GROUP_COL[dim];
+  const perPo = `
+    SELECT
+      PROCESS_ORDER_FG,
+      MAX(${col})        AS GRP,
+      MAX(PRODUCT_CODE)  AS PRODUCT_CODE,
+      MAX(PRODUCT_NAME)  AS PRODUCT_NAME,
+      MAX(RELEASE_QTY)   AS QTY
+    FROM ${LT_TABLE}
+    WHERE ${datePred}
+      AND RELEASE_QTY IS NOT NULL
+      ${pw}
+      ${sw}
+    GROUP BY PROCESS_ORDER_FG`;
+  const [groups, skus] = await Promise.all([
+    part === "skus" ? Promise.resolve([]) : executeQuery<{ GRP: string; QTY_PO: number; QTY_REAL: number }>(`
+      SELECT
+        COALESCE(GRP, '(Not set)')        AS GRP,
+        COUNT(DISTINCT PROCESS_ORDER_FG)  AS QTY_PO,
+        SUM(QTY)                          AS QTY_REAL
+      FROM (${perPo}) per_po
+      GROUP BY COALESCE(GRP, '(Not set)')
+      ORDER BY QTY_REAL DESC
+    `, [...dateBinds, ...pb]),
+    part === "groups" ? Promise.resolve([]) : executeQuery<{ PRODUCT_CODE: string; PRODUCT_NAME: string; QTY_PO: number; QTY_REAL: number; PCT_CONTRIBUTION: number }>(`
+      WITH per_po AS (${perPo}),
+      totals AS (SELECT NULLIF(SUM(QTY), 0) AS GRAND_TOTAL FROM per_po)
+      SELECT
+        p.PRODUCT_CODE,
+        MAX(p.PRODUCT_NAME)                       AS PRODUCT_NAME,
+        COUNT(DISTINCT p.PROCESS_ORDER_FG)        AS QTY_PO,
+        SUM(p.QTY)                                AS QTY_REAL,
+        SUM(p.QTY) * 100.0 / MAX(t.GRAND_TOTAL)   AS PCT_CONTRIBUTION
+      FROM per_po p CROSS JOIN totals t
+      WHERE p.PRODUCT_CODE IS NOT NULL
+      GROUP BY p.PRODUCT_CODE
+      ORDER BY QTY_REAL DESC
+      LIMIT 10
+    `, [...dateBinds, ...pb]),
+  ]);
+  return { groups, skus };
 }
 
 // Output detail stats: distinct SKU + PO counts, and output quantity split by SEDIAAN (pharmaceutical form).
@@ -1117,7 +1196,7 @@ export async function getTrendsData(filters: QueryFilters) {
 // Every trend KPI also returns an "All plants" row per period (GROUPING SETS), computed from the raw rows —
 // the Overview TrendChart Overall view uses it, so sums / ratios are exact, not averages of plant values.
 export async function getTrendKPIByPlant(
-  filters: QueryFilters & { kpiType?: string; grain?: TrendGrain }
+  filters: QueryFilters & { kpiType?: string; grain?: TrendGrain; outputSel?: OutputSel | null }
 ) {
   const { startDate, endDate, plant, kpiType = "leadtime" } = filters;
   const unit = truncUnit(filters.grain); // WEEK column = start of the week or month
@@ -1267,11 +1346,12 @@ export async function getTrendKPIByPlant(
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_TRENDS
           WHERE PO_FG_DONE_DATE::DATE BETWEEN ${dateRange}
             ${pf}
+            ${outputSelWhere(filters.outputSel).sql}
           GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
         ) sub
         GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
         ORDER BY WEEK
-      `, [startDate, endDate, ...plantBinds(plant)]);
+      `, [startDate, endDate, ...plantBinds(plant), ...outputSelWhere(filters.outputSel).binds]);
 
     case "oee":
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`

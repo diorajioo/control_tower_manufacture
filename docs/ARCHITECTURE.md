@@ -2,7 +2,7 @@
 
 ## Overview
 
-Next.js 14 App Router serves as both the frontend (React Server/Client Components) and backend (API Routes). No separate backend process. Snowflake is the sole data warehouse.
+Next.js 15 App Router serves as both the frontend (React Server/Client Components) and backend (API Routes). No separate backend process. Snowflake is the sole data warehouse.
 
 ```mermaid
 flowchart LR
@@ -115,6 +115,7 @@ lib/
 | `/api/lead-time/note` | POST | Required | 1h | AI draft of the Lead Time card note from the variables the page shows; null unless every number in it is one of them (`lib/leadTimeNote.ts`) |
 | `/api/lead-time/options` | GET | Required | 1h | Dropdown values for the Lead Time filters (period + plant) |
 | `/api/lead-time/trend` | GET | Required | 1h | Lead Time Trend (total + per POSITION) at `grain=week\|month` — used when the chart is switched to Monthly |
+| `/api/dashboard/output-mix` | GET | Required | — | Tactical Output: FG released per `dim=brand\|variant\|su_group` (treemap) + top 10 SKU by released qty (`getOutputMix()`) |
 | `/api/dashboard/plants` | GET | Required | — | List of plant names for dropdown |
 | `/api/dashboard/summary` | GET | Required | 5h | AI executive summary text |
 | `/api/chat` | POST | Required | — | Streaming AI chat with tool use |

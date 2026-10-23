@@ -17,6 +17,11 @@
 5. **Trend + AI Risks** — 2fr / 1fr grid: TrendChart (Standard Line Chart, SPC markers; header = Metric ▾ · Overall / By plant · Weekly / Monthly ▾) + AIRisksPanel.
    - **Planned:** Quarterly grain in the Weekly / Monthly dropdown (all trend charts).
 
+### Tactical view — Output section
+FG / Bulk toggle · 4 KPI cards · Output trend + Top Line by Output table · **Output per Brand treemap + Top SKU by Output table** (`OutputMixRow`, `/api/dashboard/output-mix`, real data, FG only). Treemap: Group by ▾ Brand / Variant / SKU group; tile = FG released (Σ RELEASE_QTY per PO), shade = share (darker = larger, Paragon Blue tints — no health colors until targets exist); top 15 groups, caption "Top n of N · x% of FG released" when cut; tooltip = FG released · share · POs. Its height follows the SKU table (no fixed height). Top SKU table: top 10 by qty, sortable; Theoretical and Gap show "—" until planning data is connected.
+
+**Cross-filter (Output only, `components/dashboard/outputPick.ts`):** click a plant or form (donut slice or legend row), a trend bar (month / week), a Top Line row or a treemap tile → every other Output chart reloads for that pick; the source chart keeps all items and dims the rest to 35%. One pick at a time; cleared by the same click, the "Filtered by …" chip ✕ next to FG / Bulk, Esc, or a header / FG–Bulk change. Plant → `plant` param, month/week → date range ∩ header range, brand / variant / SKU group / line / form → `fdim` + `fval` (PO-level `IN` subquery, `outputSelWhere()` in `lib/queries.ts`; trends route applies it to `kpiType=output` only). The 4 KPI cards stay on the header filters.
+
 ### User interactions
 - Header filter row: Period picker, Plant dropdown, Data Level selector. Changes trigger immediate re-fetch.
 - Refresh button: force-reloads KPI data, flashes `#1E4076` overlay briefly.
