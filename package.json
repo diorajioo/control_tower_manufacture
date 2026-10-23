@@ -2,6 +2,9 @@
   "name": "control-tower-manufacture",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "predev": "npx kill-port 3000 --silent",
     "dev": "next dev -p 3000",
