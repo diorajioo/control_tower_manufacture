@@ -6,15 +6,11 @@
 
 ### Next.js 14 Is Out Of Security Support
 
-**Status: Partially mitigated (2026-10-23)**
-**Severity: High**
-**Area: `package.json`, `next.config.mjs`**
+**Status: Resolved (2026-10-23)** — upgraded to Next.js 15.5.28 (React stays 18.3.1).
 
-**Description:** Next.js 14.2.x no longer gets security patches. 14.2.35 (upgraded from 14.2.5) fixes the middleware authorization bypass; `npm audit` still lists advisories fixed only in 15.5+ (Server Actions / Server Components DoS, SSRF in rewrites, cache poisoning, Image Optimization RCE).
+Next 15 allows React `^18.2.0 || ^19`; the App Router runs on the React build bundled with Next, so no app code changed. Only config change: `experimental.serverComponentsExternalPackages` → `serverExternalPackages`. No `cookies()` / `headers()` / dynamic `params` in the app, so the async request API change does not apply. Verified: build, every page with 0 console / API errors, middleware auth (incl. the `x-middleware-subrequest` bypass), Docker image. Image Optimization stays off (`images.unoptimized`).
 
-**Mitigation in place:** Image Optimization API off (`images.unoptimized`, no `next/image` in the app); the app uses no Server Actions, rewrites or WebSockets; every API route checks the session itself, not only `middleware.ts`; the container runs on Linux (the Windows-only RCE does not apply).
-
-**What needs doing:** Upgrade to Next.js 15.5+ (React 19, async `cookies()`/`headers()`/`params`, NextAuth check) as its own task. Snowflake SDK advisories (toml, uuid, fast-xml-parser) go away when Snowflake is removed after the move to Kubernetes (`k8s/README.md`).
+Remaining `npm audit` items: `postcss` 8.4.31 bundled inside Next (CSS build-time), `glob` (CLI only), and the `snowflake-sdk` chain (gone when Snowflake is removed, `k8s/README.md`). React 19 is a separate, optional upgrade.
 
 ---
 

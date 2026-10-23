@@ -32,9 +32,8 @@ const nextConfig = {
   output: "standalone",
   // No next/image in the app — turning the Image Optimization API off closes its advisories on Next 14
   images: { unoptimized: true },
-  experimental: {
-    serverComponentsExternalPackages: ["snowflake-sdk"],
-  },
+  // Next 15: moved out of `experimental` (was serverComponentsExternalPackages)
+  serverExternalPackages: ["snowflake-sdk"],
 
   async headers() {
     return [
