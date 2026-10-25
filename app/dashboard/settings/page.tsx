@@ -14,6 +14,7 @@ import { FloatingChat } from "@/components/dashboard/FloatingChat";
 import { cn } from "@/lib/utils";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { ToggleSelect } from "@/components/ui/ToggleSelect";
 import { ALERT_KPIS } from "@/lib/aiScope";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -389,7 +390,7 @@ function Card({
   description?: string;
 }) {
   return (
-    <div className={cn("bg-white rounded-xl border border-slate-200 overflow-hidden", className)}>
+    <div className={cn("bg-white rounded-xl border border-slate-200", className)}>
       {(title || icon) && (
         <div className={cn("px-5 py-4 border-b border-slate-100", icon && "flex items-center gap-3")}>
           {icon && (
@@ -674,19 +675,12 @@ function TampilanSection({
       <Card title="Default Filters">
         <div className="space-y-4">
           <Field label="Default Plant">
-            <select
+            <ToggleSelect<string>
+              ariaLabel="Default plant"
+              options={["All Plant", "Plant 1", "Plant 2", "Plant 3", "Plant 4", "Plant 5", "Plant 6"].map((p) => ({ key: p, label: p }))}
               value={display.defaultPlant}
-              onChange={(e) => set({ defaultPlant: e.target.value })}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-400"
-            >
-              {["All Plant", "Plant 1", "Plant 2", "Plant 3", "Plant 4", "Plant 5", "Plant 6"].map(
-                (p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                )
-              )}
-            </select>
+              onChange={(v) => set({ defaultPlant: v })}
+            />
           </Field>
 
           <Field label="Default Data View">
@@ -1380,14 +1374,13 @@ function TeamsTab({
                   <li key={r.email} className="bg-gray-50 rounded-xl p-3 space-y-2.5">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium text-gray-700 flex-1 truncate">{r.email}</span>
-                      <select
-                        aria-label={`Plant for ${r.email}`}
+                      <ToggleSelect<string>
+                        ariaLabel={`Plant for ${r.email}`}
+                        options={(plants.includes(r.plant) ? plants : [...plants, r.plant]).map((p) => ({ key: p, label: p }))}
                         value={r.plant}
-                        onChange={(e) => updateRecipient(r.email, (x) => ({ ...x, plant: e.target.value }))}
-                        className={fieldCls}
-                      >
-                        {(plants.includes(r.plant) ? plants : [...plants, r.plant]).map((p) => <option key={p} value={p}>{p}</option>)}
-                      </select>
+                        onChange={(v) => updateRecipient(r.email, (x) => ({ ...x, plant: v }))}
+                        align="right"
+                      />
                       <button
                         onClick={() => removeRecipient(r.email)}
                         className="text-gray-400 hover:text-red-500 transition-colors"
@@ -1444,14 +1437,12 @@ function TeamsTab({
                         onChange={(mode) => updateRecipient(r.email, (x) => ({ ...x, summary: { ...x.summary, mode } }))}
                       />
                       {r.summary.mode === "weekly" && (
-                        <select
-                          aria-label="Weekday"
-                          value={r.summary.weekday}
-                          onChange={(e) => updateRecipient(r.email, (x) => ({ ...x, summary: { ...x.summary, weekday: Number(e.target.value) } }))}
-                          className={fieldCls}
-                        >
-                          {WEEKDAYS.map((d, i) => <option key={d} value={i + 1}>{d}</option>)}
-                        </select>
+                        <ToggleSelect<string>
+                          ariaLabel="Weekday"
+                          options={WEEKDAYS.map((d, i) => ({ key: String(i + 1), label: d }))}
+                          value={String(r.summary.weekday)}
+                          onChange={(v) => updateRecipient(r.email, (x) => ({ ...x, summary: { ...x.summary, weekday: Number(v) } }))}
+                        />
                       )}
                       {r.summary.mode !== "off" && (
                         <>
@@ -1462,14 +1453,12 @@ function TeamsTab({
                             onChange={(e) => updateRecipient(r.email, (x) => ({ ...x, summary: { ...x.summary, time: e.target.value } }))}
                             className={fieldCls}
                           />
-                          <select
-                            aria-label="Period the summary covers"
+                          <ToggleSelect<SummaryRange>
+                            ariaLabel="Period the summary covers"
+                            options={SUMMARY_RANGES.map((o) => ({ key: o.key, label: o.label }))}
                             value={r.summary.range}
-                            onChange={(e) => updateRecipient(r.email, (x) => ({ ...x, summary: { ...x.summary, range: e.target.value as SummaryRange } }))}
-                            className={fieldCls}
-                          >
-                            {SUMMARY_RANGES.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-                          </select>
+                            onChange={(v) => updateRecipient(r.email, (x) => ({ ...x, summary: { ...x.summary, range: v } }))}
+                          />
                         </>
                       )}
                     </div>

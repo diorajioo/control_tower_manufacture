@@ -31,7 +31,7 @@ export function ToggleSelect<T extends string>({ options, value, onChange, ariaL
   const current = options.find((o) => o.key === value)?.label ?? value;
 
   return (
-    <div ref={ref} className="relative shrink-0">
+    <div ref={ref} className="relative shrink-0 w-fit">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

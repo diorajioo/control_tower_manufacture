@@ -11,6 +11,7 @@ import { StatusDot } from "@/components/ui/StatusDot";
 import { LeadTimePlantTable, type PlantBreakdown, type PlantActivity } from "@/components/dashboard/LeadTimePlantTable";
 import type { StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { ToggleSelect } from "@/components/ui/ToggleSelect";
 import { LINE_THEME, LineTooltip, TOOLTIP_COLORS, hexToRgba } from "@/components/charts/StandardLine";
 import { PLANT_COLORS, SERIES_COLORS } from "@/lib/chartConfig";
 import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
@@ -696,7 +697,7 @@ export function TacticalParetoChart({
                 aria-expanded={catOpen}
                 className={cn(FIELD, FIELD_ON, "justify-between gap-2 min-w-[80px]")}
               >
-                <span>{categoryFilter === "all" ? "Semua" : categoryFilter}</span>
+                <span>{categoryFilter === "all" ? "All categories" : categoryFilter}</span>
                 <ChevronDown size={11} className={cn("text-slate-400 shrink-0 transition-transform duration-150", catOpen && "rotate-180")} />
               </button>
               {catOpen && (
@@ -705,7 +706,7 @@ export function TacticalParetoChart({
                     <button key={v} role="option" aria-selected={categoryFilter === v}
                       onClick={() => { setCategoryFilter(v); setCatOpen(false); }}
                       className={cn(MENU_ITEM, categoryFilter === v ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
-                      <span>{v === "all" ? "Semua" : v === "VA" ? "VA – Value Added" : v === "NNVA" ? "NNVA – Non-Value Added" : "UNVA – Waste"}</span>
+                      <span>{v === "all" ? "All categories" : v === "VA" ? "VA – Value Added" : v === "NNVA" ? "NNVA – Non-Value Added" : "UNVA – Waste"}</span>
                       {categoryFilter === v && <Check size={10} className="text-[#1E4076] shrink-0" />}
                     </button>
                   ))}
@@ -1180,18 +1181,13 @@ function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{t("output_trend_title")}</p>
           <InfoTooltip text={t("output_trend_tooltip")} size={13} width={240} />
         </div>
-        <select
+        <ToggleSelect<"month" | "week">
+          ariaLabel="Trend grain"
+          options={[{ key: "month", label: t("toggle_monthly") }, { key: "week", label: t("toggle_weekly") }]}
           value={grain}
-          onChange={(e) => setGrain(e.target.value as "month" | "week")}
-          style={{
-            fontSize: 11, fontFamily: "Lato, sans-serif", fontWeight: 600, color: "#344054",
-            border: "1px solid #D0D5DD", borderRadius: 6, padding: "3px 8px",
-            background: "white", cursor: "pointer", outline: "none",
-          }}
-        >
-          <option value="month">{t("toggle_monthly")}</option>
-          <option value="week">{t("toggle_weekly")}</option>
-        </select>
+          onChange={setGrain}
+          align="right"
+        />
       </div>
 
       {metric === "bulk" ? (

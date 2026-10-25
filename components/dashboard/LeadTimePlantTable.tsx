@@ -6,6 +6,7 @@ import { ChartCard, EmptyState } from "@/components/dashboard/LeadTimeCharts";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { activityLabel, PROCESS_GROUPS } from "@/lib/leadTimeStages";
 import { cn } from "@/lib/utils";
+import { FIELD, FIELD_ON, MENU } from "@/components/ui/FilterField";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lead time breakdown per plant (Overview → Tactical view).
@@ -267,12 +268,12 @@ function ColumnPicker({ cols, hidden, onChange }: { cols: Col[]; hidden: Set<str
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}
-        className="h-7 inline-flex items-center gap-1.5 px-2.5 rounded-md border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:border-slate-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40">
+        className={cn(FIELD, FIELD_ON, "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40")}>
         {shown} of {cols.length} processes
         <ChevronDown size={11} className={cn("text-slate-400 transition-transform duration-150", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-30 w-60 max-h-80 overflow-y-auto bg-white rounded-lg border border-slate-200 shadow-[0_8px_24px_rgba(16,24,40,0.12)] py-1" role="listbox" aria-multiselectable>
+        <div className={cn(MENU, "left-auto right-0 w-60 max-h-80 overflow-y-auto")} role="listbox" aria-multiselectable>
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-100">
             <button onClick={() => onChange(new Set())} className="text-[11px] font-semibold text-[#1E4076] hover:underline">Select all</button>
             <button onClick={() => onChange(new Set(cols.map((c) => c.key)))} className="text-[11px] font-semibold text-slate-500 hover:underline">Clear</button>
