@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getTeamsSettings, saveTeamsSettings, type TeamsSettings } from "@/lib/settings";
 import { storeBackend } from "@/lib/notifications/store";
+import { isServerAdmin } from "@/lib/serverAdmin";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -20,6 +21,7 @@ export async function GET() {
 export async function PUT(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isServerAdmin(session.user?.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json() as Partial<TeamsSettings>;
   try {

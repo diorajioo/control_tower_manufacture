@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { connectSender, disconnectSender } from "@/lib/settings";
+import { isServerAdmin } from "@/lib/serverAdmin";
 
 /**
  * POST: make the signed-in account the sender of Teams notifications (its refresh token is stored,
@@ -12,6 +13,7 @@ import { connectSender, disconnectSender } from "@/lib/settings";
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isServerAdmin(session.user.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   const refreshToken = jwt?.refreshToken as string | undefined;
@@ -30,6 +32,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isServerAdmin(session.user?.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   await disconnectSender();
   return NextResponse.json({ ok: true });
 }
