@@ -11,8 +11,8 @@ export async function POST() {
   }
   if (!isServerAdmin(session.user?.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  revalidateTag("kpi");
-  revalidateTag("trends");
+  revalidateTag("kpi", { expire: 0 });
+  revalidateTag("trends", { expire: 0 });
 
   return NextResponse.json({ ok: true, revalidated: ["kpi", "trends"] });
 }
