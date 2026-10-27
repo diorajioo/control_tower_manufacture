@@ -1,0 +1,356 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { TrendingUp, TrendingDown } from "lucide-react";
+import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import {
+  animate,
+  AnimatePresence,
+  motion,
+  useMotionValue,
+} from "framer-motion";
+import { cn } from "@/lib/utils";
+
+// ── AnimatedNumber ────────────────────────────────────────────────────────────
+// Count-up from previous → target using Framer Motion.
+
+function parseNumeric(v: string | number): { raw: number; decimals: number; prefix: string; suffix: string } {
+  const s = String(v);
+  const match = s.match(/^([^\d-]*)(-?[\d,]+(?:\.\d+)?)(.*)$/);
+  if (!match) return { raw: NaN, decimals: 0, prefix: "", suffix: s };
+  const numStr = match[2].replace(/,/g, "");
+  const dotIdx = numStr.indexOf(".");
+  return {
+    raw: parseFloat(numStr),
+    decimals: dotIdx === -1 ? 0 : numStr.length - dotIdx - 1,
+    prefix: match[1],
+    suffix: match[3],
+  };
+}
+
+function fmt(n: number, decimals: number): string {
+  if (decimals === 0) return Math.round(n).toLocaleString("en-US");
+  return n.toFixed(decimals);
+}
+
+interface AnimatedNumberProps {
+  value: string | number;
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+function AnimatedNumber({ value, className, style }: AnimatedNumberProps) {
+  const { raw, decimals, prefix, suffix } = parseNumeric(value);
+  const mv = useMotionValue(0);
+  const [display, setDisplay] = useState(() =>
+    isNaN(raw) ? String(value) : `${prefix}${fmt(0, decimals)}${suffix}`
+  );
+  const prevRef = useRef(0);
+
+  useEffect(() => {
+    if (isNaN(raw)) {
+      setDisplay(String(value));
+      prevRef.current = 0;
+      return;
+    }
+    const from = prevRef.current;
+    prevRef.current = raw;
+    const ctrl = animate(mv, raw, {
+      duration: 0.9,
+      ease: [0.22, 1, 0.36, 1],
+      from,
+      onUpdate: (v) => setDisplay(`${prefix}${fmt(v, decimals)}${suffix}`),
+    });
+    return () => ctrl.stop();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raw]);
+
+  return <span className={className} style={style}>{display}</span>;
+}
+
+// ── KPICard types ─────────────────────────────────────────────────────────────
+
+interface KPICardProps {
+  title: string;
+  icon?: React.ReactNode;
+  iconColor?: string;
+  value?: string | number;
+  unit?: string;
+  trend?: number;
+  trendLabel?: string;
+  subtitle?: string;
+  children?: React.ReactNode;
+  className?: string;
+  badge?: string;
+  badgeColor?: "green" | "red" | "amber" | "blue" | "purple";
+  alert?: boolean;
+  compact?: boolean;
+  tooltip?: string;
+  sparkline?: number[];
+  sparklineColor?: string;
+  dimmed?: boolean;
+  valueColor?: string;
+  /** Increment this value whenever data refreshes to trigger a brief flash. */
+  flashKey?: number;
+}
+
+const badgeColors = {
+  green:  "bg-emerald-50 text-emerald-600",
+  red:    "bg-[#FFEDEF] text-[#8A0011]",
+  amber:  "bg-[#FFFBE4] text-[#342900]",
+  blue:   "bg-[#EEF4FB] text-[#16305C]",
+  purple: "bg-violet-50 text-violet-600",
+};
+
+// ── TrendBadge ────────────────────────────────────────────────────────────────
+
+export function TrendBadge({ trend }: { trend: number }) {
+  const up = trend > 0;
+  const cls = up ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500";
+  const Icon = up ? TrendingUp : TrendingDown;
+  return (
+    <span className={cn("inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full", cls)}>
+      <Icon size={10} />
+      {up ? "+" : ""}{Math.abs(trend).toFixed(1)}%
+    </span>
+  );
+}
+
+// ── KPICard ───────────────────────────────────────────────────────────────────
+
+export function KPICard({
+  title,
+  icon,
+  iconColor = "#1E4076",
+  value,
+  unit,
+  trend,
+  trendLabel,
+  subtitle,
+  children,
+  className,
+  badge,
+  badgeColor = "blue",
+  alert,
+  compact,
+  tooltip,
+  sparkline,
+  sparklineColor,
+  dimmed,
+  valueColor,
+  flashKey,
+}: KPICardProps) {
+  const hasValue = value !== undefined && value !== "";
+  const isNumeric = hasValue && !isNaN(parseNumeric(value!).raw);
+
+  const accentColor =
+    alert || badgeColor === "red"  ? "#ef4444"
+    : badgeColor === "green"       ? "#22c55e"
+    : badgeColor === "amber"       ? "#D1A400"
+    : badgeColor === "purple"      ? "#7c3aed"
+    : iconColor;
+
+  return (
+    <div
+      className={cn(
+        "relative bg-white rounded-lg flex overflow-hidden transition-all duration-200",
+        "hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)]",
+        alert ? "border border-[#FFEDEF]" : "border border-[#EBEBEB]",
+        dimmed && "opacity-30 scale-[0.99]",
+        className
+      )}
+    >
+      {/* Refresh flash overlay */}
+      {flashKey !== undefined && flashKey > 0 && (
+        <motion.div
+          key={flashKey}
+          className="pointer-events-none absolute inset-0 rounded-lg"
+          initial={{ opacity: 0.22, backgroundColor: "#1E4076" }}
+          animate={{ opacity: 0, backgroundColor: "#1E4076" }}
+          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+        />
+      )}
+
+      {/* Left accent bar */}
+      <div className="w-[5px] shrink-0" style={{ backgroundColor: accentColor }} />
+
+      {/* Card body */}
+      <div className={cn("flex-1 flex flex-col gap-2", compact ? "p-4" : "px-[18px] py-4")}>
+        {/* Label row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-[5px]">
+            {icon && (
+              <span style={{ color: accentColor }} className="shrink-0 [&>svg]:w-[13px] [&>svg]:h-[13px]">
+                {icon}
+              </span>
+            )}
+            <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-[0.08em] leading-none">
+              {title}
+            </span>
+            {tooltip && <InfoTooltip text={tooltip} />}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {trend !== undefined && <TrendBadge trend={trend} />}
+            {badge && (
+              <span className={cn("text-[10.5px] px-2 py-[2px] rounded font-bold", badgeColors[badgeColor])}>
+                {badge}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Primary value */}
+        {hasValue && (
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-baseline gap-[2px] leading-none">
+              {isNumeric ? (
+                <AnimatedNumber
+                  value={value!}
+                  className={cn(
+                    "font-bold tabular-nums tracking-tight leading-none",
+                    compact ? "text-[1.75rem]" : "text-[2rem]"
+                  )}
+                  style={valueColor ? { color: valueColor } : { color: undefined }}
+                />
+              ) : (
+                <span
+                  className={cn("font-bold tracking-tight leading-none", !valueColor && "text-slate-900", compact ? "text-[1.75rem]" : "text-[2rem]")}
+                  style={valueColor ? { color: valueColor } : undefined}
+                >
+                  {value}
+                </span>
+              )}
+              {unit && <span className="text-[13px] text-slate-400 font-medium ml-[2px]">{unit}</span>}
+            </div>
+            {sparkline && sparkline.length >= 2 && (
+              <Sparkline data={sparkline} color={sparklineColor ?? accentColor} width={88} height={36} />
+            )}
+          </div>
+        )}
+
+        {subtitle && <p className="text-[12px] text-slate-500 leading-snug">{subtitle}</p>}
+        {trendLabel && <p className="text-[12px] text-slate-500">{trendLabel}</p>}
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── CircularGauge ─────────────────────────────────────────────────────────────
+
+interface CircularGaugeProps {
+  value: number;
+  max?: number;
+  color?: string;
+  size?: number;
+  ariaLabel?: string;
+}
+
+export function CircularGauge({ value, max = 100, color = "#22c55e", size = 72, ariaLabel }: CircularGaugeProps) {
+  const radius = (size - 12) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const pct = Math.min(Math.max(value / max, 0), 1);
+  const offset = circumference * (1 - pct);
+
+  return (
+    <div
+      className="relative flex items-center justify-center shrink-0"
+      style={{ width: size, height: size }}
+      role="img"
+      aria-label={ariaLabel ?? `${value.toFixed(1)}% of ${max}%`}
+    >
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#f3f4f6" strokeWidth={9} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={9}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 0.6s ease" }}
+        />
+      </svg>
+      <div className="absolute text-center">
+        <span className="text-sm font-bold text-slate-800 tabular-nums leading-none">{value.toFixed(1)}</span>
+        <span className="text-[10px] text-gray-400 block leading-none mt-0.5">%</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Sparkline ─────────────────────────────────────────────────────────────────
+
+interface SparklineProps {
+  data: number[];
+  color?: string;
+  width?: number;
+  height?: number;
+}
+
+export function Sparkline({ data, color = "#1E4076", width = 80, height = 32 }: SparklineProps) {
+  if (data.length < 2) return null;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data
+    .map((v, i) => {
+      const x = (i / (data.length - 1)) * width;
+      const y = height - ((v - min) / range) * (height - 4) - 2;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        opacity={0.8}
+      />
+    </svg>
+  );
+}
+
+// ── MiniStat ──────────────────────────────────────────────────────────────────
+
+interface MiniStatProps {
+  label: string;
+  value: string | number;
+  unit?: string;
+  positive?: boolean;
+  negative?: boolean;
+  trend?: number;
+}
+
+export function MiniStat({ label, value, unit, positive, negative, trend }: MiniStatProps) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1">
+        <span
+          className={cn(
+            "text-sm font-bold tabular-nums",
+            positive ? "text-emerald-600" : negative ? "text-red-500" : "text-slate-800"
+          )}
+        >
+          {value}
+          {unit && <span className="text-[11px] font-normal ml-0.5 text-gray-400">{unit}</span>}
+        </span>
+        {trend !== undefined && (
+          <span className={cn("text-[11px] font-semibold", trend > 0 ? "text-emerald-500" : "text-red-500")}>
+            {trend > 0 ? "↑" : "↓"}{Math.abs(trend).toFixed(1)}%
+          </span>
+        )}
+      </div>
+      <span className="text-[12px] text-gray-500 leading-none">{label}</span>
+    </div>
+  );
+}

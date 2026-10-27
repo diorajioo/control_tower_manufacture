@@ -1,0 +1,21 @@
+# Teams notifications runner, every 15 minutes (WIB schedule math is in the app).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: control-tower-notifications
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: run
+              image: curlimages/curl:8.10.1
+              args: ["-fsS", "--max-time", "240", "-H", "Authorization: Bearer $(CRON_SECRET)", "http://control-tower/api/cron/notifications"]
+              env:
+                - name: CRON_SECRET
+                  valueFrom: { secretKeyRef: { name: control-tower, key: CRON_SECRET } }

@@ -1,0 +1,44 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "#667085",
+        "createdAt": "2026-10-19T09:52:25.136Z",
+        "reason": "Slate-500 equivalent, intentional muted chart text and axis legends"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#d92d20",
+        "createdAt": "2026-10-19T09:52:25.359Z",
+        "reason": "Semantic error/above-target red, intentional"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#334155",
+        "createdAt": "2026-10-19T09:52:25.598Z",
+        "reason": "Slate-700 equivalent, intentional chart text"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#101828",
+        "createdAt": "2026-10-19T09:52:25.818Z",
+        "reason": "Near-black, intentional chart text"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#98a2b3",
+        "createdAt": "2026-10-19T09:52:26.061Z",
+        "reason": "9th+ series gray per design system (CLAUDE.md)"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#1e4076",
+        "createdAt": "2026-10-19T09:52:26.291Z",
+        "reason": "Paragon Blue — primary brand color defined in CLAUDE.md"
+      }
+    ]
+  }
+}

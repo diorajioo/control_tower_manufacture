@@ -1,0 +1,50 @@
+# Web app. Replace <REGISTRY> with the internal image registry.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: control-tower
+  labels: { app: control-tower }
+spec:
+  # Stateless (platform rule 6): notification store = Vercel Blob via BLOB_READ_WRITE_TOKEN, no volume
+  replicas: 1
+  selector:
+    matchLabels: { app: control-tower }
+  template:
+    metadata:
+      labels: { app: control-tower }
+    spec:
+      containers:
+        - name: web
+          image: <REGISTRY>/control-tower:latest
+          ports: [{ containerPort: 3000 }]
+          envFrom:
+            - secretRef: { name: control-tower }
+            - configMapRef: { name: control-tower }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits:   { memory: 1Gi }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: control-tower
+data:
+  NEXTAUTH_URL: "https://<DOMAIN>"
+  DATA_SOURCE: "clickhouse"
+  NOTIF_RUNNER: "frequent"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: control-tower
+spec:
+  selector: { app: control-tower }
+  ports: [{ port: 80, targetPort: 3000 }]

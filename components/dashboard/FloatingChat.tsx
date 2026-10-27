@@ -1,0 +1,470 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { MessageSquare, X, Send, Sparkles, Loader2, ChevronDown, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { GROQ_MODELS, CHAT_DEFAULT_MODEL_ID, getModelConfig } from "@/lib/ai-models";
+import type { KPISnapshot } from "@/lib/diagnostic-prompt";
+import type { KPIAlert } from "@/lib/alerts";
+import { highlightKpi, isKpiHighlightId, KPI_TRIGGER_ATTR } from "@/components/ui/KpiHighlight";
+import { trackFeatureUsed, trackPanelOpened } from "@/lib/analytics/events";
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
+
+interface FloatingChatProps {
+  filters?: { plant: string; startDate: string; endDate: string; period?: string };
+  kpiSnapshot?: KPISnapshot;
+  /** In-scope KPI data (leadTime / output / productivity from /api/dashboard/kpi) for the narrative context */
+  kpi?: unknown;
+  alerts?: Pick<KPIAlert, "severity" | "kpi" | "message">[];
+}
+
+// Starter questions: 2 general + 2 metric-specific, only on metrics with real data
+// (Lead Time, Output, E2E Productivity) that the chat tools can answer.
+const QUICK_ACTIONS = [
+  "Summarize production health this month",
+  "What should I focus on first today?",
+  "Is lead time improving week over week?",
+  "How does E2E productivity compare with last month?",
+];
+
+const KPI_CHIP_LABELS: Record<string, string> = {
+  leadtime:     "Lead Time",
+  yield:        "Yield",
+  rft:          "RFT",
+  output:       "Output",
+  oee:          "OEE",
+  ope:          "OPE",
+  productivity: "Productivity",
+};
+
+// Inline: **bold** → <strong>, [kpi:ID] → highlight chip
+function formatInline(text: string, onKpiClick?: (kpi: string) => void): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*|\[kpi:[a-z]+\])/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>;
+        }
+        const kpiMatch = part.match(/^\[kpi:([a-z]+)\]$/);
+        if (kpiMatch) {
+          const kpiId = kpiMatch[1];
+          const label = KPI_CHIP_LABELS[kpiId] ?? kpiId;
+          // No highlight target for this KPI → drop the tag instead of showing a dead chip
+          if (!isKpiHighlightId(kpiId)) return null;
+          return (
+            <button
+              key={i}
+              {...KPI_TRIGGER_ATTR}
+              onClick={() => onKpiClick?.(kpiId)}
+              title={`Highlight ${label} on dashboard`}
+              className="inline-flex items-center gap-0.5 text-[10px] text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 px-1.5 py-0.5 rounded-md font-semibold transition-colors ml-0.5 align-middle cursor-pointer"
+            >
+              {label} ↗
+            </button>
+          );
+        }
+        return part;
+      })}
+    </>
+  );
+}
+
+// Extract follow-up questions from the AI response tail
+function splitFollowUps(text: string): { main: string; followUps: string[] } {
+  const headerRe = /\*{0,2}(?:[Ww]ant\s+to\s+explore\s+further|[Mm]au\s+explore\s+lebih\s+lanjut)\??\*{0,2}/;
+  const idx = text.search(headerRe);
+  if (idx === -1) return { main: text, followUps: [] };
+
+  const main = text.slice(0, idx).trimEnd();
+  const followUps: string[] = [];
+  for (const line of text.slice(idx).split("\n")) {
+    if (headerRe.test(line)) continue;
+    const m = line.match(/^[\s>*-]*"?([^"<>]{8,160})"?\s*$/);
+    if (m) followUps.push(m[1].trim().replace(/^["']|["']$/g, ""));
+  }
+  return { main, followUps: followUps.slice(0, 3) };
+}
+
+// Block renderer: paragraphs + bullet lists
+function MarkdownContent({ text, onKpiClick }: { text: string; onKpiClick?: (kpi: string) => void }) {
+  const lines = text.split("\n");
+  const nodes: React.ReactNode[] = [];
+  const listBuf: React.ReactNode[] = [];
+
+  const flushList = (key: string) => {
+    if (!listBuf.length) return;
+    nodes.push(
+      <ul key={key} className="my-1 pl-3.5 space-y-0.5 list-disc">
+        {listBuf.splice(0)}
+      </ul>
+    );
+  };
+
+  lines.forEach((line, i) => {
+    const isBullet = /^[-•]\s/.test(line);
+    if (!isBullet) flushList(`l${i}`);
+
+    if (isBullet) {
+      listBuf.push(
+        <li key={i} className="leading-relaxed text-[13px] text-gray-700">
+          {formatInline(line.replace(/^[-•]\s/, ""), onKpiClick)}
+        </li>
+      );
+    } else if (line.trim() === "") {
+      if (i > 0) nodes.push(<div key={i} className="h-1.5" />);
+    } else {
+      nodes.push(
+        <p key={i} className="text-[13px] leading-relaxed text-gray-700">
+          {formatInline(line, onKpiClick)}
+        </p>
+      );
+    }
+  });
+
+  flushList("end");
+  return <div className="space-y-0.5">{nodes}</div>;
+}
+
+const BADGE_CLS: Record<string, { bg: string; text: string }> = {
+  indigo:  { bg: "bg-blue-100",    text: "text-blue-800"    },
+  emerald: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  amber:   { bg: "bg-amber-100",   text: "text-amber-700"   },
+  cyan:    { bg: "bg-cyan-100",    text: "text-cyan-700"    },
+  violet:  { bg: "bg-violet-100",  text: "text-violet-700"  },
+};
+
+const PROVIDER_LABEL: Record<string, { label: string; cls: string }> = {
+  deepseek: { label: "DeepSeek", cls: "text-emerald-300/80" },
+  groq:     { label: "Groq",     cls: "text-blue-300/60"    },
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
+export function FloatingChat({ filters, kpiSnapshot, kpi, alerts }: FloatingChatProps) {
+  const [open,           setOpen]           = useState(false);
+  const [messages,       setMessages]       = useState<Message[]>([]);
+  const [input,          setInput]          = useState("");
+  const [loading,        setLoading]        = useState(false);
+  const [streaming,      setStreaming]      = useState(false);
+  const [typed,          setTyped]          = useState("");
+  const [selectedModel,  setSelectedModel]  = useState<string>(() => {
+    try { return localStorage.getItem("ct-chat-model") ?? CHAT_DEFAULT_MODEL_ID; }
+    catch { return CHAT_DEFAULT_MODEL_ID; }
+  });
+  const [showPicker,     setShowPicker]     = useState(false);
+
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const inputRef   = useRef<HTMLInputElement>(null);
+  const streamBuf  = useRef("");   // full received content
+  const streamDone = useRef(false);
+  const rafRef     = useRef<number | null>(null);
+  const nextRef    = useRef<Message[]>([]); // capture message array for RAF closure
+
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 100);
+  }, [open]);
+
+  useEffect(() => {
+    try { localStorage.setItem("ct-chat-model", selectedModel); } catch { /* ignore */ }
+  }, [selectedModel]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading, typed]);
+
+  function handleKpiHighlight(kpi: string) {
+    highlightKpi(kpi);
+  }
+
+  // RAF-based character drip: reveals ~8 chars per frame (~480/s at 60fps)
+  function startTyping() {
+    let pos = 0;
+    const tick = () => {
+      const target = streamBuf.current.length;
+      if (pos < target) {
+        pos = Math.min(pos + 8, target);
+        setTyped(streamBuf.current.slice(0, pos));
+      }
+
+      if (pos >= target && streamDone.current) {
+        // Caught up and stream is finished — commit to messages
+        setMessages([...nextRef.current, { role: "assistant", content: streamBuf.current }]);
+        setStreaming(false);
+        setTyped("");
+        return;
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }
+
+  async function sendMessage(text: string) {
+    if (!text.trim() || loading || streaming) return;
+
+    const userMsg: Message = { role: "user", content: text.trim() };
+    const next = [...messages, userMsg];
+    nextRef.current = next;
+    setMessages(next);
+    setInput("");
+    setLoading(true);
+    streamBuf.current = "";
+    streamDone.current = false;
+    setTyped("");
+
+    try {
+      const MAX_HISTORY = 10;
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages:    next.slice(-MAX_HISTORY),
+          context:     filters,
+          model:       selectedModel,
+          kpiSnapshot: kpiSnapshot ?? undefined,
+          kpi:         kpi ?? undefined,
+          alerts:      alerts?.length ? alerts : undefined,
+        }),
+      });
+
+      if (!res.ok || !res.body) throw new Error("Failed to get a response");
+
+      setLoading(false);
+      setStreaming(true);
+      startTyping();
+
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        streamBuf.current += decoder.decode(value, { stream: true });
+      }
+      streamDone.current = true;
+      // RAF tick will detect this and finalize
+
+    } catch {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      setMessages([
+        ...nextRef.current,
+        { role: "assistant", content: "Sorry, something went wrong. Please try again in a moment." },
+      ]);
+      setLoading(false);
+      setStreaming(false);
+      setTyped("");
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(input);
+    }
+  }
+
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+      {open && (
+        <div
+          className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-[30rem] flex flex-col overflow-hidden chat-pop-in"
+          style={{ height: "640px" }}
+        >
+          {/* Header */}
+          <div className="bg-brand-800 text-white shrink-0">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2">
+                <div className="bg-white/20 rounded-md p-1">
+                  <Sparkles size={13} className="text-blue-200" />
+                </div>
+                <span className="text-sm font-semibold">AI Analyst</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowPicker((v) => !v)}
+                  className="flex items-center gap-1 text-[10px] bg-white/15 hover:bg-white/25 px-2 py-0.5 rounded-full text-blue-200 font-medium tracking-tight transition-colors"
+                >
+                  {getModelConfig(selectedModel)?.badge ?? "auto"}
+                  <ChevronDown size={10} className={cn("transition-transform duration-150", showPicker && "rotate-180")} />
+                </button>
+                <button onClick={() => { setOpen(false); setShowPicker(false); }} className="text-white/70 hover:text-white transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Model picker */}
+            {showPicker && (
+              <div className="px-3 pb-3 space-y-1.5">
+                {GROQ_MODELS.map((m) => {
+                  const badge = BADGE_CLS[m.badgeVariant];
+                  const active = m.id === selectedModel;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => { setSelectedModel(m.id); setShowPicker(false); }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 rounded-xl transition-all flex items-start gap-2.5",
+                        active ? "bg-white/20" : "bg-white/5 hover:bg-white/12"
+                      )}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-[12px] font-semibold text-white leading-none">{m.name}</span>
+                          <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none", badge.bg, badge.text)}>
+                            {m.badge}
+                          </span>
+                          <span className={cn("text-[9px] font-medium leading-none", PROVIDER_LABEL[m.provider]?.cls)}>
+                            {PROVIDER_LABEL[m.provider]?.label}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-blue-200/70 leading-snug">{m.tagline}</p>
+                        <p className="text-[9px] text-white/30 mt-0.5">{m.limit}</p>
+                      </div>
+                      {active && <Check size={13} className="text-blue-300 shrink-0 mt-0.5" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Context pill */}
+          {filters?.plant && (
+            <div className="px-4 py-1.5 bg-gray-50 border-b border-gray-100 shrink-0">
+              <span className="text-[11px] text-gray-500">
+                Konteks: <span className="font-medium text-gray-700">{filters.plant}</span>
+                {" · "}{filters.startDate} s/d {filters.endDate}
+              </span>
+            </div>
+          )}
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
+            {messages.length === 0 && !loading && !streaming && (
+              <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
+                <div className="bg-brand-50 rounded-full p-4">
+                  <Sparkles size={24} className="text-brand-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800 mb-1">Ask about manufacturing</p>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Analyze KPIs, detect anomalies, or find patterns straight from Snowflake data.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 w-full mt-1">
+                  {QUICK_ACTIONS.map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => sendMessage(q)}
+                      className="text-xs text-left bg-gray-50 hover:bg-brand-50 hover:text-brand-700 border border-gray-200 hover:border-brand-200 text-gray-700 px-3 py-2 rounded-lg transition-colors"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Completed messages */}
+            {messages.map((msg, i) => {
+              const isLastAssistant = msg.role === "assistant" && i === messages.length - 1;
+              const { main, followUps } = msg.role === "assistant"
+                ? splitFollowUps(msg.content)
+                : { main: msg.content, followUps: [] };
+              return (
+                <div key={i} className={cn("flex flex-col", msg.role === "user" ? "items-end" : "items-start")}>
+                  <div className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+                    {msg.role === "user" ? (
+                      <div className="max-w-[82%] bg-brand-800 text-white text-[13px] leading-relaxed rounded-2xl rounded-br-sm px-3.5 py-2.5">
+                        {msg.content}
+                      </div>
+                    ) : (
+                      <div className="max-w-[92%] bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
+                        <MarkdownContent text={main} onKpiClick={handleKpiHighlight} />
+                      </div>
+                    )}
+                  </div>
+                  {isLastAssistant && followUps.length > 0 && !loading && !streaming && (
+                    <div className="flex flex-col gap-1.5 mt-2 w-[92%]">
+                      {followUps.map((q, j) => (
+                        <button
+                          key={j}
+                          onClick={() => sendMessage(q)}
+                          className="text-[12px] text-left bg-blue-50 hover:bg-blue-100 border border-blue-100 hover:border-blue-200 text-blue-800 px-3 py-2 rounded-xl transition-colors leading-snug"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Streaming message (typing animation) */}
+            {streaming && (
+              <div className="flex justify-start">
+                <div className="max-w-[92%] bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
+                  <MarkdownContent text={splitFollowUps(typed).main} onKpiClick={handleKpiHighlight} />
+                  <span className="inline-block w-0.5 h-3.5 bg-gray-400 ml-0.5 animate-pulse align-middle" />
+                </div>
+              </div>
+            )}
+
+            {/* Loading dots */}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full [animation:dot-fade_1.4s_ease-in-out_infinite] [animation-delay:0ms]" />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full [animation:dot-fade_1.4s_ease-in-out_infinite] [animation-delay:200ms]" />
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full [animation:dot-fade_1.4s_ease-in-out_infinite] [animation-delay:400ms]" />
+                </div>
+              </div>
+            )}
+
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="px-3 py-3 border-t border-gray-100 shrink-0 flex gap-2 items-center">
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask about KPIs or data patterns…"
+              disabled={loading || streaming}
+              className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 placeholder:text-gray-400 disabled:opacity-50 transition-all"
+            />
+            <button
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim() || loading || streaming}
+              className="shrink-0 w-9 h-9 bg-brand-800 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl flex items-center justify-center transition-colors"
+            >
+              {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* FAB */}
+      <button
+        onClick={() => { const next = !open; setOpen(next); if (next) { trackFeatureUsed({ report: "dashboard_strategic", feature: "chat_opened" }); trackPanelOpened({ report: "dashboard_strategic", panel: "chat" }); } }}
+        className="group relative w-12 h-12 bg-brand-800 hover:bg-brand-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center"
+      >
+        {open ? <X size={18} /> : <MessageSquare size={18} />}
+        {!open && (
+          <>
+            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white" />
+            <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full animate-ping opacity-75" />
+          </>
+        )}
+      </button>
+    </div>
+  );
+}

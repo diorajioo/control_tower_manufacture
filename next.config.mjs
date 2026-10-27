@@ -1,0 +1,48 @@
+/** @type {import('next').NextConfig} */
+
+const isDev = process.env.NODE_ENV !== "production";
+
+const CSP = [
+  "default-src 'self'",
+  // 'unsafe-eval' required in dev for webpack HMR + source maps; excluded in production
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "connect-src 'self' https://api.groq.com https://graph.microsoft.com https://login.microsoftonline.com https://openpanel.pti-cosmetics.com",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
+const SECURITY_HEADERS = [
+  { key: "Content-Security-Policy",            value: CSP },
+  { key: "X-Frame-Options",                    value: "DENY" },
+  { key: "X-Content-Type-Options",             value: "nosniff" },
+  { key: "X-XSS-Protection",                   value: "1; mode=block" },
+  { key: "Referrer-Policy",                    value: "strict-origin-when-cross-origin" },
+  { key: "Strict-Transport-Security",          value: "max-age=31536000; includeSubDomains; preload" },
+  { key: "Permissions-Policy",                 value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Cross-Origin-Opener-Policy",         value: "same-origin" },
+  { key: "Cross-Origin-Resource-Policy",       value: "same-origin" },
+];
+
+const nextConfig = {
+  // Self-contained server in .next/standalone for the Docker image (Kubernetes); Vercel ignores it
+  output: "standalone",
+  // No next/image in the app — turning the Image Optimization API off closes its advisories on Next 14
+  images: { unoptimized: true },
+  // Next 15: moved out of `experimental` (was serverComponentsExternalPackages)
+  serverExternalPackages: ["snowflake-sdk"],
+
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: SECURITY_HEADERS,
+      },
+    ];
+  },
+};
+
+export default nextConfig;

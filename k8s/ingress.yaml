@@ -1,0 +1,20 @@
+# Replace <DOMAIN> (the DNS record pointing at the ingress IP) and <INGRESS_CLASS> (e.g. nginx).
+# TLS: create secret control-tower-tls from the internal CA certificate:
+#   kubectl create secret tls control-tower-tls -n control-tower --cert=cert.pem --key=key.pem
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: control-tower
+spec:
+  ingressClassName: <INGRESS_CLASS>
+  tls:
+    - hosts: [<DOMAIN>]
+      secretName: control-tower-tls
+  rules:
+    - host: <DOMAIN>
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: control-tower, port: { number: 80 } }

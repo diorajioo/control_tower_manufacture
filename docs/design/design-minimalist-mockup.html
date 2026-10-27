@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Control Tower — Minimalist Theme Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  /*
+    DESIGN READ:
+    B2B manufacturing ops dashboard, plant manager audience.
+    Minimalist precision — ENERGY 1 / RHYTHM 2 / MOTION 1.
+    Direction: DESIGN.md (Paradise Design System v2, Paragon Blue, Lato).
+
+    THEME CHANGES vs current:
+    - Header: white bg (not blue), #215AA8 only for sidebar active + CTAs
+      Time/date left, last sync + controls right — same layout as original
+    - Filter bar: same format as original, active pill uses brand-100 (#D3DEEE)
+      instead of blue fill; muted color treatment throughout
+    - Cards: match screenshots 1 & 2 closely — left 5px accent bar retained,
+      content structure identical, status badge outline-only (no fill)
+    - Page bg: #F1F5F9 → #F7F8FA (marginally cooler/lighter)
+    - Sidebar: left-border indicator for active (no filled block)
+
+    UNCHANGED:
+    - Lato 400/700 only
+    - #EBEBEB card borders, rounded-lg (8px)
+    - Semantic status colors
+    - Layout structure, KPI order, Bahasa Indonesia
+  */
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Lato', ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    background: #F7F8FA;
+    color: #2A3D4A;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── SIDEBAR ─────────────────────────────────── */
+  .sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: #fff;
+    border-right: 1px solid #EBEBEB;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 0;
+  }
+
+  .sidebar-brand {
+    padding: 0 18px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #EBEBEB;
+    margin-bottom: 14px;
+  }
+
+  .sidebar-brand-logo {
+    width: 28px; height: 28px;
+    background: #215AA8;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .sidebar-brand-name { font-size: 13px; font-weight: 700; color: #143665; line-height: 1.2; }
+  .sidebar-brand-sub  { font-size: 10px; color: #94a3b8; font-weight: 400; margin-top: 1px; }
+
+  .sidebar-section-label {
+    font-size: 9.5px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    padding: 0 18px; margin-bottom: 4px;
+  }
+
+  .sidebar-nav { list-style: none; padding: 0; margin-bottom: 16px; }
+
+  .sidebar-nav li a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 18px;
+    font-size: 13px; font-weight: 400; color: #64748b;
+    text-decoration: none;
+    border-left: 2px solid transparent;
+  }
+
+  .sidebar-nav li a:hover { color: #215AA8; }
+
+  .sidebar-nav li a.active {
+    color: #143665; font-weight: 700;
+    border-left-color: #215AA8;
+    background: #F0F4FA;
+  }
+
+  .sidebar-footer {
+    margin-top: auto; padding: 14px 18px 0;
+    border-top: 1px solid #EBEBEB;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+
+  .sidebar-footer a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0; font-size: 12px; color: #94a3b8;
+    text-decoration: none; font-weight: 400;
+  }
+
+  .sidebar-footer a:hover { color: #64748b; }
+
+  /* ── MAIN ────────────────────────────────────── */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+
+  /* ── HEADER — white, time left, controls right ── */
+  .header {
+    background: #fff;
+    border-bottom: 1px solid #EBEBEB;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 52px;
+    flex-shrink: 0;
+  }
+
+  .header-left { display: flex; align-items: center; gap: 14px; }
+
+  .header-time-block {}
+  .header-time {
+    font-size: 15px; font-weight: 700; color: #1e293b; line-height: 1;
+  }
+  .header-date { font-size: 11px; color: #94a3b8; font-weight: 400; margin-top: 2px; }
+
+  .header-divider { width: 1px; height: 22px; background: #EBEBEB; }
+
+  /* Last sync — matches original "LAST SYNC / 13:59 just now" layout */
+  .header-sync-block {}
+  .header-sync-label {
+    font-size: 9px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .header-sync-val {
+    font-size: 12px; font-weight: 700; color: #1e293b;
+  }
+  .header-sync-ago { font-size: 10px; color: #94a3b8; font-weight: 400; margin-left: 4px; }
+
+  .header-right { display: flex; align-items: center; gap: 6px; }
+
+  /* Lang/icon buttons — muted on white bg */
+  .header-btn {
+    height: 30px; min-width: 30px; padding: 0 8px;
+    border-radius: 5px;
+    border: 1px solid #EBEBEB;
+    background: #fff;
+    color: #64748b;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 10px; font-weight: 700;
+    font-family: inherit;
+  }
+
+  .header-btn:hover { background: #F7F8FA; color: #2A3D4A; }
+
+  .header-avatar {
+    width: 30px; height: 30px;
+    border-radius: 5px;
+    background: #215AA8;
+    color: #fff;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── FILTER BAR — same format as original ───── */
+  .filter-bar {
+    background: #fff;
+    border-bottom: 1px solid #EBEBEB;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 46px;
+    flex-shrink: 0;
+  }
+
+  .filter-group {
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 14px 0 0;
+  }
+
+  .filter-group:first-child { padding-left: 0; }
+
+  .filter-label {
+    font-size: 9px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  /* Select dropdown — same visual weight as original */
+  .filter-select {
+    padding: 4px 22px 4px 8px;
+    border-radius: 5px;
+    border: 1px solid #e2e8f0;
+    font-size: 12px; color: #2A3D4A; font-family: inherit;
+    background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 7px center;
+    appearance: none; cursor: pointer;
+    height: 28px;
+  }
+
+  /* Pill group — same as original segmented control */
+  .filter-pills {
+    display: flex; gap: 2px;
+    background: #F1F5F9;
+    border-radius: 6px;
+    padding: 2px;
+  }
+
+  .filter-pill {
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 12px; font-weight: 400; color: #64748b;
+    border: none; background: transparent; cursor: pointer; font-family: inherit;
+    white-space: nowrap;
+  }
+
+  .filter-pill.active {
+    background: #fff;
+    color: #143665;
+    font-weight: 700;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  .filter-separator { width: 1px; height: 22px; background: #EBEBEB; margin: 0 14px; }
+
+  .filter-date-range {
+    font-size: 10.5px; color: #94a3b8; white-space: nowrap;
+  }
+
+  .filter-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  .copy-link-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 5px;
+    border: 1px solid #EBEBEB; background: #fff;
+    font-size: 11px; color: #64748b; cursor: pointer; font-family: inherit;
+    font-weight: 400;
+  }
+
+  /* ── CONTENT ─────────────────────────────────── */
+  .content {
+    flex: 1; overflow-y: auto;
+    padding: 14px 20px 20px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  /* ── NOTICE BANNER ───────────────────────────── */
+  .notice {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 14px;
+    background: #FFFBE4;
+    border: 1px solid #e9d87a;
+    border-radius: 6px;
+    font-size: 12px; color: #342900;
+  }
+
+  .notice-dot { width: 6px; height: 6px; border-radius: 50%; background: #D1A400; flex-shrink: 0; }
+
+  /* ── AI SUMMARY ──────────────────────────────── */
+  .ai-summary {
+    padding: 11px 16px;
+    background: #fff;
+    border: 1px solid #EBEBEB;
+    border-radius: 8px;
+    display: flex; align-items: flex-start; gap: 12px;
+  }
+
+  .ai-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 9.5px; font-weight: 700; color: #fff;
+    background: linear-gradient(90deg, #725DA3, #864A9C);
+    white-space: nowrap; flex-shrink: 0; margin-top: 1px;
+  }
+
+  .ai-summary-text { font-size: 12.5px; color: #2A3D4A; line-height: 1.55; flex: 1; }
+  .ai-summary-text strong { color: #215AA8; font-weight: 700; }
+
+  /* ── GRID ────────────────────────────────────── */
+  .kpi-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .kpi-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+  /* ── KPI CARD — matches screenshots 1 & 2 ───── */
+  /*
+    Left 5px accent bar retained. Card structure mirrors the screenshots:
+    header row (label + info icon + toggle), large value, delta row,
+    status badge, comparison row, info strip, open feature link.
+  */
+  .kpi-card {
+    background: #fff;
+    border: 1px solid #EBEBEB;
+    border-radius: 8px;
+    padding: 15px 16px 14px 21px; /* left pad compensates for accent bar */
+    display: flex; flex-direction: column; gap: 0;
+    position: relative; overflow: hidden;
+  }
+
+  .kpi-card::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+    border-radius: 8px 0 0 8px;
+  }
+
+  .kpi-card.good::before   { background: #22c55e; }
+  .kpi-card.warn::before   { background: #D1A400; }
+  .kpi-card.bad::before    { background: #E6001C; }
+  .kpi-card.neutral::before{ background: #EBEBEB; }
+
+  /* Row 1: label + info icon + toggle */
+  .kpi-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .kpi-header-left { display: flex; align-items: center; gap: 5px; }
+
+  .kpi-label {
+    font-size: 12px; font-weight: 400; color: #2A3D4A;
+  }
+
+  .kpi-info-icon {
+    color: #94a3b8; font-size: 10px; cursor: default;
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1.2px solid #cbd5e1;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-style: normal; line-height: 1;
+  }
+
+  .kpi-toggle {
+    display: flex; background: #F1F5F9; border-radius: 5px; padding: 2px; gap: 1px;
+  }
+
+  .kpi-toggle-btn {
+    padding: 2px 8px; border-radius: 3px;
+    font-size: 11px; font-weight: 400; color: #64748b;
+    border: none; cursor: pointer; font-family: inherit; background: transparent;
+  }
+
+  .kpi-toggle-btn.active {
+    background: #fff; color: #143665; font-weight: 700;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  /* Row 2: big value */
+  .kpi-value-row { display: flex; align-items: baseline; gap: 5px; margin-bottom: 4px; }
+
+  .kpi-value {
+    font-size: 28px; font-weight: 700; color: #1e293b;
+    line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  }
+
+  .kpi-unit { font-size: 13px; color: #64748b; font-weight: 400; }
+
+  /* Row 3: delta line — "-2.18 days (−16.7 %) vs target 13.00" */
+  .kpi-delta-line {
+    font-size: 11.5px; color: #64748b;
+    display: flex; align-items: center; gap: 4px;
+    margin-bottom: 10px; flex-wrap: wrap;
+  }
+
+  .kpi-delta-val {
+    font-weight: 700;
+  }
+
+  .kpi-delta-val.red  { color: #dc2626; }
+  .kpi-delta-val.green{ color: #16a34a; }
+
+  .kpi-delta-pct { color: #94a3b8; }
+
+  /* Row 4: status badge — outline only, no fill */
+  .kpi-status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 700;
+    padding: 4px 10px; border-radius: 5px;
+    border: 1.5px solid currentColor;
+    width: fit-content; margin-bottom: 10px;
+    background: transparent;
+  }
+
+  .kpi-status-badge.bad   { color: #dc2626; border-color: #fca5a5; }
+  .kpi-status-badge.good  { color: #16a34a; border-color: #86efac; }
+  .kpi-status-badge.warn  { color: #b45309; border-color: #fcd34d; }
+
+  /* sparkline — float right inside the card */
+  .kpi-sparkline-wrap {
+    position: absolute; right: 14px; top: 36px;
+    width: 90px; height: 36px;
+    pointer-events: none;
+  }
+
+  /* Row 5: comparison "2.0% better vs prev period" */
+  .kpi-compare {
+    font-size: 11.5px; color: #64748b;
+    display: flex; align-items: center; gap: 4px;
+    margin-bottom: 8px;
+  }
+
+  .kpi-compare .pos { color: #16a34a; font-weight: 700; }
+  .kpi-compare .neg { color: #dc2626; font-weight: 700; }
+
+  /* Row 6: info strip */
+  .kpi-info-strip {
+    background: #F7F8FA; border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 11px; color: #64748b;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  /* MPQ badge inline */
+  .kpi-mpq-badge {
+    display: inline-flex; align-items: center;
+    padding: 1px 6px; border-radius: 3px;
+    font-size: 10px; font-weight: 700;
+    background: #FFFBE4; color: #b45309; border: 1px solid #fcd34d;
+    margin-left: 4px;
+  }
+
+  /* Warning note box */
+  .kpi-warn-note {
+    background: #FFFBE4;
+    border: 1px solid #fcd34d;
+    border-radius: 5px;
+    padding: 7px 10px;
+    font-size: 11px; color: #342900; line-height: 1.45;
+    margin-bottom: 10px;
+  }
+
+  /* Open feature link */
+  .kpi-open-link {
+    font-size: 11.5px; color: #215AA8; font-weight: 700;
+    text-decoration: none; cursor: pointer;
+    background: none; border: none; padding: 0; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+
+  .kpi-open-link:hover { color: #1A4886; }
+
+  /* ── COMPACT KPI CARD (4-col row) ───────────── */
+  /*
+    Same items as full card, reduced padding + font sizes.
+    Reason: 4 cards in one row need tighter footprint.
+    Sparkline stays but smaller (60px wide).
+  */
+  .kpi-card-sm {
+    background: #fff;
+    border: 1px solid #EBEBEB;
+    border-radius: 8px;
+    padding: 12px 12px 12px 18px;
+    display: flex; flex-direction: column; gap: 0;
+    position: relative; overflow: hidden;
+  }
+
+  .kpi-card-sm::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    border-radius: 8px 0 0 8px;
+  }
+
+  .kpi-card-sm.good::before   { background: #22c55e; }
+  .kpi-card-sm.warn::before   { background: #D1A400; }
+  .kpi-card-sm.bad::before    { background: #E6001C; }
+
+  .kpi-card-sm .kpi-sparkline-wrap {
+    position: absolute; right: 10px; top: 30px;
+    width: 60px; height: 28px;
+    pointer-events: none;
+  }
+
+  .kpi-card-sm .kpi-header    { margin-bottom: 6px; }
+  .kpi-card-sm .kpi-label     { font-size: 11px; }
+
+  .kpi-card-sm .kpi-value-row { margin-bottom: 3px; }
+  .kpi-card-sm .kpi-value     { font-size: 22px; }
+  .kpi-card-sm .kpi-unit      { font-size: 11px; }
+
+  .kpi-card-sm .kpi-delta-line  { font-size: 10.5px; margin-bottom: 7px; }
+  .kpi-card-sm .kpi-status-badge{ font-size: 10px; padding: 3px 8px; margin-bottom: 7px; }
+  .kpi-card-sm .kpi-compare     { font-size: 10.5px; margin-bottom: 6px; }
+  .kpi-card-sm .kpi-info-strip  { font-size: 10px; padding: 5px 8px; margin-bottom: 7px; }
+  .kpi-card-sm .kpi-open-link   { font-size: 10.5px; }
+
+  /* ── CHART CARD ──────────────────────────────── */
+  .chart-card {
+    background: #fff; border: 1px solid #EBEBEB; border-radius: 8px; padding: 15px 16px;
+  }
+
+  .chart-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+  }
+
+  .chart-title {
+    font-size: 10px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+
+  .chart-area {
+    background: #F7F8FA; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: #cbd5e1; font-style: italic;
+  }
+
+  /* ── AI INSIGHT PANEL ────────────────────────── */
+  .ai-panel {
+    background: #fff; border: 1px solid #EBEBEB; border-radius: 8px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  .ai-panel-header {
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid #EBEBEB;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .ai-panel-title {
+    font-size: 10px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+
+  /* Key Risks section */
+  .risk-section { padding: 12px 14px 10px; border-bottom: 1px solid #EBEBEB; }
+
+  .risk-section-label {
+    font-size: 9px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+  .risk-grid-full { margin-top: 0; }
+
+  .risk-card {
+    border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px;
+    background: #FAFBFC;
+  }
+
+  .risk-card.warn { border-color: #fcd34d; background: #FFFBE4; }
+  .risk-card.info { border-color: #EBEBEB; background: #F7F8FA; }
+
+  .risk-card-label {
+    font-size: 9px; font-weight: 700; color: #b45309;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+
+  .risk-card.info .risk-card-label { color: #64748b; }
+
+  .risk-card-text { font-size: 11px; color: #2A3D4A; line-height: 1.45; }
+
+  /* Decision / Action Items */
+  .action-section { padding: 10px 14px 12px; flex: 1; }
+
+  .action-section-label {
+    font-size: 9px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  .action-item {
+    border: 1px solid #D3DEEE;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background: #F0F6FF;
+    font-size: 11px; color: #2A3D4A; line-height: 1.45;
+  }
+
+  .action-item:last-child { margin-bottom: 0; }
+
+  .action-item-num {
+    font-size: 9px; font-weight: 700; color: #215AA8;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin-bottom: 2px;
+  }
+
+  /* ── BOTTOM ROW (trend + AI panel) ───────────── */
+  .bottom-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  /* ── SECTION LABEL ───────────────────────────── */
+  .section-label {
+    font-size: 9.5px; font-weight: 700; color: #94a3b8;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .section-label::after { content: ''; flex: 1; height: 1px; background: #EBEBEB; }
+
+  /* scrollbar */
+  .content::-webkit-scrollbar { width: 4px; }
+  .content::-webkit-scrollbar-track { background: transparent; }
+  .content::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ── SIDEBAR ──────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="sidebar-brand-logo">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+      </svg>
+    </div>
+    <div>
+      <div class="sidebar-brand-name">Control Tower</div>
+      <div class="sidebar-brand-sub">PT Paracorp Group</div>
+    </div>
+  </div>
+
+  <div class="sidebar-section-label">Menu</div>
+  <ul class="sidebar-nav">
+    <li><a href="#" class="active">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Overview
+    </a></li>
+    <li><a href="#">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Lead Time
+    </a></li>
+    <li><a href="#">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Output
+    </a></li>
+    <li><a href="#">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Produktivitas
+    </a></li>
+    <li><a href="#">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      OEE
+    </a></li>
+    <li><a href="#">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Energi
+    </a></li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <a href="#">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      Pengaturan
+    </a>
+    <a href="#">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Keluar
+    </a>
+  </div>
+</aside>
+
+<!-- ── MAIN ─────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Header — white, time left, last sync + controls right -->
+  <header class="header">
+    <div class="header-left">
+      <div class="header-time-block">
+        <div class="header-time">14:02:47 WIB</div>
+        <div class="header-date">Senin, 21 Sept 2026</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="header-sync-block" style="text-align:right;margin-right:8px;">
+        <div class="header-sync-label">Last Sync</div>
+        <div><span class="header-sync-val">14:02</span><span class="header-sync-ago">baru saja</span></div>
+      </div>
+      <div class="header-divider"></div>
+      <button class="header-btn">ID</button>
+      <button class="header-btn">EN</button>
+      <button class="header-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      </button>
+      <button class="header-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      </button>
+      <div class="header-avatar">EB</div>
+    </div>
+  </header>
+
+  <!-- Filter bar — same format as original -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">Waktu</span>
+      <select class="filter-select">
+        <option>Year to Date</option>
+        <option>30 Hari</option>
+        <option>90 Hari</option>
+      </select>
+    </div>
+
+    <div class="filter-separator"></div>
+
+    <div class="filter-group">
+      <span class="filter-label">Frekuensi</span>
+      <div class="filter-pills">
+        <button class="filter-pill">Harian</button>
+        <button class="filter-pill active">Bulanan</button>
+        <button class="filter-pill">Mingguan</button>
+      </div>
+    </div>
+
+    <div class="filter-separator"></div>
+
+    <div class="filter-group">
+      <span class="filter-label">Plant</span>
+      <select class="filter-select">
+        <option>Semua Plant</option>
+        <option>Plant 1</option>
+        <option>Plant 2</option>
+      </select>
+    </div>
+
+    <div class="filter-separator"></div>
+
+    <div class="filter-group">
+      <span class="filter-label">Tier</span>
+      <div class="filter-pills">
+        <button class="filter-pill active">Strategis</button>
+        <button class="filter-pill">Taktis</button>
+        <button class="filter-pill">Operasional</button>
+      </div>
+    </div>
+
+    <div class="filter-right">
+      <span class="filter-date-range">2026-01-01 s/d 2026-09-21 · 264 hari</span>
+      <button class="copy-link-btn">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Salin tautan
+      </button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- Notice -->
+    <div class="notice">
+      <div class="notice-dot"></div>
+      Sample data — bukan angka produksi aktual
+    </div>
+
+    <!-- AI Summary -->
+    <div class="ai-summary">
+      <span class="ai-chip">✦ AI Summary</span>
+      <p class="ai-summary-text">
+        OEE seluruh plant tercatat <strong>61.4%</strong>, di bawah target 65% dengan penurunan 3.2% vs periode sebelumnya.
+        Lead Time gross <strong>15.18 hari</strong> meningkat 16.7% — penyebab utama PO dan approval menyumbang 41% dari total waktu.
+        RFT <strong>96.2%</strong> masih di atas threshold, namun output FG turun 6.4% dari target MPQ.
+      </p>
+    </div>
+
+    <!-- ── ROW 1: Lead Time + Output ── -->
+    <div class="kpi-grid-2">
+
+      <!-- Lead Time -->
+      <div class="kpi-card warn">
+        <div class="kpi-sparkline-wrap">
+          <svg width="90" height="36" viewBox="0 0 90 36">
+            <line x1="0" y1="8"  x2="90" y2="8"  stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+            <line x1="0" y1="28" x2="90" y2="28" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+            <path d="M0,28 C10,26 20,20 30,22 C42,24 50,18 60,16 C70,14 80,18 90,12"
+              fill="none" stroke="#D1A400" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+            <circle cx="90" cy="12" r="3" fill="#D1A400"/>
+          </svg>
+        </div>
+        <div class="kpi-header">
+          <div class="kpi-header-left">
+            <span class="kpi-label">Lead Time</span>
+            <i class="kpi-info-icon">i</i>
+          </div>
+          <div class="kpi-toggle">
+            <button class="kpi-toggle-btn active">Gross</button>
+            <button class="kpi-toggle-btn">Net</button>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value">15.18</span>
+          <span class="kpi-unit">hari</span>
+        </div>
+        <div class="kpi-delta-line">
+          <span class="kpi-delta-val red">-2.18 hari</span>
+          <span class="kpi-delta-pct">(-16.7%)</span>
+          <span>vs target 13.00</span>
+        </div>
+        <div class="kpi-status-badge bad">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+          Off Track
+        </div>
+        <div class="kpi-compare">
+          <span class="pos">▲ 2.0% lebih baik</span>
+          <span>vs periode ekuivalen sebelumnya</span>
+        </div>
+        <div class="kpi-info-strip">PO dan approval 6.18 hari · 41% dari total</div>
+        <button class="kpi-open-link">Buka halaman fitur →</button>
+      </div>
+
+      <!-- Output -->
+      <div class="kpi-card warn">
+        <div class="kpi-sparkline-wrap">
+          <svg width="90" height="36" viewBox="0 0 90 36">
+            <line x1="0" y1="8"  x2="90" y2="8"  stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+            <line x1="0" y1="28" x2="90" y2="28" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+            <path d="M0,14 C12,16 22,20 34,18 C46,16 56,24 68,26 C76,27 82,22 90,26"
+              fill="none" stroke="#D1A400" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+            <circle cx="90" cy="26" r="3" fill="#D1A400"/>
+          </svg>
+        </div>
+        <div class="kpi-header">
+          <div class="kpi-header-left">
+            <span class="kpi-label">Output</span>
+            <i class="kpi-info-icon">i</i>
+          </div>
+          <div class="kpi-toggle">
+            <button class="kpi-toggle-btn active">Finished Goods</button>
+            <button class="kpi-toggle-btn">Bulk</button>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value">217,382,359</span>
+          <span class="kpi-unit">pcs</span>
+        </div>
+        <div class="kpi-delta-line">
+          <span class="kpi-delta-val red">-14,831,417 pcs</span>
+          <span class="kpi-delta-pct">(-6.4%)</span>
+          <span>vs target 232,213,776</span>
+        </div>
+        <div class="kpi-status-badge bad">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+          Off Track
+        </div>
+        <div class="kpi-compare">
+          <span class="pos">▲ 2.1% lebih baik</span>
+          <span>vs periode ekuivalen sebelumnya</span>
+        </div>
+        <div class="kpi-info-strip">Jatake 4: 4,820,830 · 33% dari total shortfall</div>
+        <button class="kpi-open-link">Buka halaman fitur →</button>
+      </div>
+
+    </div>
+
+    <!-- ── ROW 2: OEE + RFT + Yield Loss + OPE (4-col compact) ── -->
+    <div style="display:grid; grid-template-columns: repeat(4,1fr); gap:14px;">
+
+      <!-- OEE -->
+      <div class="kpi-card-sm bad">
+        <div class="kpi-sparkline-wrap">
+          <svg width="60" height="28" viewBox="0 0 60 28">
+            <line x1="0" y1="6"  x2="60" y2="6"  stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="0" y1="22" x2="60" y2="22" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2"/>
+            <path d="M0,8 C10,10 20,14 30,16 C42,18 52,20 60,22"
+              fill="none" stroke="#E6001C" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+            <circle cx="60" cy="22" r="2.5" fill="#E6001C"/>
+          </svg>
+        </div>
+        <div class="kpi-header">
+          <div class="kpi-header-left">
+            <span class="kpi-label">OEE</span>
+            <i class="kpi-info-icon">i</i>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" style="color:#dc2626;">61.4</span>
+          <span class="kpi-unit">%</span>
+        </div>
+        <div class="kpi-delta-line">
+          <span class="kpi-delta-val red">-3.2pp</span>
+          <span class="kpi-delta-pct">(-4.9%)</span>
+          <span>vs ≥ 65%</span>
+        </div>
+        <div class="kpi-status-badge bad">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+          Di Bawah Target
+        </div>
+        <div class="kpi-compare">
+          <span class="neg">▼ 3.2% lebih buruk</span>
+          <span>vs periode sebelumnya</span>
+        </div>
+        <div class="kpi-info-strip">Plant 3 terendah · 54.1%</div>
+        <button class="kpi-open-link">Buka halaman fitur →</button>
+      </div>
+
+      <!-- OPE -->
+      <div class="kpi-card-sm bad">
+        <div class="kpi-sparkline-wrap">
+          <svg width="60" height="28" viewBox="0 0 60 28">
+            <line x1="0" y1="6"  x2="60" y2="6"  stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="0" y1="22" x2="60" y2="22" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2"/>
+            <path d="M0,8 C12,10 24,13 36,16 C46,18 54,20 60,22"
+              fill="none" stroke="#E6001C" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+            <circle cx="60" cy="22" r="2.5" fill="#E6001C"/>
+          </svg>
+        </div>
+        <div class="kpi-header">
+          <div class="kpi-header-left">
+            <span class="kpi-label">OPE</span>
+            <i class="kpi-info-icon">i</i>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" style="color:#dc2626;">49.1</span>
+          <span class="kpi-unit">%</span>
+        </div>
+        <div class="kpi-delta-line">
+          <span class="kpi-delta-val red">-10.9pp</span>
+          <span class="kpi-delta-pct">(-18.2%)</span>
+          <span>vs ≥ 60%</span>
+        </div>
+        <div class="kpi-status-badge bad">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+          Di Bawah Target
+        </div>
+        <div class="kpi-compare">
+          <span class="neg">▼ 2.6% lebih buruk</span>
+          <span>vs periode sebelumnya</span>
+        </div>
+        <div class="kpi-info-strip">Derived: OEE × 0.8</div>
+        <button class="kpi-open-link">Buka halaman fitur →</button>
+      </div>
+
+      <!-- Yield Loss -->
+      <div class="kpi-card-sm warn">
+        <div class="kpi-sparkline-wrap">
+          <svg width="60" height="28" viewBox="0 0 60 28">
+            <line x1="0" y1="6"  x2="60" y2="6"  stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="0" y1="22" x2="60" y2="22" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2"/>
+            <path d="M0,14 C12,14 24,12 36,11 C46,12 54,16 60,18"
+              fill="none" stroke="#D1A400" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+            <circle cx="60" cy="18" r="2.5" fill="#D1A400"/>
+          </svg>
+        </div>
+        <div class="kpi-header">
+          <div class="kpi-header-left">
+            <span class="kpi-label">Yield Loss</span>
+            <i class="kpi-info-icon">i</i>
+          </div>
+          <div class="kpi-toggle">
+            <button class="kpi-toggle-btn active" style="font-size:10px;padding:1px 6px;">Bulk</button>
+            <button class="kpi-toggle-btn" style="font-size:10px;padding:1px 6px;">Pack</button>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value">3.8</span>
+          <span class="kpi-unit">%</span>
+        </div>
+        <div class="kpi-delta-line">
+          <span class="kpi-delta-val red">+0.8pp</span>
+          <span class="kpi-delta-pct">(+26.7%)</span>
+          <span>vs ≤ 3%</span>
+        </div>
+        <div class="kpi-status-badge warn">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+          Mendekati Batas
+        </div>
+        <div class="kpi-compare">
+          <span class="neg">▼ 0.5% lebih buruk</span>
+          <span>vs periode sebelumnya</span>
+        </div>
+        <div class="kpi-info-strip">Pack loss 0.7% · dalam batas</div>
+        <button class="kpi-open-link">Buka halaman fitur →</button>
+      </div>
+
+      <!-- RFT -->
+      <div class="kpi-card-sm good">
+        <div class="kpi-sparkline-wrap">
+          <svg width="60" height="28" viewBox="0 0 60 28">
+            <line x1="0" y1="6"  x2="60" y2="6"  stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="0" y1="22" x2="60" y2="22" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,2"/>
+            <path d="M0,20 C12,18 24,15 36,13 C46,11 54,9 60,8"
+              fill="none" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+            <circle cx="60" cy="8" r="2.5" fill="#22c55e"/>
+          </svg>
+        </div>
+        <div class="kpi-header">
+          <div class="kpi-header-left">
+            <span class="kpi-label">Right First Time</span>
+            <i class="kpi-info-icon">i</i>
+          </div>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" style="color:#16a34a;">96.2</span>
+          <span class="kpi-unit">%</span>
+        </div>
+        <div class="kpi-delta-line">
+          <span class="kpi-delta-val green">+1.2pp</span>
+          <span class="kpi-delta-pct">(+1.3%)</span>
+          <span>vs ≥ 95%</span>
+        </div>
+        <div class="kpi-status-badge good">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          On Track
+        </div>
+        <div class="kpi-compare">
+          <span class="pos">▲ 1.1% lebih baik</span>
+          <span>vs periode sebelumnya</span>
+        </div>
+        <div class="kpi-info-strip">3 batch gagal pertama · bulan ini</div>
+        <button class="kpi-open-link">Buka halaman fitur →</button>
+      </div>
+
+    </div>
+
+    <!-- ── ROW 3: Trend (bigger) + AI Key Risks & Actions ── -->
+    <div class="bottom-row">
+
+      <!-- Trend chart — taller, 6-metric selector -->
+      <div class="chart-card">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:10px; flex-wrap:wrap;">
+          <span class="chart-title">Tren per Plant</span>
+          <div style="display:flex; gap:4px; flex-wrap:wrap;">
+            <button class="filter-pill active" style="padding:2px 9px; font-size:10.5px; border-radius:4px; background:#D3DEEE; color:#143665; font-weight:700; border:none; cursor:pointer; font-family:inherit;">OEE</button>
+            <button class="filter-pill" style="padding:2px 9px; font-size:10.5px; border-radius:4px; background:transparent; color:#64748b; border:none; cursor:pointer; font-family:inherit;">OPE</button>
+            <button class="filter-pill" style="padding:2px 9px; font-size:10.5px; border-radius:4px; background:transparent; color:#64748b; border:none; cursor:pointer; font-family:inherit;">RFT</button>
+            <button class="filter-pill" style="padding:2px 9px; font-size:10.5px; border-radius:4px; background:transparent; color:#64748b; border:none; cursor:pointer; font-family:inherit;">Yield Loss</button>
+            <button class="filter-pill" style="padding:2px 9px; font-size:10.5px; border-radius:4px; background:transparent; color:#64748b; border:none; cursor:pointer; font-family:inherit;">Lead Time</button>
+            <button class="filter-pill" style="padding:2px 9px; font-size:10.5px; border-radius:4px; background:transparent; color:#64748b; border:none; cursor:pointer; font-family:inherit;">Output</button>
+          </div>
+        </div>
+        <div class="chart-area" style="height:220px;">Nivo line chart</div>
+      </div>
+
+      <!-- AI Key Risks + Decision panel -->
+      <div class="ai-panel">
+        <div class="ai-panel-header">
+          <span class="ai-chip" style="font-size:9px; padding:1px 7px;">✦ AI</span>
+          <span class="ai-panel-title">Risiko &amp; Rekomendasi</span>
+        </div>
+
+        <!-- Key Risks -->
+        <div class="risk-section">
+          <div class="risk-section-label">Risiko Utama</div>
+          <div class="risk-grid">
+            <div class="risk-card warn">
+              <div class="risk-card-label">Stabilitas OEE</div>
+              <div class="risk-card-text">OEE Plant 3 (54.1%) turun 3 minggu berturut-turut. Risiko missed target Q4 tinggi.</div>
+            </div>
+            <div class="risk-card warn">
+              <div class="risk-card-label">Lead Time</div>
+              <div class="risk-card-text">PO &amp; approval menyumbang 41% waktu total. Bottleneck di approval level 2.</div>
+            </div>
+          </div>
+          <div class="risk-card info">
+            <div class="risk-card-label">Yield Loss Bulk</div>
+            <div class="risk-card-text">Tren 3 bulan menunjukkan kenaikan bertahap dari 3.1% → 3.8%. Perlu investigasi formula batch sebelum melewati threshold 5%.</div>
+          </div>
+        </div>
+
+        <!-- Action Items -->
+        <div class="action-section">
+          <div class="action-section-label">Tindakan yang Diperlukan</div>
+
+          <div class="action-item">
+            <div class="action-item-num">01 · Plant 3 OEE</div>
+            Eskalasi 3 mesin downtime tak terjadwal ke tim maintenance. Target penyelesaian sebelum 25 Sep.
+          </div>
+
+          <div class="action-item">
+            <div class="action-item-num">02 · Lead Time</div>
+            Review proses approval PO bersama procurement. Target pangkas 2 hari dari tahap approval level 2.
+          </div>
+
+          <div class="action-item">
+            <div class="action-item-num">03 · Yield Loss</div>
+            Audit formula batch di Plant 2 &amp; 3. Jadwalkan review mingguan sampai loss kembali ke ≤ 3%.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+</body>
+</html>

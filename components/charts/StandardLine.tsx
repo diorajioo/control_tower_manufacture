@@ -1,0 +1,538 @@
+"use client";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Standard line chart style — the single source for every Nivo line chart (same role as TONES for KPI cards).
+// Full standard, checklist and anti-patterns: docs/UI_UX.md → Standard Line Chart.
+// Implementations: Lead Time LeadTimeTrendChart (cleanest full example) · Overview TrendChart (adds SPC).
+//
+//   Style    minimal: no axis lines, dashed horizontal hairline grid only, muted 10px ticks
+//   Colors   SERIES_COLORS in fixed entity order (lib/chartConfig.ts); aggregate = SERIES_TOTAL_COLOR
+//   Lines    linear, 2px, no resting points; animate:false (no spring morph) + LineDraw draw-in
+//   Hover    hairline crosshair + ONE solid 4px point with a white ring, on the line under the cursor
+//            (makeActivePointsLayer reads Nivo's currentPoint)
+//   Tooltip  translucent slate card: x label, then dot · series · value for every series; sub-lines 9.5px, never wrap
+//   Legend   below the plot, centered, 9.5px: dot · name · last value; hover isolates (other lines 12%, legend 40%)
+//   Refetch  old chart at 45% opacity while loading, then the new lines draw in
+// ─────────────────────────────────────────────────────────────────────────────
+
+import type { ReactNode } from "react";
+import { line, curveLinear } from "d3-shape";
+import { SERIES_COLORS, SERIES_OVERFLOW_COLOR } from "@/lib/chartConfig";
+
+export interface StandardSeries {
+  id: string;
+  color: string;
+  data: { x: string; y: number | null }[];
+}
+
+export const LINE_THEME = {
+  background: "transparent",
+  text: { fontFamily: "inherit" },
+  axis: {
+    ticks: {
+      line: { strokeWidth: 0 },
+      text: { fill: "#a0a6b1", fontSize: 10, fontFamily: "inherit", fontVariantNumeric: "tabular-nums" },
+    },
+    domain: { line: { strokeWidth: 0 } },
+  },
+  grid: {
+    line: { stroke: "#eef0f3", strokeWidth: 1, strokeDasharray: "3 4" },
+  },
+  crosshair: {
+    line: { stroke: "#c4c9d2", strokeWidth: 1, strokeOpacity: 1, strokeDasharray: "0" },
+  },
+};
+
+/** Shared ResponsiveLine props — spread first, then add chart-specific ones. */
+export const LINE_DEFAULTS = {
+  theme:         LINE_THEME,
+  margin:        { top: 10, right: 8, bottom: 26, left: 36 },
+  xScale:        { type: "point" as const },
+  yScale:        { type: "linear" as const, min: "auto" as const, max: "auto" as const, stacked: false },
+  curve:         "linear" as const,
+  lineWidth:     2,
+  enablePoints:  false,
+  enableGridX:   false,
+  gridYValues:   4,
+  useMesh:       true,
+  crosshairType: "x" as const,
+  // No spring morph between data sets (weekly ↔ monthly have different point counts); LineDraw draws lines in instead
+  animate:       false,
+  axisLeft: {
+    tickSize: 0,
+    tickPadding: 10,
+    tickValues: 4,
+    format: (v: string | number | Date) => Number(v).toFixed(0),
+  },
+};
+
+/** Series color by fixed slot; slots beyond the palette fold to neutral gray. */
+export function seriesColor(index: number): string {
+  return SERIES_COLORS[index] ?? SERIES_OVERFLOW_COLOR;
+}
+
+export function hexToRgba(hex: string, alpha: number) {
+  const n = parseInt(hex.replace("#", ""), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
+/** Line color while a series is isolated: non-hovered series drop to 12% opacity. */
+export function isolatedColor(color: string, id: string, hovered: string | null) {
+  return hovered && id !== hovered ? hexToRgba(color, 0.12) : color;
+}
+
+// ── Layers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Hover point: one solid point with a white ring at the hovered x, on the series under the cursor.
+ * Source = Nivo's `currentPoint` (custom-layer prop, always in sync with the crosshair); `getActiveX` /
+ * `getActiveSerie` are fallbacks. With no series known, every series gets a point at that x.
+ */
+export function makeActivePointsLayer(
+  series: StandardSeries[],
+  getActiveX: () => string | null,
+  pointColor?: (id: string, x: string, y: number) => string | null,
+  getActiveSerie?: () => string | null,
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function ActivePointsLayer(props: any) {
+    // Nivo passes the hovered point to every custom layer (props.currentPoint, set by the mesh) — read it first,
+    // so the point is drawn in the same render as the crosshair. The getters are only a fallback.
+    const cp = props.currentPoint;
+    const x = cp ? String(cp.data?.x) : getActiveX();
+    if (!x || !props.xScale || !props.yScale) return null;
+    const only = cp?.seriesId != null ? String(cp.seriesId) : getActiveSerie?.() ?? null;
+    return (
+      <g style={{ pointerEvents: "none" }}>
+        {series.filter((serie) => !only || serie.id === only).map((serie) => {
+          const pt = serie.data.find((d) => d.x === x);
+          if (!pt || pt.y == null) return null;
+          return (
+            <circle
+              key={serie.id}
+              cx={props.xScale(x)}
+              cy={props.yScale(pt.y)}
+              r={4}
+              fill={pointColor?.(serie.id, x, pt.y) ?? serie.color}
+              stroke="#ffffff"
+              strokeWidth={2}
+            />
+          );
+        })}
+      </g>
+    );
+  };
+}
+
+/** Redraws the isolated (legend-hovered) series on top of the dimmed ones. */
+export function makeActiveLineLayer(series: StandardSeries[], hovered: string | null) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function ActiveLineLayer(props: any) {
+    if (!hovered || !props.xScale || !props.yScale) return null;
+    const serie = series.find((s) => s.id === hovered);
+    if (!serie) return null;
+    const points = serie.data.filter((d) => d.y != null);
+    if (points.length < 2) return null;
+    const pathD = line<{ x: string; y: number | null }>()
+      .x((d) => props.xScale(d.x))
+      .y((d) => props.yScale(d.y))
+      .curve(curveLinear)(points) ?? "";
+    return (
+      <path
+        d={pathD}
+        fill="none"
+        stroke={serie.color}
+        strokeWidth={2.25}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        style={{ pointerEvents: "none" }}
+      />
+    );
+  };
+}
+
+// ── Tooltip ──────────────────────────────────────────────────────────────────
+
+export interface TooltipRow {
+  label: string;
+  /** Series dot; omit for rows without a series (e.g. a total) */
+  color?: string;
+  /** Number → formatted with `decimals`; string → shown as is */
+  value: number | string | null;
+  unit?: string;
+  /** Optional muted second line (e.g. control limits) */
+  sub?: ReactNode;
+  /** Bold row (e.g. the hovered segment) */
+  strong?: boolean;
+}
+
+/** Tooltip palette — standard for every chart tooltip: translucent slate card, light text. */
+export const TOOLTIP_COLORS = {
+  bg: "rgba(42,61,74,0.82)",
+  border: "rgba(255,255,255,0.08)",
+  title: "#ffffff",
+  label: "#cbd5e1",
+  value: "#ffffff",
+  muted: "#94a3b8",
+  divider: "rgba(255,255,255,0.12)",
+} as const;
+
+/**
+ * Standard chart tooltip (all Nivo charts): title · rows (dot · name · value · unit) · optional footer.
+ * `subtitle` = small muted line under the title (e.g. a product code).
+ */
+export function LineTooltip({ title, subtitle, rows, decimals = 2, footer, nowrap = false }: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  rows: TooltipRow[];
+  decimals?: number;
+  footer?: { label: string; value: string };
+  /** Keep the title on one line too (long names) — the tooltip widens instead of wrapping */
+  nowrap?: boolean;
+}) {
+  const c = TOOLTIP_COLORS;
+  return (
+    <div style={{
+      background: c.bg,
+      border: `1px solid ${c.border}`,
+      borderRadius: 8,
+      padding: "8px 10px",
+      fontSize: 11.5,
+      minWidth: 180,
+      maxWidth: nowrap ? "none" : 300,
+      boxShadow: "0 6px 20px -6px rgba(16,24,40,0.28)",
+      fontFamily: "inherit",
+      backdropFilter: "blur(4px)",
+      animation: "chart-tooltip-in 0.15s ease-out",
+    }}>
+      <p style={{ fontWeight: 700, margin: subtitle ? "0 0 1px 0" : "0 0 6px 0", color: c.title, fontSize: 11, lineHeight: 1.35, whiteSpace: nowrap ? "nowrap" : undefined }}>{title}</p>
+      {subtitle && <p style={{ margin: "0 0 6px 0", color: c.muted, fontSize: 9.5 }}>{subtitle}</p>}
+      {rows.map(({ label, color, value, unit, sub, strong }) => (
+        <div key={label} style={{ padding: "2px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+            {color && <span style={{ width: 6, height: 6, borderRadius: 999, background: color, flexShrink: 0 }} />}
+            <span style={{ color: c.label, flex: 1, fontWeight: strong ? 700 : 400 }}>{label}</span>
+            <span style={{ color: c.value, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+              {value == null ? "—" : typeof value === "number" ? value.toFixed(decimals) : value}
+            </span>
+            {unit && <span style={{ color: c.muted, fontSize: 10.5 }}>{unit}</span>}
+          </div>
+          {sub && (
+            <p style={{
+              color: c.muted, margin: "1px 0 0 14px", fontSize: 9.5, lineHeight: 1.3,
+              whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+            }}>
+              {sub}
+            </p>
+          )}
+        </div>
+      ))}
+      {footer && (
+        <div style={{ borderTop: `1px solid ${c.divider}`, marginTop: 5, paddingTop: 5, display: "flex", justifyContent: "space-between", gap: 12, color: c.label, whiteSpace: "nowrap" }}>
+          <span>{footer.label}</span>
+          <span style={{ color: c.value, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{footer.value}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** All series values at x, for the tooltip. */
+export function rowsAtX(series: StandardSeries[], x: string, unit?: string): TooltipRow[] {
+  return series.flatMap((serie) =>
+    serie.data
+      .filter((d) => String(d.x) === x)
+      .map((d) => ({ label: serie.id, color: serie.color, value: d.y, unit })),
+  );
+}
+
+// ── Legend ───────────────────────────────────────────────────────────────────
+
+export function LineLegend({
+  series,
+  hovered,
+  onHover,
+}: {
+  series: StandardSeries[];
+  hovered: string | null;
+  onHover?: (id: string | null) => void;
+  /** @deprecated kept for call-site compatibility; the minimal legend has no hint */
+  showHint?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5">
+      {series.map((s) => {
+        const isHovered = hovered === s.id;
+        const isDimmed = hovered !== null && !isHovered;
+        const last = [...s.data].reverse().find((d) => d.y != null)?.y;
+        return (
+          <button
+            key={s.id}
+            className="flex items-center gap-1.5 transition-opacity duration-150 cursor-default"
+            style={{ opacity: isDimmed ? 0.4 : 1 }}
+            onMouseEnter={() => onHover?.(s.id)}
+            onMouseLeave={() => onHover?.(null)}
+            onFocus={() => onHover?.(s.id)}
+            onBlur={() => onHover?.(null)}
+          >
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+            <span className="text-[9.5px] text-slate-500">{s.id}</span>
+            {last != null && <span className="text-[9.5px] font-bold text-slate-800 tabular-nums">{last.toFixed(1)}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Card shell ───────────────────────────────────────────────────────────────
+
+/** Standard card around a line chart — same shell as the Overview TrendChart. */
+export function LineChartCard({
+  label,
+  unitBadge,
+  loading = false,
+  legend,
+  height = 300,
+  empty = false,
+  emptyText = "No data available",
+  actions,
+  children,
+}: {
+  /** Uppercase card label, e.g. "Lead Time Trend" */
+  label: string;
+  /** Pill on the right, e.g. "Lead Time · days" */
+  unitBadge?: string;
+  loading?: boolean;
+  legend?: ReactNode;
+  height?: number;
+  empty?: boolean;
+  emptyText?: string;
+  /** Controls shown left of the unit pill, e.g. the Weekly / Monthly toggle */
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-lg p-3 border border-[#EBEBEB] hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200 flex flex-col min-w-0">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[11.5px] font-bold text-slate-500 uppercase tracking-[0.08em] leading-none">{label}</span>
+          {loading && (
+            <span className="w-3 h-3 border border-[#1E4076] border-t-transparent rounded-full animate-spin inline-block" />
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {actions}
+          {unitBadge && (
+            <span className="text-[11px] bg-[#EEF4FB] text-[#16305C] px-2.5 py-0.5 rounded-full font-semibold tracking-tight">
+              {unitBadge}
+            </span>
+          )}
+        </div>
+      </div>
+      <div style={{ height }}>
+        {empty ? (
+          <div className="h-full flex items-center justify-center text-[11px] text-gray-300">
+            {loading ? "Loading…" : emptyText}
+          </div>
+        ) : children}
+      </div>
+      {legend && <div className="mt-1.5">{legend}</div>}
+    </div>
+  );
+}
+
+// ── Trend granularity (Weekly / Monthly toggle) ──────────────────────────────
+
+export type TrendGrain = "week" | "month";
+export const GRAIN_OPTIONS: { key: TrendGrain; label: string }[] = [
+  { key: "week",  label: "Weekly" },
+  { key: "month", label: "Monthly" },
+];
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Month axis label from a period-start date "YYYY-MM-DD": "Jan", or "Jan 25" when the range spans years. */
+export function monthLabel(dateStr: string, withYear = false): string {
+  const [y, m] = dateStr.split("-");
+  const name = MONTHS[Number(m) - 1] ?? dateStr;
+  return withYear ? `${name} ${y.slice(2)}` : name;
+}
+
+/** Tick values for a weekly point axis: every even ISO week, thinned further when dense (Overview rule). */
+export function evenWeekTicks(labels: string[]): string[] {
+  const even = labels.filter((l) => Number(l.replace(/^W/, "")) % 2 === 0);
+  const step = even.length > 26 ? 2 : 1;
+  return even.filter((_, i) => i % step === 0);
+}
+
+// ── SPC control limits (mean ± 3σ) ───────────────────────────────────────────
+
+export interface Limits { mean: number; stdev: number; ucl: number; lcl: number }
+
+/** mean ± 3σ (sample stdev, n-1), LCL floored at 0 — same rule as computeControlLimits in lib/chartConfig.ts */
+export function limitsOf(values: number[]): Limits {
+  const v = values.filter((n) => typeof n === "number" && !isNaN(n));
+  if (v.length < 2) return { mean: 0, stdev: 0, ucl: 0, lcl: 0 };
+  const mean  = v.reduce((s, n) => s + n, 0) / v.length;
+  const stdev = Math.sqrt(v.reduce((s, n) => s + (n - mean) ** 2, 0) / (v.length - 1));
+  return {
+    mean:  Number(mean.toFixed(2)),
+    stdev: Number(stdev.toFixed(2)),
+    ucl:   Number((mean + 3 * stdev).toFixed(2)),
+    lcl:   Number(Math.max(0, mean - 3 * stdev).toFixed(2)),
+  };
+}
+
+// ── Laney P′ chart (Overview TrendChart → Lead Time, % PO above target) ──────
+// Each point = share of n POs above the target. Classic p limits are p̄ ± 3·√(p̄(1−p̄)/n), which get very
+// narrow with 20–300 POs; Laney widens them by σz = average moving range of the z-scores / 1.128, so only
+// weeks that are unusual compared with normal week-to-week variation fall outside. Limits still step with n.
+export type PointStats = Record<string, Record<string, { n: number; late: number; avgDays?: number }>>; // date → series → stats
+
+/** Laney P′ limits in % per series and point. `mean` = p̄ (%), `stdev` = σz. */
+export function laneyPLimits(series: StandardSeries[], stats: PointStats): Record<string, Record<string, Limits>> {
+  const out: Record<string, Record<string, Limits>> = {};
+  for (const s of series) {
+    const pts = s.data.map((p) => ({ x: p.x, ...stats[p.x]?.[s.id] })).filter((p): p is { x: string; n: number; late: number } => !!p.n);
+    const sumN = pts.reduce((a, p) => a + p.n, 0), sumLate = pts.reduce((a, p) => a + p.late, 0);
+    const pBar = sumN ? sumLate / sumN : 0;
+    if (pBar <= 0 || pBar >= 1 || pts.length < 2) continue;
+    const z = pts.map((p) => (p.late / p.n - pBar) / Math.sqrt((pBar * (1 - pBar)) / p.n));
+    const mr = z.slice(1).map((v, i) => Math.abs(v - z[i]));
+    const sigmaZ = mr.reduce((a, v) => a + v, 0) / mr.length / 1.128;
+    out[s.id] = {};
+    for (const p of pts) {
+      const half = 3 * Math.sqrt((pBar * (1 - pBar)) / p.n) * sigmaZ;
+      out[s.id][p.x] = {
+        mean:  Number((pBar * 100).toFixed(1)),
+        stdev: Number(sigmaZ.toFixed(2)),
+        ucl:   Number((Math.min(1, pBar + half) * 100).toFixed(1)),
+        lcl:   Number((Math.max(0, pBar - half) * 100).toFixed(1)),
+      };
+    }
+  }
+  return out;
+}
+
+// ── XmR (individuals) chart — metrics without a subgroup count (Output, OEE, OPE, Yield Loss) ──
+// One value per period: center = mean, limits = mean ± 2.66 × average moving range (|xᵢ − xᵢ₋₁|).
+// Limits are the same for every point (no n), clamped to [min, max] (e.g. 0–100 for %).
+export function xmrLimits(series: StandardSeries[], { min = 0, max }: { min?: number; max?: number } = {}): Record<string, Record<string, Limits>> {
+  const out: Record<string, Record<string, Limits>> = {};
+  for (const s of series) {
+    const pts = s.data.filter((p): p is { x: string; y: number } => p.y != null && !isNaN(p.y));
+    if (pts.length < 2) continue;
+    const mean = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+    const mrBar = pts.slice(1).reduce((a, p, i) => a + Math.abs(p.y - pts[i].y), 0) / (pts.length - 1);
+    const clamp = (v: number) => Math.max(min, max != null ? Math.min(max, v) : v);
+    const lim: Limits = {
+      mean:  Number(mean.toFixed(2)),
+      stdev: Number((mrBar / 1.128).toFixed(2)),
+      ucl:   Number(clamp(mean + 2.66 * mrBar).toFixed(2)),
+      lcl:   Number(clamp(mean - 2.66 * mrBar).toFixed(2)),
+    };
+    out[s.id] = Object.fromEntries(pts.map((p) => [p.x, lim]));
+  }
+  return out;
+}
+
+/**
+ * Control chart layer (P′ and XmR): one set of step lines UCL · center · LCL with labels at the right end — the `band`
+ * passed in (Overall limits, or the hovered plant's limits in the By plant view, label prefixed with the plant).
+ * `center` = center-line name ("p̄" for P′, "Mean" for XmR); `fmt` formats label values (unit included).
+ */
+export type PBand = { lim: Record<string, Limits>; prefix?: string };
+export function makePChartLayer(
+  series: StandardSeries[],
+  limits: Record<string, Record<string, Limits>>,
+  band: PBand | null,
+  hovered: string | null,
+  { center = "p̄", fmt = (v: number) => `${v.toFixed(1)}%` }: { center?: string; fmt?: (v: number) => string } = {},
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return function PChartLayer(props: any) {
+    if (!props.xScale || !props.yScale) return null;
+    const xs = band ? Object.keys(band.lim).filter((x) => series.some((s) => s.data.some((p) => p.x === x))).sort() : [];
+    const half = xs.length > 1 ? (props.xScale(xs[1]) - props.xScale(xs[0])) / 2 : 6;
+    const step = (key: "ucl" | "mean" | "lcl") =>
+      xs.map((x, i) => `${i === 0 ? "M" : "L"}${props.xScale(x) - half},${props.yScale(band!.lim[x][key])}H${props.xScale(x) + half}`).join("");
+    const last = xs.length ? band!.lim[xs[xs.length - 1]] : null;
+    const end = xs.length ? props.xScale(xs[xs.length - 1]) + half : 0;
+    const pre = band?.prefix ? `${band.prefix} ` : "";
+    const labels = last ? [
+      { key: "ucl", y: props.yScale(last.ucl), text: `${pre}UCL ${fmt(last.ucl)}`, color: "#e07a70" },
+      { key: "mean", y: props.yScale(last.mean), text: `${pre}${center} ${fmt(last.mean)}`, color: "#98a2b3" },
+      { key: "lcl", y: props.yScale(last.lcl), text: `${pre}LCL ${fmt(last.lcl)}`, color: "#e07a70" },
+    ].sort((a, b) => a.y - b.y) : [];
+    for (let i = 1; i < labels.length; i++) if (labels[i].y - labels[i - 1].y < 11) labels[i].y = labels[i - 1].y + 11;
+    return (
+      <g style={{ pointerEvents: "none" }}>
+        {last && <>
+          <path d={step("ucl")} fill="none" stroke="#e07a70" strokeWidth={1.5} strokeDasharray="5 3" />
+          <path d={step("mean")} fill="none" stroke="#98a2b3" strokeOpacity={0.8} strokeWidth={1} strokeDasharray="2 3" />
+          <path d={step("lcl")} fill="none" stroke="#e07a70" strokeWidth={1.5} strokeDasharray="5 3" />
+          {labels.map((l) => (
+            <text key={l.key} x={end} y={l.y - 3} fill={l.color} fontSize={9.5} fontWeight={700} textAnchor="end"
+              stroke="#ffffff" strokeWidth={3} paintOrder="stroke">{l.text}</text>
+          ))}
+        </>}
+      </g>
+    );
+  };
+}
+
+/** Hover point color for control charts: red when the point is outside that series' own limits. */
+export function outOfLimitColor(limits: Record<string, Record<string, Limits>>) {
+  return (id: string, x: string, y: number) => {
+    const l = limits[id]?.[x];
+    return l && (y > l.ucl || y < l.lcl) ? "#d92d20" : null;
+  };
+}
+
+/** Per-series limits, keyed by series id (tooltip sub-line). */
+export function seriesLimits(series: StandardSeries[]): Record<string, Limits> {
+  const out: Record<string, Limits> = {};
+  for (const s of series) out[s.id] = limitsOf(s.data.map((d) => d.y as number));
+  return out;
+}
+
+/** Hairline UCL / Mean / LCL markers for ResponsiveLine `markers` (minimal: muted, small labels). */
+export function controlMarkers({ mean, ucl, lcl }: Pick<Limits, "mean" | "ucl" | "lcl">) {
+  const text = { fontSize: 9.5, fontFamily: "inherit", fontWeight: 700 };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const m: any[] = [];
+  if (ucl > 0) m.push({
+    axis: "y", value: ucl,
+    lineStyle: { stroke: "#f3b4ae", strokeDasharray: "2 3", strokeWidth: 1 },
+    legend: `UCL ${ucl.toFixed(1)}`, legendPosition: "top-right",
+    legendOffsetX: 0, legendOffsetY: 4,
+    textStyle: { ...text, fill: "#e07a70" },
+  });
+  if (mean > 0) m.push({
+    axis: "y", value: mean,
+    lineStyle: { stroke: "#d0d5dd", strokeDasharray: "2 3", strokeWidth: 1 },
+    legend: `Mean ${mean.toFixed(1)}`, legendPosition: "top-right",
+    legendOffsetX: 0, legendOffsetY: 4,
+    textStyle: { ...text, fill: "#98a2b3" },
+  });
+  if (lcl > 0) m.push({
+    axis: "y", value: lcl,
+    lineStyle: { stroke: "#f3b4ae", strokeDasharray: "2 3", strokeWidth: 1 },
+    legend: `LCL ${lcl.toFixed(1)}`, legendPosition: "bottom-right",
+    legendOffsetX: 0, legendOffsetY: 4,
+    textStyle: { ...text, fill: "#e07a70" },
+  });
+  return m;
+}
+
+/** Tooltip sub-line: "Mean x · UCL y · LCL z" */
+export function LimitsSub({ lim }: { lim: Limits }) {
+  return (
+    <>
+      Mean {lim.mean.toFixed(2)} · UCL{" "}
+      <span style={{ color: "#f5a39a" }}>{lim.ucl.toFixed(2)}</span> · LCL{" "}
+      <span style={{ color: "#f5a39a" }}>{lim.lcl.toFixed(2)}</span>
+    </>
+  );
+}

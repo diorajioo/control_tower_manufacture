@@ -1,0 +1,676 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Bell, ArrowRight, ChevronDown, Check, Loader2, X, Send, Monitor, Lock, User, Settings, LogOut } from "lucide-react";
+
+const EN_DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const EN_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+
+function useClock() {
+  const [time, setTime] = useState("");
+  const [date, setDate] = useState("");
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, "0");
+      const m = String(now.getMinutes()).padStart(2, "0");
+      const s = String(now.getSeconds()).padStart(2, "0");
+      setTime(`${h}:${m}:${s} WIB`);
+      setDate(`${EN_DAYS[now.getDay()]}, ${now.getDate()} ${EN_MONTHS[now.getMonth()]} ${now.getFullYear()}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return { time, date };
+}
+import { useSession, signOut } from "next-auth/react";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { FIELD_LABEL, FIELD, FIELD_ON, FIELD_OFF, SEG, SEG_ITEM, SEG_PILL, MENU, MENU_ITEM, MENU_ITEM_ON, MENU_ITEM_OFF } from "@/components/ui/FilterField";
+import { useI18n } from "@/lib/i18n";
+import type { KPIAlert } from "@/lib/alerts";
+
+const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
+
+function today() { return new Date().toISOString().split("T")[0]; }
+function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split("T")[0]; }
+function firstOfMonth() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; }
+function firstOfLastMonth() { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; }
+function lastOfLastMonth() { const d = new Date(); d.setDate(0); return d.toISOString().split("T")[0]; }
+function mondayOfWeek(offset = 0) {
+  const d = new Date(); const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day) + offset * 7);
+  return d.toISOString().split("T")[0];
+}
+function sundayOfLastWeek() {
+  const d = new Date(); const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day) - 1);
+  return d.toISOString().split("T")[0];
+}
+
+const PERIOD_PRESETS = [
+  { key: "YTD",        label: "YTD",               getValue: () => ({ start: `${new Date().getFullYear()}-01-01`, end: today() }) },
+  { key: "ThisMonth",  label: "This Month",          getValue: () => ({ start: firstOfMonth(),     end: today() }) },
+  { key: "LastMonth",  label: "Last Month",         getValue: () => ({ start: firstOfLastMonth(), end: lastOfLastMonth() }) },
+  { key: "Last30Days", label: "Last 30 Days",       getValue: () => ({ start: daysAgo(30),        end: today() }) },
+  { key: "ThisWeek",   label: "This Week",          getValue: () => ({ start: mondayOfWeek(0),    end: today() }) },
+  { key: "LastWeek",   label: "Last Week",          getValue: () => ({ start: mondayOfWeek(-1),   end: sundayOfLastWeek() }) },
+  { key: "Custom",     label: "Custom Range",       getValue: () => ({ start: "", end: "" }) },
+];
+
+// Available resolutions per period
+const PERIOD_RESOLUTIONS: Record<string, string[]> = {
+  YTD:        ["Daily", "Weekly", "Monthly"],
+  ThisMonth:  ["Daily", "Weekly"],
+  LastMonth:  ["Daily", "Weekly"],
+  Last30Days: ["Daily", "Weekly"],
+  ThisWeek:   ["Daily"],
+  LastWeek:   ["Daily"],
+  Custom:     ["Daily", "Weekly", "Monthly"],
+};
+
+// Resolution (Daily / Weekly / Monthly) field in the filter bar — hidden for now, flip to show it again
+const SHOW_RESOLUTION = false;
+
+const DATA_LEVELS: { value: string; label: string }[] = [
+  { value: "Daily",   label: "Daily"   },
+  { value: "Weekly",  label: "Weekly"  },
+  { value: "Monthly", label: "Monthly" },
+];
+
+interface HeaderProps {
+  plants: string[];
+  onFilterChange: (f: { plant: string; startDate: string; endDate: string; dataLevel: string; period: string }) => void;
+  /** Filters the page is currently showing (e.g. restored from localStorage); defaults to YTD · All Plant */
+  initialFilters?: Partial<{ plant: string; startDate: string; endDate: string; dataLevel: string; period: string }>;
+  activeView: string;
+  onViewChange: (v: string) => void;
+  /** `locked` views are shown with a lock icon and cannot be opened (e.g. still on mock data) */
+  views?: Array<{ key: string; label: string; locked?: boolean }>;
+  onRefresh: () => void;
+  isLoading: boolean;
+  lastUpdated?: Date;
+  alertCount?: number;
+  onBellClick?: () => void;
+  alerts?: KPIAlert[];
+  onDismiss?: (id: string) => void;
+  onMonitorMode?: () => void;
+  ltBasis?: "created" | "released";
+  onLtBasisChange?: (b: "created" | "released") => void;
+  /** Page title shown above the filter bar */
+  pageTitle?: string;
+}
+
+export function Header({
+  plants, onFilterChange, activeView, onViewChange, views,
+  onRefresh, isLoading, lastUpdated, alertCount = 0, onBellClick,
+  alerts = [], onDismiss, onMonitorMode,
+  ltBasis, onLtBasisChange, initialFilters, pageTitle,
+}: HeaderProps) {
+  const { data: session } = useSession();
+  const { t, lang, setLang } = useI18n();
+  const resolvedViews: Array<{ key: string; label: string; locked?: boolean }> = views ?? [
+    { key: "strategic", label: t("header_view_strategic") },
+    { key: "tactical",  label: t("header_view_tactical") },
+  ];
+  const [countdown,      setCountdown]      = useState(REFRESH_INTERVAL_MS);
+  // Filter controls edit a draft; nothing reaches the page until the user clicks Apply.
+  const [applied, setApplied] = useState(() => ({
+    plant:     initialFilters?.plant     ?? "All Plant",
+    period:    initialFilters?.period    ?? "YTD",
+    startDate: initialFilters?.startDate ?? `${new Date().getFullYear()}-01-01`,
+    endDate:   initialFilters?.endDate   ?? today(),
+    dataLevel: initialFilters?.dataLevel ?? "Daily",
+  }));
+  const [plant,          setPlant]          = useState(applied.plant);
+  const [period,         setPeriod]         = useState(applied.period);
+  const [startDate,      setStartDate]      = useState(applied.startDate);
+  const [endDate,        setEndDate]        = useState(applied.endDate);
+  const [dataLevel,      setDataLevel]      = useState(applied.dataLevel);
+  const [plantOpen,      setPlantOpen]      = useState(false);
+  const [periodOpen,     setPeriodOpen]     = useState(false);
+  const [resolutionOpen, setResolutionOpen] = useState(false);
+  const [alertOpen,      setAlertOpen]      = useState(false);
+  const [teamsState,     setTeamsState]     = useState<"idle"|"sending"|"ok"|"err">("idle");
+  const [avatarOpen,     setAvatarOpen]     = useState(false);
+  const plantRef      = useRef<HTMLDivElement>(null);
+  const periodRef     = useRef<HTMLDivElement>(null);
+  const resolutionRef = useRef<HTMLDivElement>(null);
+  const alertRef      = useRef<HTMLDivElement>(null);
+  const avatarRef     = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (plantRef.current      && !plantRef.current.contains(e.target as Node))      setPlantOpen(false);
+      if (periodRef.current     && !periodRef.current.contains(e.target as Node))     setPeriodOpen(false);
+      if (resolutionRef.current && !resolutionRef.current.contains(e.target as Node)) setResolutionOpen(false);
+      if (alertRef.current      && !alertRef.current.contains(e.target as Node))      setAlertOpen(false);
+      if (avatarRef.current     && !avatarRef.current.contains(e.target as Node))     setAvatarOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  useEffect(() => {
+    if (!lastUpdated) return;
+    const tick = () => {
+      const rem = REFRESH_INTERVAL_MS - (Date.now() - lastUpdated.getTime());
+      if (rem <= 0) { onRefresh(); setCountdown(REFRESH_INTERVAL_MS); }
+      else setCountdown(rem);
+    };
+    tick();
+    const id = setInterval(tick, 10_000);
+    return () => clearInterval(id);
+  }, [lastUpdated, onRefresh]);
+
+  const draft = { plant, period, startDate, endDate, dataLevel };
+  const dirty = (Object.keys(draft) as (keyof typeof draft)[]).some((k) => draft[k] !== applied[k]);
+  const invalidRange = period === "Custom" && (!startDate || !endDate || startDate > endDate);
+  const applyFilters = () => {
+    if (!dirty || invalidRange) return;
+    setApplied(draft);
+    onFilterChange(draft);
+  };
+  const discardFilters = () => {
+    setPlant(applied.plant); setPeriod(applied.period); setStartDate(applied.startDate);
+    setEndDate(applied.endDate); setDataLevel(applied.dataLevel);
+  };
+
+  const handlePlant     = (v: string) => { setPlant(v); };
+  const handlePeriod    = (key: string) => {
+    const p = PERIOD_PRESETS.find((x) => x.key === key); if (!p) return;
+    if (key === "Custom") { setPeriod("Custom"); setPeriodOpen(false); return; }
+    const { start, end } = p.getValue();
+    const allowed = PERIOD_RESOLUTIONS[key] ?? ["Daily", "Weekly", "Monthly"];
+    const newLevel = allowed.includes(dataLevel) ? dataLevel : allowed[0];
+    setStartDate(start); setEndDate(end); setPeriod(key); setDataLevel(newLevel);
+    setPeriodOpen(false);
+  };
+  const handleDataLevel = (v: string) => { setDataLevel(v); setResolutionOpen(false); };
+  const handleStart     = (v: string) => { setStartDate(v); };
+  const handleEnd       = (v: string) => { setEndDate(v); };
+
+  const handleTeamsSend = async () => {
+    setTeamsState("sending");
+    try {
+      let teamsRecipients: Array<{ email: string; kpis: Record<string, boolean> }> | undefined;
+      // Prefer server settings for cross-device consistency, fall back to localStorage cache
+      try {
+        const settingsRes = await fetch("/api/settings/teams");
+        if (settingsRes.ok) {
+          const cfg = await settingsRes.json() as { enabled?: boolean; recipients?: typeof teamsRecipients };
+          if (cfg.enabled && cfg.recipients?.length) teamsRecipients = cfg.recipients;
+        }
+      } catch {
+        const raw = localStorage.getItem("ct-teams-settings");
+        if (raw) {
+          const cfg = JSON.parse(raw) as { enabled?: boolean; recipients?: typeof teamsRecipients };
+          if (cfg.enabled && cfg.recipients?.length) teamsRecipients = cfg.recipients;
+        }
+      }
+      const res = await fetch("/api/notifications/teams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          alerts,
+          plant:  applied.plant,
+          period: applied.period,
+          startDate: applied.startDate,
+          endDate: applied.endDate,
+          force: true, // manual send — skip dedup
+          ...(teamsRecipients ? { recipients: teamsRecipients } : {}),
+        }),
+      });
+      const d = await res.json() as { ok?: boolean };
+      setTeamsState(d.ok ? "ok" : "err");
+    } catch { setTeamsState("err"); }
+    setTimeout(() => setTeamsState("idle"), 3500);
+  };
+
+  const { time: clockTime, date: clockDate } = useClock();
+
+  const initials = session?.user?.name
+    ? session.user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
+    : "AP";
+
+  const fmtCountdown = (ms: number) => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  };
+
+  // Live indicator: time since the data was last loaded into Snowflake (LOAD_TIMESTAMP via /api/dashboard/etl),
+  // counting up every second. Re-read on mount and after every refresh; the hourly auto-refresh is unchanged.
+  const [etlAt, setEtlAt] = useState<Date | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    fetch("/api/dashboard/etl")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setEtlAt(d?.etlAt ? new Date(d.etlAt) : null))
+      .catch(() => setEtlAt(null));
+  }, [lastUpdated]);
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const fmtElapsed = (ms: number) => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+    if (m > 0) return `${m}m ${String(sec).padStart(2, "0")}s`;
+    return `${sec}s`;
+  };
+  const etlTitle = etlAt
+    ? `Last data load: ${etlAt.toLocaleString("en-GB", { timeZone: "Asia/Jakarta", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })} WIB · auto-refresh in ${fmtCountdown(countdown)}`
+    : `Auto-refresh in ${fmtCountdown(countdown)}`;
+
+
+  return (
+    <header className="shrink-0">
+
+      {/* ── Row 1: Paragon Blue topbar (joins the Sidebar logo block) ─────── */}
+      {/* ct-topbar-row: left padding grows while the sidebar collapses, so this row never moves (globals.css) */}
+      <div className="ct-topbar-row flex items-center gap-3 pr-4 h-[52px] bg-[#1E4076]">
+
+
+        {/* Brand */}
+        <span className="text-[13px] font-medium text-white/70 tracking-[0.07em] uppercase shrink-0">Manufacturing Control Tower</span>
+
+        {applied.period && (
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/15 text-white shrink-0">
+            {applied.period}
+          </span>
+        )}
+
+        <div className="flex-1" />
+
+        {/* Live clock */}
+        <div className="flex flex-col items-end pr-2.5 border-r border-white/20 shrink-0">
+          <span className="text-[13px] font-bold text-white tracking-[0.03em] leading-tight tabular-nums">{clockTime}</span>
+          <span className="text-[9.5px] text-white/60 leading-tight">{clockDate}</span>
+        </div>
+
+        {/* Live indicator: time since the last data load (ETL) */}
+        {/* Two lines: "Last sync" (bold) over the elapsed time (muted), green dot left */}
+        <div title={etlTitle} className="flex items-center gap-2 pl-2.5 pr-3 py-1 rounded-lg bg-white/10 shrink-0">
+          <span className={cn("w-2 h-2 rounded-full bg-emerald-400 shrink-0", !isLoading && "animate-pulse")} />
+          <span className="flex flex-col leading-tight">
+            <span className="text-[11.5px] font-bold text-white">{etlAt ? t("header_data_updated") : "Live"}</span>
+            <span className="text-[9.5px] text-white/60 tabular-nums">
+              {isLoading ? t("empty_loading") : etlAt ? `${fmtElapsed(nowMs - etlAt.getTime())} ${t("header_ago")}` : lastUpdated ? fmtCountdown(countdown) : ""}
+            </span>
+          </span>
+        </div>
+
+        {/* Language toggle — pill with ID | EN, active one highlighted */}
+        <div
+          className="flex items-center h-8 rounded-[9px] border border-white/25 bg-white/5 overflow-hidden shrink-0"
+          role="group"
+          aria-label={`${t("lang_toggle_switch_to")} ID / EN`}
+        >
+          {(["id", "en"] as const).map((code) => {
+            const active = lang === code;
+            return (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setLang(code)}
+                aria-pressed={active}
+                title={`${t("lang_toggle_switch_to")} ${code === "id" ? "Bahasa Indonesia" : "English"}`}
+                className={cn(
+                  "w-8 h-full flex items-center justify-center text-[11px] font-bold tracking-wider transition-colors",
+                  active ? "bg-white text-[#1E4076]" : "text-white/80 hover:bg-white/10"
+                )}
+              >
+                {code.toUpperCase()}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Monitor mode */}
+        {onMonitorMode && (
+          <button
+            onClick={onMonitorMode}
+            className="w-8 h-8 rounded-[9px] flex items-center justify-center border border-white/25 text-white/85 hover:bg-white/10 hover:text-white transition-colors shrink-0"
+            title={t("monitor_mode_full")}
+          >
+            <Monitor size={14} />
+          </button>
+        )}
+
+        {/* Alert bell */}
+        <div className="relative shrink-0" ref={alertRef}>
+          <button
+            onClick={() => { setAlertOpen((o) => !o); onBellClick?.(); }}
+            className={cn(
+              "relative w-8 h-8 rounded-[9px] flex items-center justify-center transition-colors",
+              alertCount > 0
+                ? "bg-amber-50 border border-amber-300 text-amber-500 hover:bg-amber-100"
+                : "border border-white/25 text-white/85 hover:bg-white/10"
+            )}
+          >
+            <Bell size={14} />
+            {alertCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 border-[1.5px] border-[#1E4076] flex items-center justify-center text-[8px] font-bold text-white">
+                {alertCount}
+              </span>
+            )}
+          </button>
+
+          {alertOpen && (
+            <div className="absolute right-0 top-full mt-2 z-50 w-[340px] bg-white rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.14)] border border-gray-100 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <span className="text-[12px] font-bold text-gray-800">
+                  {alertCount > 0 ? `${alertCount} KPI${alertCount > 1 ? "s" : ""} ${t("teams_need_attention")}` : t("teams_no_active")}
+                </span>
+                <button onClick={() => setAlertOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="max-h-[300px] overflow-y-auto divide-y divide-gray-50">
+                {alerts.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-[12px] text-gray-400">{t("status_all_normal")}</div>
+                ) : (
+                  alerts.map((a) => (
+                    <div key={a.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                      <span className="shrink-0 mt-0.5">
+                        <span className={cn("block w-2 h-2 mt-1 rounded-full", a.severity === "critical" ? "bg-red-500" : a.severity === "warning" ? "bg-amber-400" : "bg-[#1E4076]")} />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-semibold text-gray-800">{a.kpi}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{a.message}</p>
+                        {a.trend != null && (
+                          <span className={cn("text-[10px] font-semibold", a.trend < 0 ? "text-red-500" : "text-emerald-600")}>
+                            {a.trend > 0 ? "+" : ""}{a.trend.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                      {onDismiss && (
+                        <button onClick={() => onDismiss(a.id)} className="shrink-0 p-0.5 text-gray-300 hover:text-gray-500 transition-colors">
+                          <X size={11} />
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {alerts.length > 0 && (
+                <div className="px-4 py-3 border-t border-gray-100">
+                  <button
+                    onClick={handleTeamsSend}
+                    disabled={teamsState === "sending"}
+                    className={cn(
+                      "w-full flex items-center justify-center gap-2 py-2 rounded-xl text-[11px] font-semibold transition-all border",
+                      teamsState === "ok"      ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                      teamsState === "err"     ? "bg-red-50 text-red-600 border-red-200" :
+                      teamsState === "sending" ? "bg-gray-50 text-gray-400 border-gray-200 cursor-wait" :
+                                                 "bg-[#EEF4FB] text-[#16305C] border-[#C3CEE3] hover:bg-[#C3CEE3]"
+                    )}
+                  >
+                    {teamsState === "sending" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                    {teamsState === "ok"      ? t("teams_sent") :
+                     teamsState === "err"     ? t("teams_failed") :
+                     teamsState === "sending" ? t("teams_sending") :
+                     t("teams_send")}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Avatar + dropdown */}
+        <div className="relative shrink-0" ref={avatarRef}>
+          <div
+            className="w-8 h-8 bg-white/15 rounded-full flex items-center justify-center cursor-pointer hover:bg-white/25 transition-colors"
+            title={session?.user?.name ?? ""}
+            onClick={() => setAvatarOpen((o) => !o)}
+          >
+            <span className="text-white text-[11px] font-bold tracking-tight">{initials}</span>
+          </div>
+          {avatarOpen && (
+            <div style={{
+              position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 200,
+              background: "white", border: "1px solid #e5e7eb", borderRadius: 12,
+              boxShadow: "0 12px 32px -8px rgba(16,24,40,0.22)",
+              minWidth: 240, fontFamily: "Lato, sans-serif",
+              overflow: "hidden",
+            }}>
+              {/* Account info — centred avatar */}
+              <div style={{ padding: "20px 16px 16px", textAlign: "center", borderBottom: "1px solid #f3f4f6" }}>
+                <div style={{
+                  width: 52, height: 52, borderRadius: "50%", background: "#1E4076",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  margin: "0 auto 10px",
+                }}>
+                  <span style={{ color: "white", fontSize: 18, fontWeight: 700 }}>{initials}</span>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#101828" }}>
+                  {session?.user?.name ?? "—"}
+                </div>
+                {(session?.user as { jobTitle?: string } | undefined)?.jobTitle && (
+                  <div style={{ fontSize: 11.5, color: "#667085", marginTop: 2 }}>
+                    {(session?.user as { jobTitle?: string } | undefined)?.jobTitle}
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: "#98a2b3", marginTop: 3, wordBreak: "break-all" }}>
+                  {session?.user?.email ?? ""}
+                </div>
+              </div>
+
+              {/* Menu items */}
+              {[
+                { icon: <User size={15} strokeWidth={1.75} />, label: "My profile",  href: "/settings" },
+                { icon: <Settings size={15} strokeWidth={1.75} />, label: "Settings", href: "/settings" },
+              ].map(({ icon, label, href }) => (
+                <a key={label} href={href}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "11px 16px", fontSize: 13, color: "#101828",
+                    textDecoration: "none", cursor: "pointer",
+                    transition: "background 0.1s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <span style={{ color: "#667085" }}>{icon}</span>
+                  {label}
+                </a>
+              ))}
+
+              {/* Divider + Sign out */}
+              <div style={{ borderTop: "1px solid #f3f4f6" }}>
+                <button
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  style={{
+                    width: "100%", padding: "11px 16px", textAlign: "left", background: "none", border: "none",
+                    fontSize: 13, color: "#d92d20", fontWeight: 600, cursor: "pointer", fontFamily: "Lato, sans-serif",
+                    display: "flex", alignItems: "center", gap: 10, transition: "background 0.1s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#fff5f5")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  <LogOut size={15} strokeWidth={1.75} />
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Row 2: Filter bar — labelled fields (PERIOD · START DATE · END DATE · PLANT · RESOLUTION) + Apply ── */}
+      {pageTitle && (
+        <div className="px-5 pt-2 pb-0 bg-white">
+          <span className="text-[13px] font-bold text-slate-800">{pageTitle}</span>
+        </div>
+      )}
+      <div className="flex items-end gap-2.5 px-5 pt-1.5 pb-2 bg-white border-b border-gray-100 flex-wrap shadow-[0_1px_0_rgba(0,0,0,0.03)]">
+
+        {/* Period */}
+        <div className="relative shrink-0" ref={periodRef}>
+          <span className={FIELD_LABEL}>{t("filter_period")}</span>
+          <button onClick={() => setPeriodOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={periodOpen}
+            className={cn(FIELD, FIELD_ON, "w-[128px] justify-between")}>
+            <span className="truncate">{PERIOD_PRESETS.find((p) => p.key === period)?.label ?? t("empty_select_period")}</span>
+            <ChevronDown size={11} className={cn("text-slate-400 shrink-0 transition-transform duration-150", periodOpen && "rotate-180")} />
+          </button>
+          {periodOpen && (
+            <div className={cn(MENU, "min-w-[128px]")} role="listbox">
+              {PERIOD_PRESETS.map((p) => (
+                <button key={p.key} onClick={() => handlePeriod(p.key)} role="option" aria-selected={period === p.key}
+                  className={cn(MENU_ITEM, period === p.key ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
+                  <span>{p.label}</span>
+                  {period === p.key && <Check size={10} className="text-[#1E4076] shrink-0" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Start / end date — editable for Custom Range, otherwise they show the preset's dates */}
+        <label className="shrink-0">
+          <span className={FIELD_LABEL}>{t("filter_start")}</span>
+          <input type="date" value={startDate} onChange={(e) => handleStart(e.target.value)}
+            disabled={period !== "Custom"}
+            className={cn(FIELD, period === "Custom" ? FIELD_ON : FIELD_OFF, "w-[118px] focus:outline-none focus:ring-2 focus:ring-[#1E4076]/30")} />
+        </label>
+        <label className="shrink-0">
+          <span className={FIELD_LABEL}>{t("filter_end")}</span>
+          <input type="date" value={endDate} onChange={(e) => handleEnd(e.target.value)}
+            disabled={period !== "Custom"}
+            className={cn(FIELD, period === "Custom" ? FIELD_ON : FIELD_OFF, "w-[118px] focus:outline-none focus:ring-2 focus:ring-[#1E4076]/30")} />
+        </label>
+
+        {/* Plant */}
+        <div className="relative shrink-0" ref={plantRef}>
+          <span className={FIELD_LABEL}>{t("filter_plant")}</span>
+          <button onClick={() => setPlantOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={plantOpen}
+            className={cn(FIELD, FIELD_ON, "w-[112px] justify-between")}>
+            <span className="truncate">{plant}</span>
+            <ChevronDown size={11} className={cn("text-slate-400 shrink-0 transition-transform duration-150", plantOpen && "rotate-180")} />
+          </button>
+          {plantOpen && (
+            <div className={cn(MENU, "min-w-[112px]")} role="listbox">
+              {plants.map((p) => (
+                <button key={p} onClick={() => { handlePlant(p); setPlantOpen(false); }} role="option" aria-selected={plant === p}
+                  className={cn(MENU_ITEM, plant === p ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
+                  <span>{p}</span>
+                  {plant === p && <Check size={10} className="text-[#1E4076] shrink-0" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Resolution — hidden from the UI for now (2026-10-13); the data level state and logic stay */}
+        {SHOW_RESOLUTION && (() => {
+          const allowed = PERIOD_RESOLUTIONS[period] ?? ["Daily", "Weekly", "Monthly"];
+          const availableLevels = DATA_LEVELS.filter((l) => allowed.includes(l.value));
+          const currentLabel = DATA_LEVELS.find((l) => l.value === dataLevel)?.label ?? "Daily";
+          const fixed = availableLevels.length === 1;
+          return (
+            <div className="relative shrink-0" ref={resolutionRef}>
+              <span className={FIELD_LABEL}>{t("filter_resolution")}</span>
+              <button onClick={() => { if (!fixed) setResolutionOpen((o) => !o); }} disabled={fixed}
+                title={fixed ? "Only one resolution fits this period" : undefined}
+                aria-haspopup="listbox" aria-expanded={resolutionOpen}
+                className={cn(FIELD, fixed ? FIELD_OFF : FIELD_ON, "w-[92px] justify-between")}>
+                <span className="truncate">{fixed ? availableLevels[0].label : currentLabel}</span>
+                <ChevronDown size={11} className={cn("text-slate-400 shrink-0 transition-transform duration-150", resolutionOpen && "rotate-180")} />
+              </button>
+              {resolutionOpen && (
+                <div className={cn(MENU, "min-w-[92px]")} role="listbox">
+                  {availableLevels.map(({ value, label }) => (
+                    <button key={value} onClick={() => handleDataLevel(value)} role="option" aria-selected={dataLevel === value}
+                      className={cn(MENU_ITEM, dataLevel === value ? MENU_ITEM_ON : MENU_ITEM_OFF)}>
+                      <span>{label}</span>
+                      {dataLevel === value && <Check size={10} className="text-[#1E4076] shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Apply — filters only run after confirmation */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={applyFilters}
+            disabled={!dirty || invalidRange}
+            title={invalidRange ? "Start date must be on or before end date" : dirty ? undefined : "No filter changes to apply"}
+            className={cn(
+              "h-7 inline-flex items-center gap-1 px-3 rounded-md border text-[11px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40",
+              dirty && !invalidRange
+                ? "border-[#1E4076] bg-[#1E4076] text-white hover:bg-[#16305C] hover:border-[#16305C]"
+                : "border-slate-200 bg-white text-slate-400 cursor-not-allowed"
+            )}
+          >
+            {t("action_apply")}
+            <ArrowRight size={12} />
+          </button>
+          {dirty && (
+            <button onClick={discardFilters}
+              className="h-7 px-2 rounded-md text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E4076]/40">
+              {t("action_discard")}
+            </button>
+          )}
+          {invalidRange && <span className="text-[10.5px] text-red-600">{t("filter_start")} &gt; {t("filter_end")}</span>}
+        </div>
+
+        {/* Spacer — pushes view/basis toggles to the far right */}
+        {(resolvedViews.length >= 2 || !!(ltBasis && onLtBasisChange)) && (
+          <div className="flex-1" />
+        )}
+
+        {ltBasis && onLtBasisChange && (
+          <div className="shrink-0">
+            <span className={FIELD_LABEL}>{t("filter_lt_from")}</span>
+            <div className={SEG}>
+              {(["created", "released"] as const).map((b) => (
+                <button key={b} onClick={() => onLtBasisChange(b)} aria-pressed={ltBasis === b}
+                  className={cn(SEG_ITEM, ltBasis === b ? "text-[#16305C]" : "text-slate-500 hover:text-slate-700")}>
+                  {ltBasis === b && (
+                    <motion.span layoutId="lt-basis-pill" className={SEG_PILL} style={{ zIndex: -1 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }} />
+                  )}
+                  {b === "created" ? t("toggle_po_created") : t("toggle_po_released")}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {resolvedViews.length >= 2 && (
+          <div className="shrink-0">
+            <span className={FIELD_LABEL}>{t("filter_view")}</span>
+            <div className={SEG}>
+              {resolvedViews.map(({ key, label, locked }) => (
+                <button key={key} onClick={() => { if (!locked) onViewChange(key); }}
+                  disabled={locked} aria-pressed={activeView === key}
+                  title={locked ? "Coming soon — data not connected yet" : undefined}
+                  className={cn(SEG_ITEM, "inline-flex items-center gap-1",
+                    locked ? "text-slate-300 cursor-not-allowed"
+                      : activeView === key ? "text-[#16305C]" : "text-slate-500 hover:text-slate-700")}>
+                  {locked && <Lock size={9} strokeWidth={2} />}
+                  {activeView === key && (
+                    <motion.span layoutId="view-pill" className={SEG_PILL} style={{ zIndex: -1 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }} />
+                  )}
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>
+    </header>
+  );
+}

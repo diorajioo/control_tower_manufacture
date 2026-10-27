@@ -1,0 +1,580 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useI18n } from "@/lib/i18n";
+import { useRouter } from "next/navigation";
+import { Droplets, Gauge, Zap, Users } from "lucide-react";
+import { Sidebar } from "@/components/dashboard/Sidebar";
+import { Header } from "@/components/dashboard/Header";
+import { SecurityOverlay } from "@/components/dashboard/SecurityOverlay";
+import { TrendChart } from "@/components/dashboard/TrendChart";
+import { SkeletonCard } from "@/components/dashboard/SkeletonCard";
+import { AIRisksPanel } from "@/components/dashboard/AIRisksPanel";
+import { AISummary } from "@/components/dashboard/AISummary";
+import { AlertPanel } from "@/components/dashboard/AlertPanel";
+import type { RiskPoResult } from "@/lib/riskScore";
+import { FloatingChat } from "@/components/dashboard/FloatingChat";
+import { OutputKPICard } from "@/components/dashboard/OutputKPICard";
+import { LeadTimeKPICard } from "@/components/dashboard/LeadTimeKPICard";
+import { RegularKPICard } from "@/components/dashboard/RegularKPICard";
+import { type StageStdPoint } from "@/components/dashboard/LeadTimeStageStdChart";
+import { type PlantBreakdown, type PlantActivity } from "@/components/dashboard/LeadTimePlantTable";
+import { TacticalView } from "@/components/dashboard/TacticalView";
+import { FitToScreen } from "@/components/ui/FitToScreen";
+import { formatThousands } from "@/lib/utils";
+import { alertsFromKpi, type KPIAlert } from "@/lib/alerts";
+import { KpiHighlightTarget } from "@/components/ui/KpiHighlight";
+import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
+import { trackFilterApplied, trackReportViewed, trackErrorShown, trackAlertDismissed } from "@/lib/analytics/events";
+
+interface KPIResponse {
+  leadTime: {
+    grossDays: number;
+    grossReleasedDays?: number;
+    nettDays: number;
+    grossTrend: number | null;
+    nettTrend: number | null;
+    byPositionNett: { position: string; avgHours: number }[];
+    byPositionGross: { position: string; avgHours: number }[];
+    sparkline: number[];
+    composition?: {
+      vaDays: number; nnvaDays: number; unvaDays: number; wipDays: number;
+      vaPrev: number; nnvaPrev: number; unvaPrev: number; wipPrev: number;
+      vaTrend: number | null; nnvaTrend: number | null;
+      unvaTrend: number | null; wipTrend: number | null;
+      vaMonthly: number[]; nnvaMonthly: number[];
+      unvaMonthly: number[]; wipMonthly: number[];
+      vaWeekly: number[]; nnvaWeekly: number[];
+      unvaWeekly: number[]; wipWeekly: number[];
+    };
+    groupProcess?: { activity: string; avgDays: number; pct: number; poCount: number }[];
+    maxGrossDays?: number;
+    avgPoStageDays?: number;
+    poCount?: number;
+  };
+  yield: {
+    bulkLossPct: number;
+    packLossPct: number;
+    bulkLossKg: number;
+    bulkLossTrend: number | null;
+    packLossTrend: number | null;
+    sparkline: number[];
+  };
+  rightFirstTime: { value: number; trend: number | null; sparkline: number[] };
+  output: {
+    bulkQty: number; fgQty: number;
+    fgPrev?: number; bulkPrev?: number;
+    fgTrend: number | null; bulkTrend: number | null;
+    sparkline: number[]; bulkSparkline: number[];
+  };
+  oee: { value: number; quality: number; performance: number; byPlant: { PLANT: string; OEE: number }[]; trend: number | null; sparkline: number[] };
+  productivity: {
+    e2e: number;
+    e2ePrev?: number;
+    upstream: number;
+    downstream: number;
+    byPlant: { PLANT: string }[];
+    e2eTrend?: number | null;
+    manhours: number;
+    avgOperators: number;
+    sparkline: number[];
+    stages?: Record<"mixing" | "filpac", { value: number; prev: number; trend: number | null; sparkline: number[] }>;
+  };
+}
+
+// Productivity card toggle: E2E (CT_MANUF_E2E) · Mixing (CT_MANUF_OLAH) · Filpac (CT_MANUF_KEMAS) — getStageProductivity()
+type ProdView = "e2e" | "mixing" | "filpac";
+const PROD_VIEWS: Record<ProdView, { label: string; unit: string; sparkUnit: string; footer: string }> = {
+  e2e:    { label: "Productivity", unit: "pcs/manhour", sparkUnit: "pcs/mh", footer: "Output per operator manhour, end to end" },
+  mixing: { label: "Productivity", unit: "kg/manhour",  sparkUnit: "kg/mh",  footer: "Released bulk per operator manhour in Mixing" },
+  filpac: { label: "Productivity", unit: "pcs/manhour", sparkUnit: "pcs/mh", footer: "Good pcs per operator manhour in Filpac" },
+};
+
+interface Filters {
+  plant: string;
+  startDate: string;
+  endDate: string;
+  dataLevel: string;
+  period: string;
+}
+
+
+
+export default function DashboardPage() {
+  const { status } = useSession();
+  const router = useRouter();
+  const { t } = useI18n();
+
+  const [kpi,           setKpi]           = useState<KPIResponse | null>(null);
+  const [plants,        setPlants]        = useState<string[]>(["All Plant"]);
+  const [loading,       setLoading]       = useState(true);
+  const [lastUpdated,   setLastUpdated]   = useState<Date>();
+  const [alerts,        setAlerts]        = useState<KPIAlert[]>([]);
+  const [dismissedIds,  setDismissedIds]  = useState<Set<string>>(new Set());
+  const [alertPanelOpen, setAlertPanelOpen] = useState(false);
+  const [activeView,    setActiveView]    = useState<"strategic" | "tactical">("strategic");
+  const [ltBasis,       setLtBasis]       = useState<"created" | "released">("created");
+  const [kpiType,       setKpiType]       = useState("leadtime");
+  const [prodView,      setProdView]      = useState<ProdView>("e2e");
+  const [fetchError,    setFetchError]    = useState<string | null>(null);
+  const [filters, setFilters] = useState<Filters>(() => {
+    const defaults: Filters = {
+      plant:     "All Plant",
+      startDate: `${new Date().getFullYear()}-01-01`,
+      endDate:   new Date().toISOString().split("T")[0],
+      dataLevel: "Daily",
+      period:    "YTD",
+    };
+    try {
+      const stored = localStorage.getItem("ct-filters");
+      return stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
+    } catch { return defaults; }
+  });
+  const [refreshCount,  setRefreshCount]  = useState(0);
+  const [stageStd,      setStageStd]      = useState<StageStdPoint[] | null>(null);
+  const [stageLoading,  setStageLoading]  = useState(false);
+  const [plantLT,       setPlantLT]       = useState<{ plants: PlantBreakdown[]; targetDays: number; activities: PlantActivity[] } | null>(null);
+  const [riskScores,      setRiskScores]      = useState<RiskPoResult[]>([]);
+  const [riskLoading,     setRiskLoading]     = useState(true);
+  const [riskModelMissing, setRiskModelMissing] = useState(false);
+  const [undoId, setUndoId] = useState<string | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sentAlertIds = useRef<Set<string>>(new Set());
+  // KPI card sparkline click → trend chart switches to that KPI and scrolls into view
+  const trendRef = useRef<HTMLDivElement>(null);
+  const showTrend = useCallback((k: string) => {
+    setKpiType(k);
+    trendRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, []);
+  const teamsSettingsRef = useRef<{ enabled?: boolean; recipients?: Array<{ email: string; kpis: Record<string, boolean> }> } | null>(null);
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.replace("/login");
+  }, [status, router]);
+
+  // Tactical view: lead time per stage vs standard — fetched only while the view is open
+  useEffect(() => {
+    if (activeView !== "tactical") return;
+    let cancelled = false;
+    setStageLoading(true);
+    const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, period: filters.period, basis: ltBasis });
+    fetch(`/api/lead-time/stages?${params}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) { setStageStd(d.stages ?? []); setPlantLT({ plants: d.plants ?? [], targetDays: d.targetDays ?? 13, activities: d.activities ?? [] }); } })
+      .catch(() => { if (!cancelled) { setStageStd([]); setPlantLT({ plants: [], targetDays: 13, activities: [] }); } })
+      .finally(() => { if (!cancelled) setStageLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeView, filters.plant, filters.startDate, filters.endDate, filters.period, ltBasis, refreshCount]);
+
+  useEffect(() => {
+    fetch("/api/dashboard/plants")
+      .then((r) => r.json())
+      .then((d) => setPlants(d.plants ?? ["All Plant"]));
+  }, []);
+
+  // Fetch Teams settings from server on mount so auto-send uses up-to-date config
+  useEffect(() => {
+    fetch("/api/settings/teams")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          teamsSettingsRef.current = data;
+          localStorage.setItem("ct-teams-settings", JSON.stringify(data));
+        } else {
+          try {
+            const raw = localStorage.getItem("ct-teams-settings");
+            if (raw) teamsSettingsRef.current = JSON.parse(raw);
+          } catch { /* ignore */ }
+        }
+      })
+      .catch(() => {
+        try {
+          const raw = localStorage.getItem("ct-teams-settings");
+          if (raw) teamsSettingsRef.current = JSON.parse(raw);
+        } catch { /* ignore */ }
+      });
+  }, []);
+
+  // Risk score: fetch once per plant change (15-min server cache)
+  useEffect(() => {
+    setRiskLoading(true);
+    const params = new URLSearchParams({ plant: filters.plant });
+    fetch(`/api/risk-score?${params}`)
+      .then((r) => r.json())
+      .then((d: { scores?: RiskPoResult[]; modelMissing?: boolean }) => {
+        setRiskScores(d.scores ?? []);
+        setRiskModelMissing(d.modelMissing ?? false);
+      })
+      .catch(() => setRiskScores([]))
+      .finally(() => setRiskLoading(false));
+  }, [filters.plant]);
+
+  const fetchData = useCallback(async (f: Filters) => {
+    setLoading(true);
+    setKpi(null);
+    setFetchError(null);
+    const params = new URLSearchParams({
+      plant:     f.plant,
+      startDate: f.startDate,
+      endDate:   f.endDate,
+      period:    f.period,
+    });
+    try {
+      const [kpiRes] = await Promise.all([
+        fetch(`/api/dashboard/kpi?${params}`).then((r) => r.json()),
+      ]);
+      if (!kpiRes?.leadTime) throw new Error(kpiRes?.error ?? "Invalid KPI response shape");
+      setKpi(kpiRes);
+      setLastUpdated(new Date());
+      setRefreshCount((n) => n + 1);
+      const newAlerts = alertsFromKpi(kpiRes);
+      setAlerts(newAlerts);
+      setDismissedIds(new Set());
+
+      // Auto-send new critical alerts to Teams (if configured).
+      // Only sends alert IDs not yet sent this session — prevents spam on every hourly refresh.
+      const newCritical = newAlerts.filter(
+        (a) => a.severity === "critical" && !sentAlertIds.current.has(a.id)
+      );
+      if (newCritical.length > 0) {
+        newCritical.forEach((a) => sentAlertIds.current.add(a.id));
+        const cfg = teamsSettingsRef.current;
+        const teamsRecipients = cfg?.enabled && cfg.recipients?.length ? cfg.recipients : undefined;
+        fetch("/api/notifications/teams", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            alerts: newCritical,
+            plant: f.plant,
+            period: f.period,
+            startDate: f.startDate,
+            endDate: f.endDate,
+            ...(teamsRecipients ? { recipients: teamsRecipients } : {}),
+          }),
+        }).catch(() => {/* silent — Teams is optional */});
+      }
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+      trackErrorShown({ report: "dashboard_strategic", error_type: "load_failed" });
+      setFetchError(
+        err instanceof Error ? err.message : "Failed to load data — try refreshing"
+      );
+      setLastUpdated(new Date());
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial load only — filter changes go through handleFilterChange which calls fetchData directly
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (status === "authenticated") fetchData(filters);
+  }, [status]);
+
+  const handleRefresh = useCallback(async () => {
+    try {
+      await fetch("/api/cache/revalidate", { method: "POST" });
+    } catch {/* silent */}
+    fetchData(filters);
+  }, [filters, fetchData]);
+
+  const handleFilterChange = (newFilters: Filters, trigger: "apply" | "reset" = "apply") => {
+    setFilters(newFilters);
+    try { localStorage.setItem("ct-filters", JSON.stringify(newFilters)); } catch { /* ignore */ }
+    const report = activeView === "tactical" ? "dashboard_tactical" : "dashboard_strategic";
+    trackFilterApplied(report, trigger, {
+      period: newFilters.period,
+      plant: Array.isArray(newFilters.plant) ? newFilters.plant.join(",") : (newFilters.plant ?? "All"),
+      data_level: newFilters.dataLevel ?? "",
+    });
+    fetchData(newFilters);
+  };
+
+  const handleDismissAlert = (id: string) => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    const alert = alerts.find((a) => a.id === id);
+    if (alert) trackAlertDismissed({ report: "dashboard_strategic", alert_type: alert.kpi.toLowerCase().replace(/[\s-]+/g, "_") });
+    setDismissedIds((prev) => new Set(Array.from(prev).concat(id)));
+    setUndoId(id);
+    undoTimerRef.current = setTimeout(() => setUndoId(null), 5000);
+  };
+
+  const handleUndoDismiss = () => {
+    if (!undoId) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setDismissedIds((prev) => { const next = new Set(Array.from(prev)); next.delete(undoId); return next; });
+    setUndoId(null);
+  };
+
+  const visibleAlerts = alerts.filter((a) => !dismissedIds.has(a.id));
+
+  const bulkLossTrendInverted  = kpi?.yield?.bulkLossTrend  != null ? -kpi.yield.bulkLossTrend  : undefined;
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f0eff8]">
+        <div className="w-7 h-7 border-2 border-[#1E4076] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const monitorUrl = `/monitor?page=strategic&plant=${encodeURIComponent(filters.plant)}&period=${encodeURIComponent(filters.period)}&startDate=${filters.startDate}&endDate=${filters.endDate}&dataLevel=${filters.dataLevel}`;
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-[#F7F8FA]">
+      <Sidebar />
+
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        <Header
+          plants={plants}
+          onFilterChange={handleFilterChange}
+          initialFilters={filters}
+          views={[{ key: "strategic", label: t("toggle_strategic") }, { key: "tactical", label: t("toggle_tactical") }]}
+          activeView={activeView}
+          onViewChange={(v) => {
+            const next = v as "strategic" | "tactical";
+            setActiveView(next);
+            trackReportViewed(next === "tactical" ? "dashboard_tactical" : "dashboard_strategic");
+          }}
+          onRefresh={handleRefresh}
+          isLoading={loading}
+          lastUpdated={lastUpdated}
+          alertCount={visibleAlerts.length}
+          onBellClick={() => setAlertPanelOpen(!alertPanelOpen)}
+          alerts={visibleAlerts}
+          onDismiss={handleDismissAlert}
+          onMonitorMode={() => router.push(monitorUrl)}
+          pageTitle="Manufacturing Overview"
+        />
+
+        <main className="flex-1 px-5 py-4 overflow-y-auto min-h-0 flex flex-col gap-3.5">
+          {fetchError && (
+            <div className="px-4 py-2.5 rounded-lg bg-red-50 border border-red-200 flex items-center justify-between gap-3">
+              <span className="text-[12px] text-red-600 font-medium">{fetchError}</span>
+              <button onClick={() => setFetchError(null)} className="text-red-400 hover:text-red-600 text-xs shrink-0">✕</button>
+            </div>
+          )}
+          {activeView === "strategic" && (<>
+
+          {/* AI Summary and the KPI alert bar belong to Overview Strategic only; the chat is on every page */}
+          <AISummary kpi={kpi} filters={filters} ready={!loading && kpi !== null} />
+
+          <AlertPanel
+            alerts={visibleAlerts}
+            onDismiss={handleDismissAlert}
+            plant={filters.plant}
+            period={filters.period}
+            startDate={filters.startDate}
+            endDate={filters.endDate}
+            riskScores={riskScores}
+            riskLoading={riskLoading}
+          />
+
+          {/* ── Row 1: Lead Time · Output · E2E Productivity (3 per row, compact regular cards) ── */}
+          <div className="grid grid-cols-3 gap-3.5">
+          {loading ? (
+            Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
+          ) : (<>
+            <KpiHighlightTarget id="leadtime">
+              <LeadTimeKPICard
+                compact
+                insightId="leadtime"
+                showBreakdown={false}
+                basisOverride="created"
+                onSparkClick={() => showTrend("leadtime")}
+                grossDays={kpi?.leadTime?.grossDays ?? 0}
+                nettDays={kpi?.leadTime?.nettDays ?? 0}
+                grossTrend={kpi?.leadTime?.grossTrend ?? null}
+                nettTrend={kpi?.leadTime?.nettTrend ?? null}
+                byPositionGross={kpi?.leadTime?.byPositionGross ?? []}
+                sparkline={kpi?.leadTime?.sparkline ?? []}
+                hasAlert={visibleAlerts.some((a) => a.id.startsWith("leadtime"))}
+              />
+            </KpiHighlightTarget>
+            <KpiHighlightTarget id="output">
+              <OutputKPICard
+                compact
+                insightId="output"
+                onSparkClick={() => showTrend("output")}
+                fgQty={kpi?.output?.fgQty ?? 0}
+                bulkQty={kpi?.output?.bulkQty ?? 0}
+                fgTrend={kpi?.output?.fgTrend ?? null}
+                bulkTrend={kpi?.output?.bulkTrend ?? null}
+                sparkline={kpi?.output?.sparkline ?? []}
+                bulkSparkline={kpi?.output?.bulkSparkline ?? []}
+              />
+            </KpiHighlightTarget>
+            <KpiHighlightTarget id="productivity">
+              {(() => {
+                const v = PROD_VIEWS[prodView];
+                const stage = prodView === "e2e" ? null : kpi?.productivity?.stages?.[prodView];
+                const value = prodView === "e2e" ? kpi?.productivity?.e2e : stage?.value;
+                const prev  = prodView === "e2e" ? kpi?.productivity?.e2ePrev : stage?.prev;
+                return (
+                  <RegularKPICard
+                    compact
+                    label={v.label}
+                    icon={<Users size={13} color="#8b5cf6" strokeWidth={1.75} />}
+                    value={kpi ? (value ?? 0).toFixed(1) : "—"}
+                    unit={v.unit}
+                    sparkUnit={v.sparkUnit}
+                    trend={(prodView === "e2e" ? kpi?.productivity?.e2eTrend : stage?.trend) ?? null}
+                    insightId={prodView === "e2e" ? "productivity" : undefined}
+                    info={v.footer}
+                    targetText="Target not defined"
+                    priorSuffix={prev ? `(${prev.toFixed(1)})` : undefined}
+                    onSparkClick={() => showTrend("productivity")}
+                    sparkline={(prodView === "e2e" ? kpi?.productivity?.sparkline : stage?.sparkline) ?? []}
+                    toggle={
+                      <SegmentedToggle
+                        ariaLabel="Productivity view"
+                        options={[{ key: "e2e", label: "E2E" }, { key: "mixing", label: "Mixing" }, { key: "filpac", label: "Filpac" }]}
+                        value={prodView}
+                        onChange={setProdView}
+                      />
+                    }
+                    footerRight={prodView === "e2e" && kpi?.productivity?.manhours ? `${formatThousands(Math.round(kpi.productivity.manhours))} mh` : undefined}
+                  />
+                );
+              })()}
+            </KpiHighlightTarget>
+          </>)}
+          </div>
+
+          {/* ── Row 2: OEE · Yield Loss · Energy (3 per row, compact regular cards) ── */}
+          <div className="grid grid-cols-3 gap-3.5">
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
+            ) : (
+              <>
+                {/* OEE — no data yet (CT_MANUF_KEMAS not connected) */}
+                <KpiHighlightTarget id="oee">
+                  <RegularKPICard
+                    compact
+                    noData
+                    label="OEE"
+                    icon={<Gauge size={13} color="#8b5cf6" strokeWidth={1.75} />}
+                    toggle={
+                      <SegmentedToggle
+                        ariaLabel="OEE view"
+                        options={[{ key: "oee", label: "OEE" }, { key: "sku", label: "OEE SKU", locked: true }]}
+                        value="oee"
+                        onChange={() => {}}
+                      />
+                    }
+                    value="—"
+                    unit="%"
+                    info="Overall equipment effectiveness. No data yet: CT_MANUF_KEMAS not connected."
+                    targetText="Target ≥ 65%"
+                  />
+                </KpiHighlightTarget>
+
+                {/* Yield Loss — no data yet (CT_MANUF_KEMAS not connected) */}
+                <KpiHighlightTarget id="yield">
+                  <RegularKPICard
+                    compact
+                    noData
+                    inverse
+                    label="Yield Loss"
+                    icon={<Droplets size={13} color="#f59e0b" strokeWidth={1.75} />}
+                    value="—"
+                    unit="%"
+                    info="Bulk and pack loss as % of input. No data yet: CT_MANUF_KEMAS not connected."
+                    targetText="Target ≤ 3%"
+                  />
+                </KpiHighlightTarget>
+
+                {/* Energy — no data yet */}
+                <KpiHighlightTarget id="energy">
+                  <RegularKPICard
+                    compact
+                    noData
+                    inverse
+                    label="Energy"
+                    icon={<Zap size={13} color="#eab308" strokeWidth={1.75} />}
+                    value="—"
+                    unit="kWh/unit"
+                    info="Energy per unit produced. No data yet: no source table."
+                    targetText="Target not defined"
+                  />
+                </KpiHighlightTarget>
+              </>
+            )}
+          </div>
+
+          {/* ── Row 3: Trend chart + AI Risks panel — shrink-0 so the flex column scrolls instead of squashing the chart ── */}
+          <div className="grid gap-3.5 shrink-0" style={{ gridTemplateColumns: "2fr 1fr", height: "420px" }}>
+            {loading ? (
+              <>
+                <div className="bg-white rounded-lg border border-[#EBEBEB] h-full animate-pulse" />
+                <div className="bg-white rounded-lg border border-[#EBEBEB] h-full animate-pulse" />
+              </>
+            ) : (
+              <>
+                <div ref={trendRef} className="h-full min-h-0 min-w-0">
+                  <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} fillHeight />
+                </div>
+                <AIRisksPanel
+                  kpi={kpi}
+                  alerts={visibleAlerts}
+                  filters={filters}
+                  ready={!loading && kpi !== null}
+                />
+              </>
+            )}
+          </div>
+
+          </>)}
+
+          {/* ── Tactical view ── */}
+          {activeView === "tactical" && (
+            <TacticalView
+              kpi={kpi}
+              loading={loading}
+              plantLT={plantLT}
+              stageStd={stageStd ?? []}
+              stageLoading={stageLoading}
+              ltBasis={ltBasis}
+              onLtBasisChange={(b) => { setLtBasis(b); trackFilterApplied("dashboard_tactical", "apply", { lt_basis: b }); }}
+              tacticalFilters={{
+                plant:     filters.plant,
+                startDate: filters.startDate,
+                endDate:   filters.endDate,
+                period:    filters.period,
+              }}
+            />
+          )}
+        </main>
+      </div>
+
+      <FloatingChat
+        filters={filters}
+        kpiSnapshot={kpi ? {
+          oee:              kpi.oee?.value,
+          oeePerformance:   kpi.oee?.performance,
+          oeeQuality:       kpi.oee?.quality,
+          leadTimeGross:    kpi.leadTime?.grossDays,
+          bulkLoss:         kpi.yield?.bulkLossPct,
+          packLoss:         kpi.yield?.packLossPct,
+          rft:              kpi.rightFirstTime?.value,
+          outputFg:         kpi.output?.fgQty,
+          outputBulk:       kpi.output?.bulkQty,
+          productivityE2e:  kpi.productivity?.e2e,
+        } : undefined}
+        kpi={kpi ? { leadTime: kpi.leadTime, output: kpi.output, productivity: kpi.productivity } : undefined}
+        alerts={visibleAlerts}
+      />
+      <SecurityOverlay />
+
+      {undoId && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1e293b] text-slate-100 text-[12px] px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 duration-200">
+          <span>{t("alert_dismissed")}</span>
+          <button onClick={handleUndoDismiss} className="text-blue-300 font-semibold hover:text-blue-200 transition-colors">
+            {t("alert_undo")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

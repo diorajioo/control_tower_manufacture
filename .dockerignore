@@ -18,3 +18,11 @@ data/
 README.md
 tests/
 .claude/
+
+# ── Project (Control Tower Manufacturing) ─────────────────────
+.next
+*.log
+*.tsbuildinfo
+k8s
+scripts/loadtest
+docs

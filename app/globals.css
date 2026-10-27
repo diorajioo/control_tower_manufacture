@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Lato', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  background-color: #f0f4f8;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+
+@keyframes dot-fade {
+  0%, 60%, 100% { opacity: 0.3; transform: scale(0.85); }
+  30% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes chart-tooltip-in {
+  from { opacity: 0; transform: scale(0.96) translateY(3px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+/* Floating AI chat panel — light pop from the launcher button (bottom-right); transform + opacity only */
+@keyframes chat-pop-in {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+.chat-pop-in {
+  transform-origin: bottom right;
+  animation: chat-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-pop-in { animation: none; }
+}
+
+@keyframes ui-fade-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ui-fade-in {
+  animation: ui-fade-in 0.22s ease forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-fade-in { animation: none; }
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  body::after {
+    visibility: visible !important;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    content: "Manufacturing Control Tower content is confidential and cannot be printed or exported.";
+    font-family: Lato, sans-serif;
+    font-size: 14px;
+    color: #64748b;
+    text-align: center;
+    display: block;
+    max-width: 400px;
+  }
+}
+
+/* Sidebar hidden / shown (components/dashboard/SidebarToggle.tsx), state = html[data-sidebar="collapsed"].
+   The menu slides (width), and the top bar's left padding grows with the same duration and easing, so
+   sidebar width + padding stays constant: the top bar content never moves. The logo block is fixed. */
+.ct-sidebar { width: 14rem; transition: width 200ms ease-out; }
+html[data-sidebar="collapsed"] .ct-sidebar { width: 0; }
+.ct-topbar-row { padding-left: 1rem; transition: padding-left 200ms ease-out; }
+html[data-sidebar="collapsed"] .ct-topbar-row { padding-left: 15rem; }  /* 14rem logo block + 1rem */
+.ct-topbar-pad { padding-top: 0; transition: padding-top 200ms ease-out; }
+html[data-sidebar="collapsed"] .ct-topbar-pad { padding-top: 52px; }      /* pages without a top bar (Settings) */
+.ct-icon-open { display: none; }
+html[data-sidebar="collapsed"] .ct-icon-open { display: block; }
+html[data-sidebar="collapsed"] .ct-icon-close { display: none; }
+@media (prefers-reduced-motion: reduce) { .ct-sidebar, .ct-topbar-row, .ct-topbar-pad { transition: none; } }
+
+/* KPI card: clickable sparkline (switches the trend chart) + "Open page →" link — hover and focus states */
+.kpi-spark { transition: background-color 150ms ease-out; }
+.kpi-spark:hover { background-color: #EEF4FB; }
+.kpi-spark:focus-visible, .kpi-open-link:focus-visible { outline: 2px solid #1E4076; outline-offset: 2px; }
+.kpi-open-link:hover { color: #16305C !important; text-decoration: underline !important; }

@@ -1,16 +1,15 @@
-# <project-slug>
+# Manufacturing Control Tower
 
-> Replace this whole file for your own project. Keep the four sections.
+Real-time KPI dashboard for PT Paracorp Group manufacturing operations. Built on Next.js 15 with live data from Snowflake and Azure AD authentication.
 
-## What this is
+## What it does
 
-One paragraph, in business language. Who uses this dashboard and what
-decision does it support?
+Displays Lead Time, Yield, Right First Time, Output, OEE, OPE, and Productivity across all plants in real time. Includes AI-generated executive summaries, Microsoft Teams alert notifications, an AI diagnostic chatbot, and a fullscreen Monitor Mode for factory floor display.
 
 ## Owner
 
 - Business owner: <name, email>
-- Technical contact: <name, email>
+- Technical contact: Dio Arioseno, dio.arioseno@paracorpgroup.com
 - Backup contact: <name, email>
 - Team: <team>
 
@@ -18,106 +17,85 @@ decision does it support?
 
 | System | Object | Refresh |
 |---|---|---|
-| Snowflake | `DB_X.SCHEMA_Y.TABLE_Z` | Hourly |
+| Snowflake | `MIGRATION.CONTROL_TOWER.CT_MANUF_*` (LEADTIME, E2E, OLAH, KEMAS, TRENDS) | Per ETL load; app cache 1 hour |
+| Snowflake | `DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_FG` / `_OLAH` | Per ETL load; app cache 1 hour |
+| ClickHouse (internal) | Same tables, used when `DATA_SOURCE=clickhouse` (Kubernetes) | Per ETL load; app cache 1 hour |
+
+## Tech stack
+
+Next.js 15 (App Router) · TypeScript · Tailwind CSS · Snowflake SDK · NextAuth.js + Azure AD · Groq API · Nivo charts · Framer Motion
+
+## Getting started
+
+```bash
+# Install dependencies
+npm install
+
+# Set up environment variables
+cp .env.example .env.local
+# Fill in values — see docs/SECURITY.md §9 for the required secrets
+
+# Run development server
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). You will be redirected to `/login` — use your Azure AD account.
+
+## Environment variables
+
+| Variable | Required | Notes |
+|---|---|---|
+| `SNOWFLAKE_ACCOUNT` | Yes | Account identifier (e.g. `yb58945.ap-southeast-3.aws`) |
+| `SNOWFLAKE_USER` | Yes | Service account username |
+| `SNOWFLAKE_PASSWORD` | Yes | Service account password |
+| `SNOWFLAKE_DATABASE` | Yes | e.g. `MIGRATION` |
+| `SNOWFLAKE_WAREHOUSE` | Yes | Compute warehouse name |
+| `SNOWFLAKE_SCHEMA` | Yes | e.g. `CONTROL_TOWER` |
+| `NEXTAUTH_SECRET` | Yes | 32+ char random string |
+| `NEXTAUTH_URL` | Yes | Canonical deployment URL |
+| `AZURE_AD_CLIENT_ID` | Yes | Azure AD app registration client ID |
+| `AZURE_AD_CLIENT_SECRET` | Yes | Azure AD app registration client secret |
+| `AZURE_AD_TENANT_ID` | Yes | Azure AD tenant ID |
+| `GROQ_API_KEY` | Yes | Groq API key for AI features |
+| `TEAMS_WEBHOOK_URL` | No | Power Automate webhook (Teams fallback) |
+| `TEAMS_REFRESH_TOKEN` | No | Teams Graph API refresh token |
+| `RESEND_API_KEY` | No | Resend API key for email notifications |
+
+## Key commands
+
+```bash
+npm run dev      # Development server with hot reload
+npm run build    # Production build
+npm run lint     # ESLint
+```
+
+## Documentation
+
+Start with [CLAUDE.md](CLAUDE.md) for the operating manual. Then:
+
+| Document | What's in it |
+|---|---|
+| [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) | Purpose, users, pages, routes |
+| [docs/FEATURES.md](docs/FEATURES.md) | Feature inventory |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Data flow, API routes, caching, AI |
+| [docs/BUSINESS_LOGIC.md](docs/BUSINESS_LOGIC.md) | KPI formulas and thresholds |
+| [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | Snowflake tables and columns |
+| [docs/UI_UX.md](docs/UI_UX.md) | Design system and component specs |
+| [docs/SECURITY.md](docs/SECURITY.md) | Auth, rate limiting, secrets checklist |
+| [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Bugs and technical debt |
+
+## Deployment
+
+Production deploys automatically to Vercel from the `main` branch. Snowflake and API credentials are set as Vercel environment variables.
 
 ## What is in this repository, and what is not
 
-This repository is **scaffolding**, not a starter app. The DAI Platform Team
-owns the files that protect you; you own the application and its Dockerfile.
-
-| Already here (do not delete) | Owner |
+| Platform Team files (do not delete) | Owner |
 |---|---|
-| `.gitignore` | Platform Team — stops `.env` and data files reaching Git |
-| `.dockerignore` | Platform Team — stops them reaching the image |
-| `.gitlab-ci.yml` | Platform Team — includes the shared pipeline |
-| `CLAUDE.md` | Platform Team (the rules) + you (project details) |
-| `.env.example` | Seeded by us, **extended by you** |
-| `CODEOWNERS` | Platform Team |
-| `.claude/skills/apply-event-tracking/` | Platform Team — the usage-tracking standard (OpenPanel). Claude Code loads it automatically; ask it to "add tracking". Copied from `paragon-is/dai/infra` `skills/apply-event-tracking` at commit `780bf21`: change it there, not here |
+| `.gitignore`, `.dockerignore` | Platform Team (project lines added below theirs) |
+| `CLAUDE.md` | Platform Team rules + project details |
+| `.env.example` | Seeded by Platform Team, extended by this project |
+| `.claude/skills/apply-event-tracking/` | Platform Team — usage-tracking standard |
 
-| You create this | Notes |
-|---|---|
-| Your application code | Whatever your app needs |
-| `requirements.txt` / `package.json` | Exact pinned versions |
-| **`Dockerfile`** | **Written alongside your app**, by you or Claude Code. We deliberately do not ship one — a Dockerfile depends on your real entrypoint, your dependencies and any system packages you need, so a generic one would be wrong for most apps. We review it before the first deployment and may adjust it; after that we help maintain it. |
-| `README.md` content | Replace this file with your own |
-
-## Run locally
-
-> Replace this block with the real commands once the stack is chosen. It is
-> left generic on purpose — this repository does not assume a language.
-
-```bash
-cp .env.example .env        # then fill in the real values
-# ... install dependencies for your stack
-# ... start the app
-```
-
-### Run it the way production runs it
-
-Whatever the stack, this is the test that matters, because it is what the
-pipeline does:
-
-```bash
-docker build -t myapp:test .
-docker run --rm -p 8080:8080 --env-file .env myapp:test
-curl -i http://localhost:8080/<your-health-path>   # must return 200
-```
-
-Substitute your own port and health path. Neither has to be 8080 or
-`/healthz` — they only have to match what your Dockerfile and your app
-actually use.
-
-## Before requesting a deployment
-
-1. Read the [**Web Dashboard Deployment Workbook**](https://paracorpgroup.sharepoint.com/:b:/s/DataEngineering/IQAUa-NHkX0bTaw5rnsqfo2IAfhNDsaqtEUxOWqfs1CQvNk?e=BQBZBJ).
-2. Run the test suite in workbook section 2.7 (Claude Code can run it for you).
-3. Download and complete the [**Deployment Request & Pre-Flight Checklist**](https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQBY5zjYR9fYTqzk_WlfUeV2AfdOqtgfLCFBCYJpsngclxg?e=Gpjiwk) document.
-4. Send it to the DAI Platform Team through submiting a ticket in [**DAI Platform Squad JIRA**](https://paracorpgroup.atlassian.net/jira/software/projects/IDE/boards/1465).
-
-## Reference documents
-
-| Document | What it is for |
-|---|---|
-| [**Web Dashboard Deployment Workbook**](https://paracorpgroup.sharepoint.com/:b:/s/DataEngineering/IQAUa-NHkX0bTaw5rnsqfo2IAfhNDsaqtEUxOWqfs1CQvNk?e=BQBZBJ) | Read this first. What to build, and why each rule exists. |
-| [**Deployment Request & Pre-Flight Checklist**](https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQBY5zjYR9fYTqzk_WlfUeV2AfdOqtgfLCFBCYJpsngclxg?e=Gpjiwk) | Fill in before you ask for a deployment. <!-- PLATFORM TEAM: add the SharePoint link here --> |
-
-Both live on the Data Engineering SharePoint site and need your company sign-in.
-
-## Moving in an app you already built
-
-Normal case, not an exception. Do not merge your old Git history into this
-repository — copy the files across instead.
-
-```bash
-# from inside this repository
-cp ~/projects/my-old-folder/app.py           .
-cp ~/projects/my-old-folder/requirements.txt .
-cp ~/projects/my-old-folder/.env             .   # copied, never committed
-git checkout -b staging
-git add -A && git status      # read the list before committing
-git commit -m "Move dashboard in from local development"
-git push -u origin staging
-```
-
-**Bring your `Dockerfile` with you** if you already have one — it belongs with
-your app. If you do not have one yet, ask Claude Code to write it (see the
-rules in `CLAUDE.md`).
-
-**Keep the files already in this repository** — `.gitignore`, `.dockerignore`,
-`CLAUDE.md` and `.gitlab-ci.yml`. Do not overwrite them with your old versions.
-**Leave behind** your `.venv/` or `node_modules/`, any data files, notebooks,
-and your old `.git` folder.
-
-Easiest route: paste the migration prompt from section 2.2 of the workbook
-into Claude Code and let it do the copying and the readiness check.
-
-The pipeline will then tell you exactly what still needs fixing. Two or three
-failures on the first push is normal for an app built before reading the
-contract.
-
-## Files you should not delete
-
-`.gitignore`, `.dockerignore`, `.gitlab-ci.yml` and the platform rules section
-of `CLAUDE.md` are your protection against committing a credential or shipping
-an image that will not deploy. Extend them if you need to; do not remove them.
+Application code, `package.json` + `pnpm-lock.yaml` (exact pins), `Dockerfile` and `k8s/` belong to this project.
+Data files, `.env*`, `node_modules/` and the old Git history are not in this repository.

@@ -53,3 +53,16 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# ── Project (Control Tower Manufacturing) ─────────────────────
+.env.local
+.next/
+out/
+*.tsbuildinfo
+# Claude Code: keep local settings and private skills out, ship the platform skill
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/apply-event-tracking/
+# Kubernetes secret (template: k8s/secret.example.yaml)
+k8s/secret.yaml
