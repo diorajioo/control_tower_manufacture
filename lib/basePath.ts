@@ -58,3 +58,14 @@ export const SESSION_COOKIE = AUTH_COOKIES.sessionToken.name;
 
 /** Marks the next Microsoft sign-in as "connect this account as the Teams sender" (Settings). */
 export const CONNECT_SENDER_COOKIE = cookie("connect-sender");
+
+/**
+ * Absolute session lifetime: 7 days from sign-in (user decision 2026-10-28). next-auth slides the
+ * cookie's expiry on every visit, so the age is checked against the sign-in time (`authAt`, set in
+ * lib/auth.ts) — by middleware here and by the jwt callback. No `authAt` (issued before) = expired.
+ */
+export const SESSION_MAX_AGE_S = 7 * 24 * 60 * 60;
+
+export function isSessionFresh(token: Record<string, unknown> | null | undefined, now = Date.now()): boolean {
+  return typeof token?.authAt === "number" && now - token.authAt < SESSION_MAX_AGE_S * 1000;
+}

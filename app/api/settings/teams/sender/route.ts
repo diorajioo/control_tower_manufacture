@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { disconnectSender } from "@/lib/settings";
 import { isServerAdmin } from "@/lib/serverAdmin";
+import { senderMarker } from "@/lib/senderMarker";
 
 /**
  * POST: start connecting the signed-in admin as the sender of Teams notifications. The session
@@ -17,8 +18,12 @@ export async function POST() {
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isServerAdmin(session.user.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const sub = (session.user as { id?: string }).id;
+  if (!sub) return NextResponse.json({ error: "Session has no account id — sign in again" }, { status: 400 });
+
   const res = NextResponse.json({ signIn: true });
-  res.cookies.set(CONNECT_SENDER_COOKIE.name, "1", { ...CONNECT_SENDER_COOKIE.options, maxAge: 600 });
+  // Bound to this admin's account and 10 minutes (lib/senderMarker.ts)
+  res.cookies.set(CONNECT_SENDER_COOKIE.name, senderMarker(sub), { ...CONNECT_SENDER_COOKIE.options, maxAge: 600 });
   return res;
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { SESSION_COOKIE } from "@/lib/basePath";
+import { SESSION_COOKIE, isSessionFresh } from "@/lib/basePath";
 
 // ── In-memory rate limiter ────────────────────────────────────────────────────
 // Per-serverless-instance; Vercel also applies edge-level DDoS protection.
@@ -49,7 +49,8 @@ export async function middleware(req: NextRequest) {
   if (["/dashboard", "/lead-time", "/monitor"].some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, cookieName: SESSION_COOKIE });
     // Relative: behind the ingress the server only knows its own bind address (0.0.0.0:3000)
-    if (!token) return loginRedirect(req, "callbackUrl", `${req.nextUrl.basePath}${pathname}${req.nextUrl.search}`);
+    // getToken only decodes the cookie (no callbacks), so the absolute 7-day limit is checked here too
+    if (!token || !isSessionFresh(token)) return loginRedirect(req, "callbackUrl", `${req.nextUrl.basePath}${pathname}${req.nextUrl.search}`);
   }
 
   // ── 2. CSRF: state-changing API calls must come from this host ───────────────

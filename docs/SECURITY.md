@@ -89,7 +89,7 @@ API responses ke client hanya mengembalikan pesan generik. Detail error (pesan S
 
 ### Session lifetime — **7 days** (`lib/auth.ts`, since 2026-10-28)
 
-The session cookie holds identity only (id, name, email) — no Microsoft tokens: they made the sign-in response headers too large for the Kong ingress (502 / AADSTS54005). With no refresh token there is no hourly re-check with Microsoft, so a session lasts `maxAge` = 7 days; a disabled account keeps access for at most that long (user decision). The Teams sender's refresh token is captured server-side during a sign-in started from Settings → Teams → Connect and stored encrypted in the notification store.
+The session cookie holds identity only (id, name, email) — no Microsoft tokens: they made the sign-in response headers too large for the Kong ingress (502 / AADSTS54005). With no refresh token there is no hourly re-check with Microsoft, so a session lasts 7 days **from sign-in, absolute** (`authAt` in the JWT, checked by `isSessionFresh()` in the jwt callback and in middleware — next-auth itself slides the cookie expiry on every visit); a disabled account keeps access for at most that long (user decision). Sessions without `authAt` (issued before 2026-10-28) are rejected → one re-login. The Teams sender's refresh token is captured server-side during a sign-in started from Settings → Teams → Connect, only when the marker cookie carries a valid HMAC for the same account (`lib/senderMarker.ts`, 10 minutes), and stored encrypted in the notification store. Checks: `npx tsx scripts/check-session.ts`.
 
 ### Teams message injection — **Implemented** (`lib/alerts/teams.ts`, `lib/graph/teams.ts`)
 

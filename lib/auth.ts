@@ -1,9 +1,11 @@
 import { NextAuthOptions } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import { cookies } from "next/headers";
 import AzureADProvider from "next-auth/providers/azure-ad";
-import { AUTH_COOKIES, CONNECT_SENDER_COOKIE, safeRedirect, withBase } from "@/lib/basePath";
+import { AUTH_COOKIES, CONNECT_SENDER_COOKIE, SESSION_MAX_AGE_S, isSessionFresh, safeRedirect, withBase } from "@/lib/basePath";
 import { connectSender } from "@/lib/settings";
 import { isServerAdmin } from "@/lib/serverAdmin";
+import { isSenderMarkerValid } from "@/lib/senderMarker";
 
 // Delegated Graph scopes for Teams DM notifications, requested at every sign-in so the account can be
 // connected as the Teams sender (connectSenderIfRequested). Chat.Create + ChatMessage.Send do NOT
@@ -15,12 +17,14 @@ const GRAPH_SCOPES = "User.Read User.ReadBasic.All Chat.Create ChatMessage.Send 
  * back (here, inside /api/auth/callback) this account's refresh token is stored, encrypted, as the
  * Teams sender — server-side, so it never travels in the session cookie.
  */
-async function connectSenderIfRequested(email: string | null | undefined, name: string | null | undefined, refreshToken: string) {
+async function connectSenderIfRequested(token: JWT, refreshToken: string) {
   const jar = await cookies();
-  if (!jar.get(CONNECT_SENDER_COOKIE.name)) return;
+  const marker = jar.get(CONNECT_SENDER_COOKIE.name)?.value;
+  if (!marker) return;
   try { jar.set(CONNECT_SENDER_COOKIE.name, "", { ...CONNECT_SENDER_COOKIE.options, maxAge: 0 }); } catch { /* expires on its own */ }
-  if (!email || !isServerAdmin(email)) return;
-  await connectSender({ email, name: name ?? undefined, refreshToken })
+  // Only the admin who clicked Connect, within 10 minutes (HMAC-bound marker, lib/senderMarker.ts)
+  if (!isSenderMarkerValid(marker, token.sub) || !token.email || !isServerAdmin(token.email)) return;
+  await connectSender({ email: token.email, name: token.name ?? undefined, refreshToken })
     .catch((err) => console.error("[auth] connecting the Teams sender failed:", err));
 }
 
@@ -57,12 +61,18 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     redirect: ({ url, baseUrl }) => safeRedirect(url, baseUrl),
     async jwt({ token, account }) {
-      if (account?.refresh_token) await connectSenderIfRequested(token.email, token.name, account.refresh_token);
-      // Identity only. Microsoft's access + refresh tokens (~5-8 KB encrypted) pushed the Set-Cookie
-      // headers past the ingress's response-header buffer: Kong answered the sign-in callback with a
-      // 502, or retried it and Microsoft refused the reused code (AADSTS54005). Deleting the keys
-      // also slims sessions issued before this change.
-      for (const key of ["accessToken", "refreshToken", "expiresAt", "error"]) delete token[key];
+      // The token holds identity + sign-in time only. Microsoft's access + refresh tokens (~6 KB
+      // encrypted) pushed the Set-Cookie headers past the ingress's response-header buffer: Kong
+      // answered the sign-in callback with a 502, or retried it and Microsoft refused the reused code
+      // (AADSTS54005).
+      if (account) {
+        token.authAt = Date.now();
+        if (account.refresh_token) await connectSenderIfRequested(token, account.refresh_token);
+      }
+      // Absolute lifetime from sign-in; also rejects sessions issued before authAt existed (incl. the
+      // old ones carrying Microsoft tokens or a failed-refresh flag). Throwing makes next-auth clear
+      // the cookie and answer with no session, so getServerSession() returns null everywhere.
+      if (!isSessionFresh(token)) throw new Error("Session expired or issued before 2026-10-28: sign in again");
       return token;
     },
     async session({ session, token }) {
@@ -72,8 +82,8 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  // 7 days, then sign in again (usually one click with Microsoft SSO). Without a refresh token in the
-  // session there is no hourly check with Microsoft any more, so this is also how long a disabled
-  // account keeps access (user decision 2026-10-28).
-  session: { strategy: "jwt", maxAge: 7 * 24 * 60 * 60 },
+  // 7 days from sign-in, absolute (isSessionFresh), then sign in again — usually one click with
+  // Microsoft SSO. With no refresh token in the session there is no hourly check with Microsoft, so
+  // this is also the longest a disabled account keeps access (user decision 2026-10-28).
+  session: { strategy: "jwt", maxAge: SESSION_MAX_AGE_S },
 };
