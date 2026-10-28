@@ -757,10 +757,12 @@ export async function getOutputMix(filters: QueryFilters, dim: OutputGroupDim = 
   const pb = [...plantBinds(filters.plant), ...outputSelWhere(sel).binds];
   const sw = outputSelWhere(sel).sql;
   const col = OUTPUT_GROUP_COL[dim];
+  // GRP_RAW, not GRP: with COALESCE(GRP, …) AS GRP, ClickHouse reads GRP in GROUP BY as the alias
+  // (Code 215 "not under aggregate function"); Snowflake reads the column.
   const perPo = `
     SELECT
       PROCESS_ORDER_FG,
-      MAX(${col})        AS GRP,
+      MAX(${col})        AS GRP_RAW,
       MAX(PRODUCT_CODE)  AS PRODUCT_CODE,
       MAX(PRODUCT_NAME)  AS PRODUCT_NAME,
       MAX(RELEASE_QTY)   AS QTY
@@ -773,11 +775,11 @@ export async function getOutputMix(filters: QueryFilters, dim: OutputGroupDim = 
   const [groups, skus] = await Promise.all([
     part === "skus" ? Promise.resolve([]) : executeQuery<{ GRP: string; QTY_PO: number; QTY_REAL: number }>(`
       SELECT
-        COALESCE(GRP, '(Not set)')        AS GRP,
+        COALESCE(GRP_RAW, '(Not set)')    AS GRP,
         COUNT(DISTINCT PROCESS_ORDER_FG)  AS QTY_PO,
         SUM(QTY)                          AS QTY_REAL
       FROM (${perPo}) per_po
-      GROUP BY COALESCE(GRP, '(Not set)')
+      GROUP BY COALESCE(GRP_RAW, '(Not set)')
       ORDER BY QTY_REAL DESC
     `, [...dateBinds, ...pb]),
     part === "groups" ? Promise.resolve([]) : executeQuery<{ PRODUCT_CODE: string; PRODUCT_NAME: string; QTY_PO: number; QTY_REAL: number; PCT_CONTRIBUTION: number }>(`
