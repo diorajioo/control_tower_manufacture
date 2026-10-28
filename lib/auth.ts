@@ -51,6 +51,18 @@ export const authOptions: NextAuthOptions = {
       authorization: {
         params: { scope: `openid profile email ${GRAPH_SCOPES}` },
       },
+      // The stock profile() also fetches the Graph profile photo during the OAuth callback. Nothing
+      // shows it, it bloats the session cookie, and when graph.microsoft.com is slow or blocked
+      // (cluster egress) the callback hangs: the ingress retries it, the code is redeemed twice,
+      // and sign-in fails with AADSTS54005.
+      profile(profile) {
+        return {
+          id:    profile.sub,
+          name:  profile.name,
+          email: profile.email ?? profile.preferred_username,
+          image: null,
+        };
+      },
     }),
   ],
   // next-auth knows nothing of Next's basePath: its pages and redirects carry it explicitly.
