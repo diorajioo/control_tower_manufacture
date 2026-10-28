@@ -66,7 +66,8 @@ const empty = (): NotifState => ({ enabled: false, recipients: [], sentAlerts: {
 // ── Encryption (sender refresh token only) ────────────────────────────────────
 
 function key(): Buffer {
-  const secret = process.env.NOTIF_STORE_KEY ?? process.env.NEXTAUTH_SECRET;
+  // || not ??: an empty NOTIF_STORE_KEY (a blank Secret key) falls back too
+  const secret = process.env.NOTIF_STORE_KEY || process.env.NEXTAUTH_SECRET;
   if (!secret) throw new Error("NOTIF_STORE_KEY or NEXTAUTH_SECRET is required to store the sender token");
   return createHash("sha256").update(secret).digest();
 }
@@ -82,7 +83,8 @@ function decrypt(box: string): string | null {
   try {
     const [v, iv, tag, data] = box.split(":");
     if (v !== "v1") return null;
-    const d = createDecipheriv("aes-256-gcm", key(), Buffer.from(iv, "base64"));
+    // Full 16-byte tag only (what encrypt() writes): a truncated tag would weaken the GCM check
+    const d = createDecipheriv("aes-256-gcm", key(), Buffer.from(iv, "base64"), { authTagLength: 16 });
     d.setAuthTag(Buffer.from(tag, "base64"));
     return Buffer.concat([d.update(Buffer.from(data, "base64")), d.final()]).toString("utf8");
   } catch {
