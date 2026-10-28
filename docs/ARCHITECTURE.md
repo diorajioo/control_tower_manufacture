@@ -146,8 +146,8 @@ User opens /dashboard
 
 1. User visits `/` → middleware checks session → redirects to `/login` if unauthenticated.
 2. Login page: Azure AD OAuth2 via NextAuth.js. User authenticates with corporate Microsoft account.
-3. Session stored in signed JWT cookie (NextAuth default).
-4. If Azure AD refresh token fails: `session.expires` is set to epoch 0; middleware redirects to `/login?error=SessionExpired`.
+3. Session stored in an encrypted JWT cookie with identity only (no Microsoft tokens — they overflowed the ingress's response-header buffer); it lasts 7 days.
+4. Settings → Teams → Connect sets a short-lived marker cookie and signs in again; the callback stores that sign-in's refresh token as the Teams sender, server-side (`lib/auth.ts`).
 5. Every API route verifies session before touching Snowflake.
 
 ## Monitor Mode Architecture

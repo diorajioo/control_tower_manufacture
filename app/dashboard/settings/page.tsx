@@ -2,7 +2,7 @@
 
 import { withBase } from "@/lib/basePath";
 import { Suspense, useState, useEffect, useRef } from "react";
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Session } from "next-auth";
 import {
@@ -1231,8 +1231,8 @@ function TeamsTab({
     const res = await fetch(withBase("/api/settings/teams/sender"), { method: "POST" }).catch(() => null);
     const d = res ? await res.json().catch(() => ({})) : {};
     if (!res?.ok) { setSenderState("error"); setSenderMsg(d.error ?? "Could not connect the sender"); return; }
-    setSenderState("idle");
-    await reloadSender();
+    // Microsoft sign-in; on the way back the server stores this account as the sender (lib/auth.ts)
+    await signIn("azure-ad", { callbackUrl: withBase("/dashboard/settings?s=notifikasi") });
   };
   const disconnectSender = async () => {
     setSenderState("busy"); setSenderMsg("");
@@ -1255,7 +1255,7 @@ function TeamsTab({
       const data = (await res.json()) as { ok?: boolean; error?: string; hint?: string; sent?: number; errors?: string[] };
       if (!res.ok) {
         const hint = data.hint === "sign-out-signin"
-          ? " Try signing out and back in to refresh Teams permissions."
+          ? " Connect the sender again (Teams → Sender) to refresh its Teams permissions."
           : "";
         throw new Error((data.error ?? "Failed to send") + hint);
       }

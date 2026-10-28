@@ -4,6 +4,11 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-10-28
+
+### Fixed
+- **Sign-in on Kubernetes (Kong)**: the session cookie no longer carries Microsoft's access + refresh tokens. Their ~5-8 KB of `Set-Cookie` overflowed Kong's response-header buffer, so the sign-in callback failed with a 502 or, after Kong's retry, `AADSTS54005` (code already redeemed). The cookie now holds identity only; sessions last 7 days from sign-in, absolute (`authAt` + `isSessionFresh()`; next-auth's own expiry slides). Sessions issued before this change are rejected once (sign in again) — this also stops old sessions flagged with a failed refresh from being revived. The Teams sender is connected through a fresh Microsoft sign-in started from Settings; the marker cookie is an HMAC bound to the clicking admin for 10 minutes (`lib/senderMarker.ts`), and `lib/auth.ts` stores the refresh token server-side. Interactive Teams sends use the connected sender / app token / `TEAMS_REFRESH_TOKEN`, no longer the user's own token, and `/api/auth/session` no longer hands the Graph access token to the browser.
+
 ## 2026-10-27
 
 ### Added
