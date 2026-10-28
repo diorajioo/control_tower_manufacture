@@ -81,8 +81,7 @@ export const authOptions: NextAuthOptions = {
       }
       (session.user as typeof session.user & { isAdmin: boolean }).isAdmin =
         isServerAdmin(token.email as string);
-      (session as unknown as Record<string, unknown>).accessToken = token.accessToken;
-      (session as unknown as Record<string, unknown>).error       = token.error;
+      (session as unknown as Record<string, unknown>).error = token.error;
       // Expire the session immediately so middleware redirects to re-login
       if (token.error === "RefreshAccessTokenError") {
         (session as unknown as Record<string, unknown>).expires = new Date(0).toISOString();

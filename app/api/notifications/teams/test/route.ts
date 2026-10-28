@@ -29,17 +29,11 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json().catch(() => ({})) as {
-    kind?: "alert" | "summary";
-    recipients?: Array<Partial<RecipientConfig> & { email: string }>;
-  };
+  const body = await req.json().catch(() => ({})) as { kind?: "alert" | "summary" };
   const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   const sessionToken = jwt?.accessToken as string | undefined;
 
-  // Recipients being edited in Settings (may be unsaved) > saved ones
-  const recipients: RecipientConfig[] = Array.isArray(body.recipients) && body.recipients.length > 0
-    ? body.recipients.filter((r) => typeof r?.email === "string").map(normalizeRecipient)
-    : (await getTeamsSettings()).recipients;
+  const recipients: RecipientConfig[] = (await getTeamsSettings()).recipients;
 
   const fail = (errors: string[]) => NextResponse.json(
     { error: errors.join("; "), hint: errors[0]?.includes("token") ? "sign-out-signin" : undefined },

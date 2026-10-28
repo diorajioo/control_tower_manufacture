@@ -228,6 +228,9 @@ export default function DashboardPage() {
       setKpi(kpiRes);
       setLastUpdated(new Date());
       setRefreshCount((n) => n + 1);
+      if (Array.isArray(kpiRes._errors) && kpiRes._errors.length > 0) {
+        setFetchError(`Some KPIs could not be loaded (${(kpiRes._errors as string[]).join(", ")}) — showing last known values. Try refreshing.`);
+      }
       const newAlerts = alertsFromKpi(kpiRes);
       setAlerts(newAlerts);
       setDismissedIds(new Set());
@@ -239,8 +242,6 @@ export default function DashboardPage() {
       );
       if (newCritical.length > 0) {
         newCritical.forEach((a) => sentAlertIds.current.add(a.id));
-        const cfg = teamsSettingsRef.current;
-        const teamsRecipients = cfg?.enabled && cfg.recipients?.length ? cfg.recipients : undefined;
         fetch("/api/notifications/teams", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -250,7 +251,6 @@ export default function DashboardPage() {
             period: f.period,
             startDate: f.startDate,
             endDate: f.endDate,
-            ...(teamsRecipients ? { recipients: teamsRecipients } : {}),
           }),
         }).catch(() => {/* silent — Teams is optional */});
       }

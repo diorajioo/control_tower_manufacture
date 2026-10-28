@@ -586,6 +586,13 @@ function TampilanSection({
     <div className="space-y-5">
       <SectionTitle title="Display" description="Display preferences and default filters" />
 
+      <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+        <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-amber-700 leading-relaxed">
+          These preferences are saved but not yet applied to the dashboard. Full support is planned.
+        </p>
+      </div>
+
       <Card title="Timezone">
         <div className="grid grid-cols-3 gap-2">
           {(["WIB", "WITA", "WIT"] as const).map((tz) => (
@@ -1454,7 +1461,7 @@ function ThresholdSection({
       <div className="flex items-start justify-between mb-6">
         <SectionTitle
           title="Alert & Threshold"
-          description="Thresholds that trigger alerts on the dashboard and in email notifications"
+          description="Alert threshold configuration"
         />
         <button
           onClick={() => setThresholds(DEFAULT_THRESHOLDS)}
@@ -1463,6 +1470,13 @@ function ThresholdSection({
           <RotateCcw size={11} />
           Reset all
         </button>
+      </div>
+
+      <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+        <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-amber-700 leading-relaxed">
+          These thresholds are saved but not yet applied to dashboard alerts. Alert thresholds are currently fixed. Full support is planned.
+        </p>
       </div>
 
       <div className="space-y-4">

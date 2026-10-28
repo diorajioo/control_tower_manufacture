@@ -6,7 +6,7 @@ import { sendTeamsAlerts, generateAlertNarrative } from "@/lib/alerts/teams";
 import { sendGraphAlerts } from "@/lib/graph/teams";
 import type { KPIAlert } from "@/lib/alerts";
 import { getTeamsSettings, alertKey, filterUnsentKeys, markSent } from "@/lib/settings";
-import { normalizeRecipient, type RecipientConfig } from "@/lib/notifications/store";
+import type { RecipientConfig } from "@/lib/notifications/store";
 import { sendAlertsToRecipients, dashboardUrl } from "@/lib/notifications/run";
 import { getKpiSnapshot } from "@/lib/kpiData";
 
@@ -22,16 +22,12 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json() as {
-    alerts:      KPIAlert[];
-    plant?:      string;
-    period?:     string;
-    /** Needed for custom periods; presets resolve their own dates */
-    startDate?:  string;
-    endDate?:    string;
-    /** Recipients cached in the browser — used only when the server has none */
-    recipients?: Array<Partial<RecipientConfig> & { email: string }>;
-    /** Manual send: skip dedup and include digest recipients */
-    force?:      boolean;
+    alerts:     KPIAlert[];
+    plant?:     string;
+    period?:    string;
+    startDate?: string;
+    endDate?:   string;
+    force?:     boolean;
   };
 
   if (!Array.isArray(body.alerts) || body.alerts.length === 0) {
@@ -47,13 +43,7 @@ export async function POST(req: NextRequest) {
   const plant = body.plant || "All Plant";
   const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-  // ── Recipients: server settings > client-sent ─────────────────────────────
-  const recipients: RecipientConfig[] =
-    server.enabled && server.recipients.length > 0
-      ? server.recipients
-      : Array.isArray(body.recipients)
-        ? body.recipients.filter((r) => typeof r?.email === "string").map(normalizeRecipient)
-        : [];
+  const recipients: RecipientConfig[] = server.enabled ? server.recipients : [];
 
   if (recipients.length > 0) {
     const result = await sendAlertsToRecipients(body.alerts, recipients, {
