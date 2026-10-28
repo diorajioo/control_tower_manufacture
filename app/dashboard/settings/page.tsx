@@ -1613,38 +1613,106 @@ function ThreshRow({
 
 // ── Integrasi ─────────────────────────────────────────────────────────────────
 
+interface DataSourceStatus {
+  active: "clickhouse" | "snowflake";
+  clickhouse: { configured: boolean; connected: boolean; url: string | null; db: string | null };
+  snowflake: { connected: boolean; account: string | null; database: string | null; schema: string | null; warehouse: string | null };
+}
+
+function ConnectedPill({ connected, active }: { connected: boolean; active: boolean }) {
+  if (active) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#EEF4FB] text-[#1E4076] rounded-full text-xs font-semibold border border-[#C3CEE3]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#1E4076] animate-pulse" />
+        Active
+      </span>
+    );
+  }
+  if (connected) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium border border-green-100">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+        Standby
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+      <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+      Not connected
+    </span>
+  );
+}
+
+function DataSourceRows({ rows }: { rows: { label: string; value: string | null }[] }) {
+  return (
+    <div className="space-y-0 mt-4">
+      {rows.filter((r) => r.value).map(({ label, value }) => (
+        <div key={label} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{label}</span>
+          <span className="text-sm text-gray-700 font-mono">{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function IntegrasiSection() {
+  const [status, setStatus] = useState<DataSourceStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/settings/data-source")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { setStatus(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
   return (
     <div className="space-y-5">
-      <SectionTitle title="Integrations" description="Connection status for external data sources" />
+      <SectionTitle title="Integrations" description="Connection status for data sources" />
 
-      <Card title="Snowflake Data Warehouse">
-        <div className="mb-4">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            Connected
-          </span>
-        </div>
-        <div className="space-y-0">
-          {[
-            { label: "Account",   value: "yb58945.ap-southeast-3.aws" },
-            { label: "Region",    value: "AP Southeast 3 (Jakarta)"    },
-            { label: "Database",  value: "MIGRATION"                   },
-            { label: "Schema",    value: "CONTROL_TOWER"               },
-            { label: "Warehouse", value: "COMPUTE_WH"                  },
-          ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0"
-            >
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                {label}
-              </span>
-              <span className="text-sm text-gray-700 font-mono">{value}</span>
+      {loading && <p className="text-sm text-gray-400">Checking connections…</p>}
+
+      {!loading && status && (
+        <>
+          <Card title="ClickHouse">
+            <div className="flex items-center justify-between">
+              <ConnectedPill
+                connected={status.clickhouse.connected}
+                active={status.active === "clickhouse"}
+              />
+              {status.active === "clickhouse" && (
+                <span className="text-[11px] text-slate-400">Queries routed here</span>
+              )}
             </div>
-          ))}
-        </div>
-      </Card>
+            {status.clickhouse.configured && (
+              <DataSourceRows rows={[
+                { label: "Host",     value: status.clickhouse.url },
+                { label: "Database", value: status.clickhouse.db  },
+              ]} />
+            )}
+          </Card>
+
+          <Card title="Snowflake Data Warehouse">
+            <div className="flex items-center justify-between">
+              <ConnectedPill
+                connected={status.snowflake.connected}
+                active={status.active === "snowflake"}
+              />
+              {status.active === "snowflake" && (
+                <span className="text-[11px] text-slate-400">Queries routed here</span>
+              )}
+            </div>
+            <DataSourceRows rows={[
+              { label: "Account",   value: status.snowflake.account   },
+              { label: "Database",  value: status.snowflake.database  },
+              { label: "Schema",    value: status.snowflake.schema    },
+              { label: "Warehouse", value: status.snowflake.warehouse },
+            ]} />
+          </Card>
+        </>
+      )}
     </div>
   );
 }

@@ -144,16 +144,20 @@ const TTL_MS    = 5 * 60 * 60 * 1000; // 5 hours
 
 export function AISummary({ kpi, filters, ready }: AISummaryProps) {
   const filterKey = [filters.plant, filters.startDate, filters.endDate].join("|");
-  const [summary,   setSummary]   = useState(() =>
-    typeof window !== "undefined" && localStorage.getItem(CACHE_KEY) === filterKey
-      ? (localStorage.getItem(CACHE_TEXT) ?? "") : ""
-  );
+  const [summary, setSummary] = useState("");
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState(false);
   const [errorMsg,  setErrorMsg]  = useState("");
   const [truncated, setTruncated] = useState(false);
   const abortRef    = useRef<AbortController | null>(null);
   const accumRef    = useRef("");
+
+  // Restore cached summary on mount (client-only — avoids hydration mismatch)
+  useEffect(() => {
+    const cached = localStorage.getItem(CACHE_TEXT) ?? "";
+    if (cached && localStorage.getItem(CACHE_KEY) === filterKey) setSummary(cached);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Card one-liners follow the summary text (cache or finished stream); cleared while a new one streams
   useEffect(() => {
