@@ -4,6 +4,22 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-10-27
+
+### Added
+- **Kubernetes staging** at `https://poros-staging.paradev.io/ct-manuf` — the shared dashboard host, one path per app (same pattern as affiliate-analytics). One container (Next.js serves pages, API and SSO). `.gitlab-ci.yml` uses the infra `k8s-monorepo-service` component; Ingress + ConfigMap in the infra repo; production stays on Vercel.
+- **Base path** (`NEXT_PUBLIC_BASE_PATH`, build arg): `basePath` in `next.config.mjs`, `withBase()` in `lib/basePath.ts` on every raw `fetch`, `<a href>`, `<img src>` and next-auth `callbackUrl`. SSO callback under it: `/ct-manuf/api/auth/callback/azure-ad`.
+
+### Changed
+- **Security (shared host)**: page CSP moved to `middleware.ts` with a per-request nonce + `strict-dynamic` (was `script-src 'unsafe-inline'`); `/api/*` answers with `default-src 'none'; sandbox`; next-auth cookies renamed `ct-manuf.*` and scoped to the base path; sign-in redirects only return into this app (`safeRedirect`, check: `npx tsx scripts/check-base-path.ts`); `/lead-time` and `/monitor` get the server-side session check `/dashboard` had. One-time effect: everyone signs in again (cookie rename).
+- **Dockerfile**: uid 1000 (`node`), `HOSTNAME=0.0.0.0` re-set at start (Kubernetes overrides it with the pod name), `NEXT_PUBLIC_BASE_PATH` build arg.
+- Teams card links built from `NEXTAUTH_URL`'s origin + base path (`dashboardUrl()`).
+- **OpenPanel on Kubernetes**: `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` is a Docker build arg, filled by CI from the variable `OPENPANEL_CLIENT_ID_STAGING` (staging's own OpenPanel project); empty = tracking off. Scroll-depth report names strip the base path (`AnalyticsBoot.reportFromPath`).
+- **Security review fixes**: `/api/notifications/teams` rebuilds alert text on the server (`alertsFromKpi(getKpiSnapshot())`) and takes only alert ids from the browser — any signed-in user could send arbitrary card text (links) from the company sender; client-sent recipients are admin-only. `/api/notifications/teams/test` is admin-only. Non-GET `/api/*` (except `/api/auth`) must carry an `Origin` matching the host — CSRF guard, because every `*.paradev.io` site is same-site. `/api/chat` keeps only `user` / `assistant` turns, ≤ 4,000 chars each. CSP `connect-src` trimmed to self + OpenPanel.
+
+### Fixed
+- Avatar menu "My profile" / "Settings" pointed to `/settings`, which does not exist — now `/dashboard/settings`.
+
 ## 2026-10-14
 
 ### Changed

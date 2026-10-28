@@ -1,6 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import AzureADProvider from "next-auth/providers/azure-ad";
+import { AUTH_COOKIES, safeRedirect, withBase } from "@/lib/basePath";
 
 // Delegated Graph scopes for Teams DM notifications.
 // Chat.Create + ChatMessage.Send do NOT require admin consent.
@@ -52,11 +53,15 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
+  // next-auth knows nothing of Next's basePath: its pages and redirects carry it explicitly.
+  // Its own API path comes from NEXTAUTH_URL (…/ct-manuf/api/auth on Kubernetes).
   pages: {
-    signIn: "/login",
-    error:  "/login",
+    signIn: withBase("/login"),
+    error:  withBase("/login"),
   },
+  cookies: AUTH_COOKIES,
   callbacks: {
+    redirect: ({ url, baseUrl }) => safeRedirect(url, baseUrl),
     async jwt({ token, account }) {
       // First sign-in: persist tokens from Azure AD
       if (account) {

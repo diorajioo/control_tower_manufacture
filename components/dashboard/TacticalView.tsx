@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { ChevronDown, Check } from "lucide-react";
 import { Fade } from "@/components/ui/Fade";
@@ -546,7 +547,7 @@ export function TacticalParetoChart({
     if (filters.period) params.set("period", filters.period);
     dimsToParams(filters.lt, params);
     setLoading(true);
-    fetch(`/api/lead-time/charts?${params}`)
+    fetch(withBase(`/api/lead-time/charts?${params}`))
       .then(r => r.json())
       .then(d => setRawStages(d.stages ?? null))
       .catch(() => setRawStages(null))
@@ -680,7 +681,7 @@ export function TacticalParetoChart({
           <div className="flex items-center gap-1.5">
             <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Pareto Lead Time</p>
             <InfoTooltip text="Net time per PO per process, summed over POs completed in the period. Bars represent average days (or hours); the standard line is the engineering estimate. Group Process merges related activities into 6 groups." size={13} width={260} />
-            {detailHref && <a href={detailHref} className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">Open detail →</a>}
+            {detailHref && <a href={withBase(detailHref)} className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">Open detail →</a>}
           </div>
           <SegmentedToggle<"group" | "process">
             options={[{ key: "group", label: "Group Process" }, { key: "process", label: "Process" }]}
@@ -1158,7 +1159,7 @@ function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
     const params = outputParams(filters, pick, "bucket");
     params.set("kpiType", "output");
     params.set("grain", grain);
-    fetch(`/api/dashboard/trends?${params}`)
+    fetch(withBase(`/api/dashboard/trends?${params}`))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setRawData((d?.trendSeries ?? []).map((row: Record<string, unknown>) => ({ date: String(row.date), value: Number(row["All plants"] ?? 0) }))))
       .catch(() => setRawData([]))
@@ -1276,7 +1277,7 @@ function TopLineByOutputTable({ filters, metric, pick, onPick }: {
     if (metric === "bulk") { setRows([]); setLoading(false); return; }
     setLoading(true);
     const params = outputParams(filters, pick, "line");
-    fetch(`/api/dashboard/output-line?${params}`)
+    fetch(withBase(`/api/dashboard/output-line?${params}`))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setRows(d?.lines ?? []))
       .catch(() => setRows([]))

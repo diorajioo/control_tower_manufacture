@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useI18n } from "@/lib/i18n";
@@ -159,7 +160,7 @@ export default function DashboardPage() {
     let cancelled = false;
     setStageLoading(true);
     const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, period: filters.period, basis: ltBasis });
-    fetch(`/api/lead-time/stages?${params}`)
+    fetch(withBase(`/api/lead-time/stages?${params}`))
       .then((r) => r.json())
       .then((d) => { if (!cancelled) { setStageStd(d.stages ?? []); setPlantLT({ plants: d.plants ?? [], targetDays: d.targetDays ?? 13, activities: d.activities ?? [] }); } })
       .catch(() => { if (!cancelled) { setStageStd([]); setPlantLT({ plants: [], targetDays: 13, activities: [] }); } })
@@ -168,14 +169,14 @@ export default function DashboardPage() {
   }, [activeView, filters.plant, filters.startDate, filters.endDate, filters.period, ltBasis, refreshCount]);
 
   useEffect(() => {
-    fetch("/api/dashboard/plants")
+    fetch(withBase("/api/dashboard/plants"))
       .then((r) => r.json())
       .then((d) => setPlants(d.plants ?? ["All Plant"]));
   }, []);
 
   // Fetch Teams settings from server on mount so auto-send uses up-to-date config
   useEffect(() => {
-    fetch("/api/settings/teams")
+    fetch(withBase("/api/settings/teams"))
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data) {
@@ -200,7 +201,7 @@ export default function DashboardPage() {
   useEffect(() => {
     setRiskLoading(true);
     const params = new URLSearchParams({ plant: filters.plant });
-    fetch(`/api/risk-score?${params}`)
+    fetch(withBase(`/api/risk-score?${params}`))
       .then((r) => r.json())
       .then((d: { scores?: RiskPoResult[]; modelMissing?: boolean }) => {
         setRiskScores(d.scores ?? []);
@@ -222,7 +223,7 @@ export default function DashboardPage() {
     });
     try {
       const [kpiRes] = await Promise.all([
-        fetch(`/api/dashboard/kpi?${params}`).then((r) => r.json()),
+        fetch(withBase(`/api/dashboard/kpi?${params}`)).then((r) => r.json()),
       ]);
       if (!kpiRes?.leadTime) throw new Error(kpiRes?.error ?? "Invalid KPI response shape");
       setKpi(kpiRes);
@@ -241,7 +242,7 @@ export default function DashboardPage() {
         newCritical.forEach((a) => sentAlertIds.current.add(a.id));
         const cfg = teamsSettingsRef.current;
         const teamsRecipients = cfg?.enabled && cfg.recipients?.length ? cfg.recipients : undefined;
-        fetch("/api/notifications/teams", {
+        fetch(withBase("/api/notifications/teams"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -274,7 +275,7 @@ export default function DashboardPage() {
 
   const handleRefresh = useCallback(async () => {
     try {
-      await fetch("/api/cache/revalidate", { method: "POST" });
+      await fetch(withBase("/api/cache/revalidate"), { method: "POST" });
     } catch {/* silent */}
     fetchData(filters);
   }, [filters, fetchData]);

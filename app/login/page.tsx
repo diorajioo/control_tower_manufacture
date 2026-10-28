@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -81,7 +82,7 @@ export default function LoginPage() {
     if (remember) localStorage.setItem(REMEMBER_PENDING, "true");
     else { localStorage.removeItem(REMEMBER_PENDING); localStorage.removeItem(REMEMBER_KEY); setSavedEmail(null); }
     sessionStorage.setItem('op_login', '1');
-    await signIn("azure-ad", { callbackUrl: "/dashboard" });
+    await signIn("azure-ad", { callbackUrl: withBase("/dashboard") });
   };
 
   if (status === "loading") {

@@ -1,3 +1,4 @@
+import { SESSION_COOKIE } from "@/lib/basePath";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
@@ -5,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { sendGraphAlerts, resolveToken, sendCardTo } from "@/lib/graph/teams";
 import { sendTeamsAlerts, buildAlertCard, alertSummary } from "@/lib/alerts/teams";
 import { getTeamsSettings } from "@/lib/settings";
+import { isServerAdmin } from "@/lib/serverAdmin";
 import { normalizeRecipient, type RecipientConfig } from "@/lib/notifications/store";
 import { sendTestSummaries, dashboardUrl } from "@/lib/notifications/run";
 
@@ -28,12 +30,14 @@ const TEST_ALERT = {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Sends from the connected sender to the recipients in the body: admins only, like saving them.
+  if (!isServerAdmin(session.user?.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({})) as {
     kind?: "alert" | "summary";
     recipients?: Array<Partial<RecipientConfig> & { email: string }>;
   };
-  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, cookieName: SESSION_COOKIE });
   const sessionToken = jwt?.accessToken as string | undefined;
 
   // Recipients being edited in Settings (may be unsaved) > saved ones

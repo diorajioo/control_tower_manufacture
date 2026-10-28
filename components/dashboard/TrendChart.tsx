@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import { ResponsiveLine } from "@nivo/line";
@@ -113,7 +114,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       kpiType:   fetchType,
       grain,
     });
-    fetch(`/api/dashboard/trends?${params}`)
+    fetch(withBase(`/api/dashboard/trends?${params}`))
       .then((r) => r.json())
       .then((d) => {
         if (stale) return;

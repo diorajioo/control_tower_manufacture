@@ -8,6 +8,7 @@
 // Cross-filter (outputPick.ts): a tile click picks that group for every Output chart; the treemap keeps all
 // its tiles and dims the others, the SKU table follows any pick.
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useMemo, useState } from "react";
 import { ResponsiveTreeMapHtml, type NodeProps } from "@nivo/treemap";
 import { Fade } from "@/components/ui/Fade";
@@ -99,7 +100,7 @@ export function OutputMixRow({ filters, metric, pick, onPick }: {
     gp.set("dim", dim); gp.set("part", "groups");
     const sp = outputParams(filters, pick, []);
     sp.set("dim", dim); sp.set("part", "skus");
-    const get = (p: URLSearchParams) => fetch(`/api/dashboard/output-mix?${p}`).then((r) => (r.ok ? r.json() : Promise.reject()));
+    const get = (p: URLSearchParams) => fetch(withBase(`/api/dashboard/output-mix?${p}`)).then((r) => (r.ok ? r.json() : Promise.reject()));
     Promise.all([get(gp), get(sp)])
       .then(([g, k]) => { setGroups(g.groups ?? []); setSkus(k.skus ?? []); })
       .catch(() => { setError(true); setGroups([]); setSkus([]); })

@@ -8,9 +8,11 @@ import {
   startScrollTracking,
   trackUserLoggedIn,
 } from '@/lib/analytics/events';
+import { BASE_PATH } from '@/lib/basePath';
 
 function reportFromPath(): import('@/lib/analytics/events').Report | undefined {
-  const p = window.location.pathname;
+  // Without the base path (/ct-manuf on Kubernetes), like usePathname() reports it
+  const p = window.location.pathname.slice(BASE_PATH.length);
   if (p.startsWith('/dashboard/settings')) return 'settings';
   if (p.startsWith('/dashboard')) return 'dashboard_strategic'; // refined to tactical at toggle level
   if (p.startsWith('/lead-time')) return 'lead_time';

@@ -8,6 +8,7 @@
 //     Ranking  — Top 10 SKU by lead time + lead time vs PO count scatter
 // Every figure is real data; the dimension filters select whole POs (lib/leadTimeFilters.ts).
 
+import { withBase } from "@/lib/basePath";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -71,7 +72,7 @@ function useFetch<T>(path: string | null, base: BaseFilters, dims: LtDims, extra
     let cancelled = false;
     setLoading(true);
     const params = dimsToParams(dims, new URLSearchParams({ ...base, ...extra }));
-    fetch(`${path}?${params}`)
+    fetch(withBase(`${path}?${params}`))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled) setData(d && !d.error ? d : null); })
       .catch(() => { if (!cancelled) setData(null); })
@@ -98,7 +99,7 @@ export default function LeadTimePage() {
 
   useEffect(() => {
     if (status !== "authenticated") return;
-    fetch("/api/dashboard/plants")
+    fetch(withBase("/api/dashboard/plants"))
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d?.plants)) setPlants(d.plants); })
       .catch(() => { /* keep All Plant */ });

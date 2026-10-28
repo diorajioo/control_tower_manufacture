@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { SESSION_COOKIE } from "@/lib/basePath";
 
 // ── In-memory rate limiter ────────────────────────────────────────────────────
 // Per-serverless-instance; Vercel also applies edge-level DDoS protection.
@@ -31,27 +32,42 @@ setInterval(() => {
 
 // ── Middleware ─────────────────────────────────────────────────────────────────
 
+// req.nextUrl.pathname has the base path (/ct-manuf on Kubernetes) stripped; a clone keeps it
+// when serialised, so the redirect stays inside this app on the shared host.
+function loginRedirect(req: NextRequest, param: string, value: string) {
+  const loginUrl = req.nextUrl.clone();
+  loginUrl.pathname = "/login";
+  loginUrl.search = "";
+  loginUrl.searchParams.set(param, value);
+  return NextResponse.redirect(loginUrl);
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // ── 1. Protect all /dashboard routes — redirect to login if unauthenticated ──
-  if (pathname.startsWith("/dashboard")) {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-    if (!token) {
-      const loginUrl = new URL("/login", req.url);
-      loginUrl.searchParams.set("callbackUrl", req.url);
-      return NextResponse.redirect(loginUrl);
-    }
+  // ── 1. Protect the app pages — redirect to login if unauthenticated ──────────
+  if (["/dashboard", "/lead-time", "/monitor"].some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, cookieName: SESSION_COOKIE });
+    // Relative: behind the ingress the server only knows its own bind address (0.0.0.0:3000)
+    if (!token) return loginRedirect(req, "callbackUrl", `${req.nextUrl.basePath}${pathname}${req.nextUrl.search}`);
 
     // Reject sessions with a failed token refresh — force re-login
-    if (token.error === "RefreshAccessTokenError") {
-      const loginUrl = new URL("/login", req.url);
-      loginUrl.searchParams.set("error", "SessionExpired");
-      return NextResponse.redirect(loginUrl);
-    }
+    if (token.error === "RefreshAccessTokenError") return loginRedirect(req, "error", "SessionExpired");
   }
 
-  // ── 2. Rate limiting on API routes ────────────────────────────────────────────
+  // ── 2. CSRF: state-changing API calls must come from this host ───────────────
+  // SameSite=lax does not help here: paradev.io is not a public suffix, so every *.paradev.io
+  // site counts as same-site and gets our cookies sent, and req.json() parses a text/plain form
+  // body. Browsers always send Origin on non-GET requests. next-auth has its own CSRF token.
+  if (pathname.startsWith("/api/") && !pathname.startsWith("/api/auth/") && req.method !== "GET" && req.method !== "HEAD") {
+    const origin = req.headers.get("origin");
+    const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+    let sameHost = false;
+    try { sameHost = !!origin && new URL(origin).host === host; } catch { /* malformed Origin */ }
+    if (!sameHost) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // ── 3. Rate limiting on API routes ────────────────────────────────────────────
   if (pathname.startsWith("/api/")) {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
       ?? req.headers.get("x-real-ip")
@@ -88,17 +104,51 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // ── 3. Block direct access to debug endpoints in production ───────────────────
+  // ── 4. Block direct access to debug endpoints in production ───────────────────
   if (pathname.startsWith("/api/debug") && process.env.NODE_ENV === "production") {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.next();
+  // JSON only; next.config.mjs gives /api its own locked-down policy.
+  if (pathname.startsWith("/api/")) return NextResponse.next();
+  return withCsp(req);
+}
+
+// ── 5. Per-request nonce CSP on every page ──────────────────────────────────────
+// The hostname is shared with other dashboards (poros-staging.paradev.io/<app>): one origin, so a
+// script injected here could call every other dashboard's API with the user's cookies. A nonce
+// replaces 'unsafe-inline' — only scripts Next.js (or the root layout) stamped with it run.
+// Next.js reads the nonce from the request's CSP header and puts it on its own scripts; the root
+// layout reads x-nonce for its inline one. Requires dynamic rendering (the layout calls headers()).
+function withCsp(req: NextRequest) {
+  const nonce = btoa(crypto.randomUUID());
+  const csp = [
+    "default-src 'self'",
+    // 'unsafe-eval' only for webpack HMR in dev; production never evals
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
+    // Nivo, framer-motion and React style props write style attributes, which a nonce cannot cover
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    // Groq, Graph and Entra are called by the server only; the browser talks to us and OpenPanel
+    "connect-src 'self' https://openpanel.pti-cosmetics.com",
+    "object-src 'none'",
+    // 'self' would be any app on the shared host; the app never uses <base>
+    "base-uri 'none'",
+    "form-action 'self' https://login.microsoftonline.com",
+    "frame-ancestors 'none'",
+  ].join("; ");
+
+  const headers = new Headers(req.headers);
+  headers.set("x-nonce", nonce);
+  headers.set("content-security-policy", csp);
+  const res = NextResponse.next({ request: { headers } });
+  res.headers.set("content-security-policy", csp);
+  return res;
 }
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/api/:path*",
-  ],
+  // Paths are relative to the base path. Static assets and /healthz (the probe has no session)
+  // skip it; "/" is listed on its own because the pattern never matches the bare /ct-manuf.
+  matcher: ["/", "/((?!_next/static|_next/image|healthz|favicon.ico|icon|.*\\.png$).*)"],
 };

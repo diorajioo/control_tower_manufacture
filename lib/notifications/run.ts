@@ -2,6 +2,7 @@
 // (/api/notifications/teams) and test sends all go through here, so routing, dedup and cards stay identical.
 
 import { getKpiSnapshot } from "@/lib/kpiData";
+import { withBase } from "@/lib/basePath";
 import { alertsFromKpi, type KPIAlert } from "@/lib/alerts";
 import {
   buildAlertCard, alertSummary, generateAlertNarrative,
@@ -23,7 +24,8 @@ export const ALERT_KPI_KEYS: Record<string, string> = {
 export const RANGE_LABEL: Record<SummaryRange, string> = { "7D": "Last 7 days", "30D": "Last 30 days", "YTD": "Year to date" };
 
 export function dashboardUrl(): string | undefined {
-  return process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL.replace(/\/$/, "")}/dashboard` : undefined;
+  // Origin only: under a base path NEXTAUTH_URL ends in /ct-manuf/api/auth (next-auth reads its path).
+  return process.env.NEXTAUTH_URL ? new URL(withBase("/dashboard"), process.env.NEXTAUTH_URL).href : undefined;
 }
 
 /** KPI snapshot for a plant and summary range (same cache as /api/dashboard/kpi). */

@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { highlightKpi, isKpiHighlightId, KPI_TRIGGER_ATTR } from "@/components/ui/KpiHighlight";
@@ -184,7 +185,7 @@ export function AISummary({ kpi, filters, ready }: AISummaryProps) {
     setTruncated(false);
 
     try {
-      const res = await fetch("/api/dashboard/summary", {
+      const res = await fetch(withBase("/api/dashboard/summary"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kpi, filters }),
