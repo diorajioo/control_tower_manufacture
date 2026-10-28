@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 import { ResponsiveScatterPlotCanvas } from "@nivo/scatterplot";
@@ -110,7 +111,7 @@ function useScatterData(filters: ScatterFilters, dim: ScatterDim) {
     if (filters.period) params.set("period", filters.period);
     dimsToParams(filters.lt, params);
 
-    fetch(`/api/lead-time/scatter?${params}`)
+    fetch(withBase(`/api/lead-time/scatter?${params}`))
       .then((r) => r.json())
       .then((rows: ScatterPoint[]) => { setData(rows); setLoading(false); })
       .catch(() => { setData([]); setLoading(false); });

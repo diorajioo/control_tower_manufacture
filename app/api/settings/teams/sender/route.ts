@@ -1,3 +1,4 @@
+import { SESSION_COOKIE } from "@/lib/basePath";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isServerAdmin(session.user.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, cookieName: SESSION_COOKIE });
   const refreshToken = jwt?.refreshToken as string | undefined;
   if (!refreshToken) {
     return NextResponse.json({ error: "No Teams permission in this session — sign out and sign back in, then try again" }, { status: 409 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useState, useEffect, useMemo } from "react";
 import { useI18n } from "@/lib/i18n";
 import { ResponsiveBar } from "@nivo/bar";
@@ -71,7 +72,7 @@ export function StackedBarChart({ filters, kpiType, onKpiChange, chartHeight = 1
       endDate:   filters.endDate,
       kpiType,
     });
-    fetch(`/api/dashboard/trends?${params}`)
+    fetch(withBase(`/api/dashboard/trends?${params}`))
       .then((r) => r.json())
       .then((d) => {
         setRawData(d.trendSeries ?? []);

@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { trackFeatureUsed } from "@/lib/analytics/events";
@@ -68,7 +69,7 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
     setLoading(true); setError(false); setRisks([]); setActions([]);
 
     try {
-      const res = await fetch("/api/ai-risks", {
+      const res = await fetch(withBase("/api/ai-risks"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kpi, filters }),

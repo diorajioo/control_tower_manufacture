@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useRef, useState } from "react";
 import { MessageSquare, X, Send, Sparkles, Loader2, ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -218,7 +219,7 @@ export function FloatingChat({ filters, kpiSnapshot, kpi, alerts }: FloatingChat
 
     try {
       const MAX_HISTORY = 10;
-      const res = await fetch("/api/chat", {
+      const res = await fetch(withBase("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

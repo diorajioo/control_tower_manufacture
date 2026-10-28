@@ -1,22 +1,7 @@
 /** @type {import('next').NextConfig} */
 
-const isDev = process.env.NODE_ENV !== "production";
-
-const CSP = [
-  "default-src 'self'",
-  // 'unsafe-eval' required in dev for webpack HMR + source maps; excluded in production
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob:",
-  "connect-src 'self' https://api.groq.com https://graph.microsoft.com https://login.microsoftonline.com https://openpanel.pti-cosmetics.com",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join("; ");
-
+// The page CSP needs a per-request nonce, so middleware.ts sets it; /api gets its own below.
 const SECURITY_HEADERS = [
-  { key: "Content-Security-Policy",            value: CSP },
   { key: "X-Frame-Options",                    value: "DENY" },
   { key: "X-Content-Type-Options",             value: "nosniff" },
   { key: "X-XSS-Protection",                   value: "1; mode=block" },
@@ -30,6 +15,9 @@ const SECURITY_HEADERS = [
 const nextConfig = {
   // Self-contained server in .next/standalone for the Docker image (Kubernetes); Vercel ignores it
   output: "standalone",
+  // On Kubernetes the app sits at https://poros-staging.paradev.io/ct-manuf (build arg in the
+  // Dockerfile, set by .gitlab-ci.yml). Empty on Vercel and locally. See lib/basePath.ts.
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
   // No next/image in the app — turning the Image Optimization API off closes its advisories on Next 14
   images: { unoptimized: true },
   // Next 15: moved out of `experimental` (was serverComponentsExternalPackages)
@@ -40,6 +28,12 @@ const nextConfig = {
       {
         source: "/:path*",
         headers: SECURITY_HEADERS,
+      },
+      // /api only ever answers JSON (and the odd text). Should anything here ever echo input back
+      // as HTML, this keeps it from running as a page on the host the other dashboards share.
+      {
+        source: "/api/:path*",
+        headers: [{ key: "Content-Security-Policy", value: "default-src 'none'; frame-ancestors 'none'; sandbox" }],
       },
     ];
   },

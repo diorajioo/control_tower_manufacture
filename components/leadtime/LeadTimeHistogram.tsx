@@ -5,6 +5,7 @@
 // Used by the Overview Tactical view and the Lead Time page (Analysis tab), where a click on a bar selects that
 // bin (`onBinClick`) to filter the PO table below; the selected bar stays navy, the others fade.
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useMemo, useState } from "react";
 import { ResponsiveBar, type BarCustomLayerProps, type BarDatum } from "@nivo/bar";
 import { Fade } from "@/components/ui/Fade";
@@ -81,7 +82,7 @@ export function LeadTimeHistogram({ filters, basis, metric, unit, detailHref = "
     params.set("metric", metric);
     if (filters.period) params.set("period", filters.period);
     setLoading(true);
-    fetch(`/api/lead-time/distribution?${params.toString()}`)
+    fetch(withBase(`/api/lead-time/distribution?${params.toString()}`))
       .then((r) => r.json())
       .then((d: DistResponse) => setData(d))
       .catch(() => setData(null))
@@ -194,7 +195,7 @@ export function LeadTimeHistogram({ filters, basis, metric, unit, detailHref = "
             width={240}
           />
           {detailHref && (
-            <a href={detailHref} className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">
+            <a href={withBase(detailHref)} className="text-[11px] text-[#1E4076] font-semibold hover:underline shrink-0">
               Open detail →
             </a>
           )}

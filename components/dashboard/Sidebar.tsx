@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -80,7 +81,7 @@ function useAlertCount() {
       if (stored) f = { ...f, ...JSON.parse(stored) };
     } catch { /* ignore */ }
     const params = new URLSearchParams({ plant: f.plant, startDate: f.startDate, endDate: f.endDate, period: f.period });
-    fetch(`/api/dashboard/kpi?${params}`)
+    fetch(withBase(`/api/dashboard/kpi?${params}`))
       .then((r) => r.json())
       .then((k) => {
         if (!k?.leadTime) return;
@@ -165,7 +166,7 @@ export function Sidebar() {
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(async () => {
         await trackUserLoggedOut();
-        signOut({ callbackUrl: "/login" });
+        signOut({ callbackUrl: withBase("/login") });
       }, INACTIVITY_MS);
     };
     const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"] as const;
@@ -206,7 +207,7 @@ export function Sidebar() {
           <NavRow key={item.label} item={item} pathname={pathname} alertCount={alertCount} />
         ))}
         <button
-          onClick={async () => { await trackUserLoggedOut(); signOut({ callbackUrl: "/login" }); }}
+          onClick={async () => { await trackUserLoggedOut(); signOut({ callbackUrl: withBase("/login") }); }}
           className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors duration-150 w-full text-left"
         >
           <LogOut size={15} strokeWidth={1.6} className="shrink-0" />

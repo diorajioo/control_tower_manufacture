@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Droplets, Gauge, Zap, Users } from "lucide-react";
 import { AlertPanel } from "@/components/dashboard/AlertPanel";
@@ -61,7 +62,7 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
       endDate: filters.endDate, period: filters.period,
     });
     try {
-      const data = await fetch(`/api/dashboard/kpi?${params}`).then((r) => r.json()) as KPIResponse;
+      const data = await fetch(withBase(`/api/dashboard/kpi?${params}`)).then((r) => r.json()) as KPIResponse;
       if (!data?.leadTime) return;
       setKpi(data);
       setAlerts(computeAlerts({

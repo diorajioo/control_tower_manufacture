@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useState, useEffect } from "react";
 import { Clock } from "lucide-react";
 import { FitToScreen } from "@/components/ui/FitToScreen";
@@ -38,7 +39,7 @@ export function LeadTimeMonitor({ filters }: { filters: MonitorFilters; onExit?:
       plant: filters.plant, startDate: filters.startDate,
       endDate: filters.endDate, period: filters.period,
     });
-    fetch(`/api/dashboard/kpi?${params}`)
+    fetch(withBase(`/api/dashboard/kpi?${params}`))
       .then((r) => r.json())
       .then((res) => { if (!cancelled && res?.leadTime) setLt(res.leadTime); })
       .catch(() => {});
@@ -53,7 +54,7 @@ export function LeadTimeMonitor({ filters }: { filters: MonitorFilters; onExit?:
       plant: filters.plant, startDate: filters.startDate,
       endDate: filters.endDate, period: filters.period,
     });
-    fetch(`/api/lead-time/charts?${params}`)
+    fetch(withBase(`/api/lead-time/charts?${params}`))
       .then((r) => r.json())
       .then((res) => { if (!cancelled && res?.trend) setChartsData(res); })
       .catch(() => {})

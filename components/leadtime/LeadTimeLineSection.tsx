@@ -9,6 +9,7 @@
 //   click  = a bubble selects its line → the SKU table shows that line (its Line dropdown follows); click again = all
 // Chart shows lines with ≥ MIN_PO POs (fewer = noise); the table lists every line. Data: /api/lead-time/lines.
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ResponsiveScatterPlot, type ScatterPlotLayerProps } from "@nivo/scatterplot";
 import { ArrowDown, ArrowUp } from "lucide-react";
@@ -61,7 +62,7 @@ export function LeadTimeLineSection({ filters, unit, refreshKey = 0 }: { filters
     const params = dimsToParams(filters.lt, new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, lineActivity: activity }));
     if (filters.period) params.set("period", filters.period);
     setLoading(true);
-    fetch(`/api/lead-time/lines?${params}`)
+    fetch(withBase(`/api/lead-time/lines?${params}`))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled) setData(d && !d.error ? d : null); })
       .catch(() => { if (!cancelled) setData(null); })
