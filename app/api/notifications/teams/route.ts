@@ -1,7 +1,5 @@
-import { SESSION_COOKIE } from "@/lib/basePath";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { sendTeamsAlerts, generateAlertNarrative } from "@/lib/alerts/teams";
 import { sendGraphAlerts } from "@/lib/graph/teams";
@@ -47,7 +45,6 @@ export async function POST(req: NextRequest) {
   }
 
   const plant = body.plant || "All Plant";
-  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, cookieName: SESSION_COOKIE });
 
   // ── Alerts: rebuilt here from the KPI snapshot the dashboard shows (same cache as
   // /api/dashboard/kpi, same rules as the scheduled runner); the browser only names them by id.
@@ -69,7 +66,7 @@ export async function POST(req: NextRequest) {
   if (recipients.length > 0) {
     const result = await sendAlertsToRecipients(serverAlerts, recipients, {
       plant, period: body.period, startDate: body.startDate, endDate: body.endDate,
-      force: body.force, sessionAccessToken: jwt?.accessToken as string | undefined,
+      force: body.force,
     });
     if (result.errors.length > 0) {
       return NextResponse.json(
@@ -94,7 +91,7 @@ export async function POST(req: NextRequest) {
     const opts = { plant, period: body.period, dashboardUrl: dashboardUrl(), kpi, narrative };
 
     if (process.env.TEAMS_RECIPIENTS) {
-      const result = await sendGraphAlerts(alerts, { ...opts, accessToken: jwt?.accessToken as string | undefined });
+      const result = await sendGraphAlerts(alerts, opts);
       if (!result.ok) {
         return NextResponse.json({ error: result.errors.join("; "), sent: result.sent }, { status: result.sent > 0 ? 207 : 502 });
       }

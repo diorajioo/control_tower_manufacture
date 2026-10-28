@@ -1,7 +1,5 @@
-import { SESSION_COOKIE } from "@/lib/basePath";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { sendGraphAlerts, resolveToken, sendCardTo } from "@/lib/graph/teams";
 import { sendTeamsAlerts, buildAlertCard, alertSummary } from "@/lib/alerts/teams";
@@ -37,8 +35,6 @@ export async function POST(req: NextRequest) {
     kind?: "alert" | "summary";
     recipients?: Array<Partial<RecipientConfig> & { email: string }>;
   };
-  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, cookieName: SESSION_COOKIE });
-  const sessionToken = jwt?.accessToken as string | undefined;
 
   // Recipients being edited in Settings (may be unsaved) > saved ones
   const recipients: RecipientConfig[] = Array.isArray(body.recipients) && body.recipients.length > 0
@@ -52,12 +48,12 @@ export async function POST(req: NextRequest) {
 
   if (recipients.length > 0) {
     if (body.kind === "summary") {
-      const result = await sendTestSummaries(recipients, sessionToken);
+      const result = await sendTestSummaries(recipients);
       if (result.sent.length === 0) return fail(result.errors);
       return NextResponse.json({ ok: true, sent: result.sent.length, errors: result.errors });
     }
-    const token = await resolveToken(sessionToken);
-    if (!token) return fail(["No token available — connect a sender, or sign out and back in"]);
+    const token = await resolveToken();
+    if (!token) return fail(["No token available — connect a sender first"]);
     const card = buildAlertCard([TEST_ALERT], { plant: "All Plant", period: "Test", dashboardUrl: dashboardUrl() });
     const errors: string[] = [];
     let sent = 0;
@@ -72,7 +68,7 @@ export async function POST(req: NextRequest) {
   // ── Legacy env paths ────────────────────────────────────────────────────────
   const opts = { plant: "All Plant", period: "Test", dashboardUrl: dashboardUrl() };
   if (process.env.TEAMS_RECIPIENTS) {
-    const result = await sendGraphAlerts([TEST_ALERT], { ...opts, accessToken: sessionToken });
+    const result = await sendGraphAlerts([TEST_ALERT], opts);
     if (!result.ok) return fail(result.errors);
     return NextResponse.json({ ok: true, sent: result.sent, mode: "graph" });
   }

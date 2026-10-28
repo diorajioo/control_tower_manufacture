@@ -55,3 +55,6 @@ export const AUTH_COOKIES = {
 
 /** For getToken({ req, secret, cookieName: SESSION_COOKIE }) — it would look for the default name. */
 export const SESSION_COOKIE = AUTH_COOKIES.sessionToken.name;
+
+/** Marks the next Microsoft sign-in as "connect this account as the Teams sender" (Settings). */
+export const CONNECT_SENDER_COOKIE = cookie("connect-sender");

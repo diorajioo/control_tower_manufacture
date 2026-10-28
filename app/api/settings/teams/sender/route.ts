@@ -1,33 +1,25 @@
-import { SESSION_COOKIE } from "@/lib/basePath";
-import { NextRequest, NextResponse } from "next/server";
+import { CONNECT_SENDER_COOKIE } from "@/lib/basePath";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
-import { connectSender, disconnectSender } from "@/lib/settings";
+import { disconnectSender } from "@/lib/settings";
 import { isServerAdmin } from "@/lib/serverAdmin";
 
 /**
- * POST: make the signed-in account the sender of Teams notifications (its refresh token is stored,
- * encrypted, and rotated on use). A service account later signs in and does the same.
+ * POST: start connecting the signed-in admin as the sender of Teams notifications. The session
+ * cookie carries no Microsoft tokens (too large for the ingress), so this only marks the next
+ * Microsoft sign-in; the client then calls signIn() and lib/auth.ts stores that sign-in's refresh
+ * token (encrypted, rotated on use). A service account later signs in and does the same.
  * DELETE: disconnect — scheduled sends stop until someone connects again.
  */
-export async function POST(req: NextRequest) {
+export async function POST() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isServerAdmin(session.user.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, cookieName: SESSION_COOKIE });
-  const refreshToken = jwt?.refreshToken as string | undefined;
-  if (!refreshToken) {
-    return NextResponse.json({ error: "No Teams permission in this session — sign out and sign back in, then try again" }, { status: 409 });
-  }
-  try {
-    await connectSender({ email: session.user.email, name: session.user.name ?? undefined, refreshToken });
-  } catch (err) {
-    console.error("[settings/teams/sender] connect failed:", err);
-    return NextResponse.json({ error: "Sender could not be saved on the server" }, { status: 500 });
-  }
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ signIn: true });
+  res.cookies.set(CONNECT_SENDER_COOKIE.name, "1", { ...CONNECT_SENDER_COOKIE.options, maxAge: 600 });
+  return res;
 }
 
 export async function DELETE() {

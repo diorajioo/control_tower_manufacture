@@ -50,9 +50,6 @@ export async function middleware(req: NextRequest) {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, cookieName: SESSION_COOKIE });
     // Relative: behind the ingress the server only knows its own bind address (0.0.0.0:3000)
     if (!token) return loginRedirect(req, "callbackUrl", `${req.nextUrl.basePath}${pathname}${req.nextUrl.search}`);
-
-    // Reject sessions with a failed token refresh — force re-login
-    if (token.error === "RefreshAccessTokenError") return loginRedirect(req, "error", "SessionExpired");
   }
 
   // ── 2. CSRF: state-changing API calls must come from this host ───────────────
