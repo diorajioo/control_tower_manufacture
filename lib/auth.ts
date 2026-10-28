@@ -1,6 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import AzureADProvider from "next-auth/providers/azure-ad";
+import { isServerAdmin } from "@/lib/serverAdmin";
 
 // Delegated Graph scopes for Teams DM notifications.
 // Chat.Create + ChatMessage.Send do NOT require admin consent.
@@ -78,6 +79,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user && token.sub) {
         (session.user as typeof session.user & { id: string }).id = token.sub;
       }
+      (session.user as typeof session.user & { isAdmin: boolean }).isAdmin =
+        isServerAdmin(token.email as string);
       (session as unknown as Record<string, unknown>).accessToken = token.accessToken;
       (session as unknown as Record<string, unknown>).error       = token.error;
       // Expire the session immediately so middleware redirects to re-login

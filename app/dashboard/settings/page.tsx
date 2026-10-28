@@ -167,17 +167,6 @@ function loadThresholds(): ThresholdSettings {
   } catch { return DEFAULT_THRESHOLDS; }
 }
 
-function loadAdmins(currentEmail: string): string[] {
-  try {
-    const raw = localStorage.getItem("ct-admins");
-    const list = raw ? (JSON.parse(raw) as string[]) : [];
-    if (Array.isArray(list) && list.length > 0) return list;
-  } catch { /* ignore */ }
-  const initial = [currentEmail];
-  localStorage.setItem("ct-admins", JSON.stringify(initial));
-  return initial;
-}
-
 function loadDisplay(): DisplaySettings {
   try {
     const raw = localStorage.getItem("ct-display-settings");
@@ -236,7 +225,6 @@ function SettingsShell() {
   const [thresholds, setThresholds] = useState<ThresholdSettings>(DEFAULT_THRESHOLDS);
   const [display, setDisplay] = useState<DisplaySettings>(DEFAULT_DISPLAY);
   const [jabatan, setJabatan] = useState("");
-  const [admins, setAdmins] = useState<string[]>([]);
 
   useEffect(() => {
     setNotif(loadNotif());
@@ -259,17 +247,7 @@ function SettingsShell() {
       .catch(() => setTeamsNotif(loadTeamsNotif()));
   }, []);
 
-  useEffect(() => {
-    const email = session?.user?.email;
-    if (!email) return;
-    setAdmins(loadAdmins(email));
-  }, [session?.user?.email]);
-
-  const isAdmin = !!session?.user?.email && admins.includes(session.user.email);
-  const saveAdmins = (list: string[]) => {
-    setAdmins(list);
-    localStorage.setItem("ct-admins", JSON.stringify(list));
-  };
+  const isAdmin = !!((session?.user ?? null) as ({ isAdmin?: boolean } & object) | null)?.isAdmin;
 
   const go = (s: SectionId) =>
     router.push(`/dashboard/settings?s=${s}`, { scroll: false });
@@ -352,11 +330,7 @@ function SettingsShell() {
           )}
           {active === "integrasi" && <IntegrasiSection />}
           {active === "admin" && isAdmin && (
-            <AdminSection
-              admins={admins}
-              currentEmail={session?.user?.email ?? ""}
-              onSave={saveAdmins}
-            />
+            <AdminSection currentEmail={session?.user?.email ?? ""} />
           )}
       </div>
     </div>
@@ -732,101 +706,29 @@ function AdminOnly({ title }: { title: string }) {
 
 // ── AdminSection ──────────────────────────────────────────────────────────────
 
-function AdminSection({
-  admins,
-  currentEmail,
-  onSave,
-}: {
-  admins: string[];
-  currentEmail: string;
-  onSave: (list: string[]) => void;
-}) {
-  const [emailInput, setEmailInput] = useState("");
-  const [emailError, setEmailError] = useState("");
-
-  const add = () => {
-    const t = emailInput.trim().toLowerCase();
-    if (!t) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) {
-      setEmailError("Invalid email format");
-      return;
-    }
-    if (admins.includes(t)) {
-      setEmailError("This email is already an admin");
-      return;
-    }
-    onSave([...admins, t]);
-    setEmailInput("");
-    setEmailError("");
-  };
-
-  const remove = (email: string) => {
-    if (admins.length <= 1) return;
-    onSave(admins.filter((e) => e !== email));
-  };
-
+function AdminSection({ currentEmail }: { currentEmail: string }) {
   return (
     <div className="space-y-5">
-      <SectionTitle title="Admin" description="Manage who has admin access" />
+      <SectionTitle title="Admin" description="Admin access for this dashboard" />
 
-      <Card title="Admin List">
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="email"
-                placeholder="name@paracorpgroup.com"
-                value={emailInput}
-                onChange={(e) => { setEmailInput(e.target.value); setEmailError(""); }}
-                onKeyDown={(e) => e.key === "Enter" && add()}
-                className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-              />
-            </div>
-            <button
-              onClick={add}
-              className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors"
-            >
-              <Plus size={14} />
-              Add
-            </button>
+      <Card title="Your Access" icon={<Shield size={16} color="#1e4076" />} iconBg="#EEF4FB">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
+            <span className="text-xs font-bold text-brand-600">
+              {currentEmail[0]?.toUpperCase() ?? "?"}
+            </span>
           </div>
-          {emailError && <p className="text-xs text-red-500">{emailError}</p>}
-
-          <ul className="space-y-2 mt-1">
-            {admins.map((email) => (
-              <li key={email} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
-                    <span className="text-xs font-bold text-brand-600">{email[0].toUpperCase()}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">{email}</p>
-                    {email === currentEmail && (
-                      <p className="text-xs text-brand-500 leading-none mt-0.5">You</p>
-                    )}
-                  </div>
-                </div>
-                {email !== currentEmail && (
-                  <button
-                    onClick={() => remove(email)}
-                    disabled={admins.length <= 1}
-                    className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30"
-                    aria-label={`Remove admin ${email}`}
-                  >
-                    <X size={13} />
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
+          <div>
+            <p className="text-sm font-medium text-gray-800">{currentEmail}</p>
+            <p className="text-xs text-brand-600 mt-0.5">Admin</p>
+          </div>
         </div>
       </Card>
 
-      <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
-        <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
-        <p className="text-xs text-amber-700 leading-relaxed">
-          Admin data is stored locally on this device. Changes only apply to this browser and device.
+      <div className="flex items-start gap-2.5 bg-[#EEF4FB] border border-[#C3CEE3] rounded-xl px-4 py-3">
+        <AlertCircle size={14} className="text-[#1E4076] shrink-0 mt-0.5" />
+        <p className="text-xs text-[#16305C] leading-relaxed">
+          Admin access is managed via the <span className="font-mono font-semibold">ADMIN_EMAILS</span> environment variable. Contact the platform team to add or remove admins.
         </p>
       </div>
     </div>

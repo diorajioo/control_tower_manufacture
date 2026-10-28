@@ -38,6 +38,24 @@
         "value": "#1e4076",
         "createdAt": "2026-10-19T09:52:26.291Z",
         "reason": "Paragon Blue — primary brand color defined in CLAUDE.md"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#dbeafe",
+        "createdAt": "2026-10-28T02:56:47.144Z",
+        "reason": "Intentional blue tint in profile card avatar gradient, complements Paragon Blue brand"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#e0e7ff",
+        "createdAt": "2026-10-28T02:56:47.453Z",
+        "reason": "Intentional indigo tint in profile card avatar gradient, complements Paragon Blue brand"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "#bfdbfe",
+        "createdAt": "2026-10-28T02:56:47.760Z",
+        "reason": "Intentional blue-200 border on profile card, complements Paragon Blue brand"
       }
     ]
   }
