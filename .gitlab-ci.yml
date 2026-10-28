@@ -1,0 +1,121 @@
+############################################################################
+# control-tower-manufacture — CI/CD
+#
+# One service (Next.js standalone: pages + API routes + Microsoft SSO in one container), using the
+# CI/CD component paragon-is/dai/infra -> templates/k8s-monorepo-service with context_path ".".
+# Same shape as affiliate-analytics, one include instead of two.
+#
+# ── Branch -> environment ─────────────────────────────────────────────────
+#   staging  ->  namespace ct-manufaktur, object names suffixed -staging
+#   main     ->  NOT on Kubernetes yet: production stays on Vercel (deploys from main).
+#                Switched off via build_when_production / deploy_when_production: "never".
+#   development: NOT USED. Switched off via build_when_development / deploy_when_development.
+#                Required, not cosmetic: with an empty ecr_repo_development, kaniko's
+#                --destination becomes "<registry>/:tag" and the build fails. Do not override the
+#                build job's `rules:` instead; the image-scan job has its own copy of the rules.
+#
+# ── URL: one shared host, one path per dashboard ──────────────────────────
+#   https://poros-staging.paradev.io/ct-manuf     (Ingress in the infra repo:
+#   Control-Tower-Manufacture/staging/ingress/staging-control-tower-manufacture-ingress.yaml)
+# The image is BUILT for that path: NEXT_PUBLIC_BASE_PATH=/ct-manuf below. Next.js bakes it into
+# routes and asset URLs, so the same image cannot be served at another path without a rebuild.
+# Microsoft SSO callback (register with IT exactly like this):
+#   https://poros-staging.paradev.io/ct-manuf/api/auth/callback/azure-ad
+#
+# ── Security (comes with the component, see infra/templates/SECURITY.md) ─
+#   security_gate_mode "warn": findings turn the job yellow and do not block. Switch to
+#   "enforce" once the first runs are clean. Accept a risk in .gitleaksignore / .semgrepignore /
+#   .trivyignore (repo root), each entry with a reason + review date.
+#
+# ── Must exist BEFORE the first pipeline run ──────────────────────────────
+#   1. ECR repo: control-tower-manufacture (ECR does not create repos; pushing to a missing one
+#      fails with an error that reads like a credentials problem)
+#   2. Namespace `ct-manufaktur`, holding: imagePullSecret `ecr-docker-registry`, TLS
+#      secret `paradev-io-sectigo-tls` (namespaced: not inherited), the ConfigMap (in the infra
+#      repo) and the Secret below (README.md, "Deploying to Kubernetes")
+#   3. GROUP-level CI/CD variables: AWS_ACCOUNT_ID, AWS_DEFAULT_REGION, AWS_ACCESS_KEY_ID,
+#      AWS_SECRET_ACCESS_KEY, CI_REGISTRY, CI_REGISTRY_USER, CI_REGISTRY_PASSWORD,
+#      KUBE_MANIFEST_REPO, CI_TOKEN_GIT
+#
+# ── Values here only apply on the FIRST deploy ────────────────────────────
+# Once the manifest exists in the infra repo, a deploy only bumps the image tag. Changing ports,
+# resources or envFrom later means an MR against the manifest in infra, not an edit here.
+#
+# ── Green here = "manifest published", NOT "app running" ──────────────────
+# The rollout is checked by the infra repo's reconcile job (it prints pod events and logs on
+# failure). A first-ever apply only WARNS, so read its log rather than trusting the colour.
+############################################################################
+
+include:
+  - component: $CI_SERVER_FQDN/paragon-is/dai/infra/k8s-monorepo-service@main
+    inputs:
+      service: control-tower-manufacture
+      group_repo: Control-Tower-Manufacture
+      context_path: "."
+
+      # The path on the shared host. Public by design (it is in every URL), never a secret.
+      # OpenPanel: client ID of the STAGING project (separate from production's on Vercel), from
+      # the CI/CD variable OPENPANEL_CLIENT_ID_STAGING (Settings -> CI/CD -> Variables, not
+      # protected — it is public). Missing variable = empty build arg = tracking off, build still green.
+      build_args_staging: "--build-arg NEXT_PUBLIC_BASE_PATH=/ct-manuf --build-arg NEXT_PUBLIC_OPENPANEL_CLIENT_ID=${OPENPANEL_CLIENT_ID_STAGING}"
+
+      ecr_repo_development: ""
+      ecr_repo_staging: control-tower-manufacture
+      ecr_repo_production: control-tower-manufacture
+
+      git_branch_staging: staging
+      git_branch_production: main
+
+      namespace_staging: ct-manufaktur
+
+      security_gate_mode: "warn"
+
+      build_when_development: "never"   # also switches off container-scan-*-development
+      deploy_when_development: "never"
+      deploy_when_staging: "on_success"
+      # Production is Vercel (main). Turn these on, with namespace_production and a production
+      # Ingress/ConfigMap/Secret in infra, when production moves to the cluster.
+      build_when_production: "never"
+      deploy_when_production: "never"
+
+      # PORT=3000 + EXPOSE 3000 in the Dockerfile; HOSTNAME is forced to 0.0.0.0 in its CMD.
+      container_port: "3000"
+      port_svc: "3000"
+      target_port_svc: "3000"
+
+      # ponytail: one replica, no HPA. Sessions are JWT cookies, so a second pod would work, but
+      # the rate limiter (middleware.ts) and the query cache (unstable_cache, .next/cache) are per
+      # pod, and /api/cache/revalidate only clears the pod it lands on. Shared cache first if
+      # usage asks for more replicas.
+      replica: "1"
+      request_cpu: "100m"
+      request_memory: "128Mi"
+      limit_cpu: "1"
+      limit_memory: "1Gi"
+
+      # envFrom. The objects are NOT created by the template: they must already exist in the
+      # namespace, or the pod stops at CreateContainerConfigError.
+      configmap_refs_staging: control-tower-manufacture-staging-configmap
+      secret_refs_staging: control-tower-manufacture-staging-secrets
+
+      # ZAP baseline (passive) against what is deployed: weekly on a pipeline schedule for
+      # `staging`, manual on a staging push. Behind SSO it mostly sees the login page.
+      dast_target_url_staging: https://poros-staging.paradev.io/ct-manuf
+
+############################################################################
+# NAME OVERRIDE — staging
+#
+# The template uses `inputs.service` for the Deployment name, the `app` label, the Service
+# selector and the container name, the same in every environment. When production joins the
+# same namespace, staging's names must differ or both environments would manage the same objects
+# and the last apply would win. Set now so staging never has to be renamed (a rename is a new
+# Deployment plus a stale old one).
+#
+# In the cluster:
+#   staging     control-tower-manufacture-staging   Service control-tower-manufacture-staging-svc
+############################################################################
+
+deploy-control-tower-manufacture-staging:
+  variables:
+    NAME_SERVICE: control-tower-manufacture-staging
+    NAME_SERVICE_SVC: control-tower-manufacture-staging-svc

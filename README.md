@@ -97,5 +97,13 @@ Production deploys automatically to Vercel from the `main` branch. Snowflake and
 | `.env.example` | Seeded by Platform Team, extended by this project |
 | `.claude/skills/apply-event-tracking/` | Platform Team — usage-tracking standard |
 
-Application code, `package.json` + `pnpm-lock.yaml` (exact pins), `Dockerfile` and `k8s/` belong to this project.
+Application code, `package.json` + `pnpm-lock.yaml` (exact pins), `Dockerfile`, `.gitlab-ci.yml` and `k8s/` belong to this project.
+
+## Deploying to Kubernetes
+
+Staging runs at `https://poros-staging.paradev.io/ct-manuf` (push to `staging`; production stays on Vercel). Manifests, the Secret keys and the SSO callback are in [`k8s/README.md`](k8s/README.md). Check the container before pushing:
+
+```bash
+PORT=3000 HEALTH_PATH=/healthz PAGE_PATH=/login sh verify.sh
+```
 Data files, `.env*`, `node_modules/` and the old Git history are not in this repository.
