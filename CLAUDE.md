@@ -4,7 +4,7 @@
 
 Manufacturing KPI dashboard for PT Paracorp Group. Real-time data from Snowflake, authenticated via Azure AD. Plant Managers and Operations Managers use it daily to read production health and make decisions without waiting for manual reports.
 
-Tech: Next.js 15 (App Router, React 18) · Snowflake · Azure AD via NextAuth.js · Groq AI · Tailwind CSS · Nivo charts.
+Tech: Next.js 16 (App Router, React 18) · Snowflake · Azure AD via NextAuth.js · Groq AI · Tailwind CSS · Nivo charts.
 
 ## DAI Platform rules (Platform Team — do not remove)
 
@@ -121,7 +121,7 @@ https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQCKOkUYBmkZRailNr6rK
 - Never load a full table into memory. Always filter and limit in SQL.
 
 ### Project specifics (platform)
-- Stack: Next.js 15.5.28 (App Router, TypeScript 5.9.3, React 18.3.1) on Node.js 24.22.1 (minimum; `engines` + `.nvmrc`) — one container, port 3000, health check `GET /healthz`.
+- Stack: Next.js 16.4.3 (App Router, TypeScript 5.9.3, React 18.3.1) on Node.js 24.22.1 (minimum; `engines` + `.nvmrc`) — one container, port 3000, health check `GET /healthz`.
 - Data sources: ClickHouse (internal) on Kubernetes, Snowflake `MIGRATION.CONTROL_TOWER` on Vercel until the move (`lib/db.ts`).
 - SSO: NextAuth Azure AD, callback `/api/auth/callback/azure-ad`.
 - Notification store: Vercel Blob (`BLOB_READ_WRITE_TOKEN`) — keeps the pod stateless.
