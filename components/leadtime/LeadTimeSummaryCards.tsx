@@ -3,6 +3,7 @@
 // Lead Time page → Analysis tab: Lead Time card and Lead time composition card.
 // Data: /api/lead-time/analysis (gross / nett stats per PO, weekly series, composition). Values arrive in days.
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useState } from "react";
 import { ResponsiveLine } from "@nivo/line";
 import { LineDraw } from "@/components/charts/LineDraw";
@@ -88,7 +89,7 @@ export function LeadTimeSummaryCard({ stats, weekly, basis, scope, unit, targetD
     setAiNote(null);
     if (!factsKey) return;
     let cancelled = false;
-    fetch("/api/lead-time/note", { method: "POST", headers: { "Content-Type": "application/json" }, body: factsKey })
+    fetch(withBase("/api/lead-time/note"), { method: "POST", headers: { "Content-Type": "application/json" }, body: factsKey })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled && typeof d?.note === "string") setAiNote(d.note); })
       .catch(() => {});

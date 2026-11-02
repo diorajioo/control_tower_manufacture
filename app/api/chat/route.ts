@@ -425,7 +425,11 @@ export async function POST(req: NextRequest) {
 
   const allMessages: ChatMessage[] = [
     { role: "system", content: systemPrompt },
-    ...messages.slice(-10),
+    // Only the two roles the UI sends, capped: a client-sent "system" turn would sit beside ours.
+    ...(Array.isArray(messages) ? messages : [])
+      .filter((m) => (m?.role === "user" || m?.role === "assistant") && typeof m.content === "string")
+      .slice(-10)
+      .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) })),
   ];
 
   const MAX_TOOL_ROUNDS = 3;

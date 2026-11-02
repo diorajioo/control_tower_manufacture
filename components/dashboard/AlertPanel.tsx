@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useState, type ReactNode } from "react";
 import { AlertTriangle, AlertCircle, Info, X, ChevronDown, ChevronUp, Send, Check, Loader2, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -81,7 +82,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
         }
       } catch { /* ignore */ }
 
-      const res = await fetch("/api/notifications/teams", {
+      const res = await fetch(withBase("/api/notifications/teams"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

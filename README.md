@@ -1,14 +1,29 @@
 # Manufacturing Control Tower
 
-Real-time KPI dashboard for PT Paracorp Group manufacturing operations. Built on Next.js 14 with live data from Snowflake and Azure AD authentication.
+Real-time KPI dashboard for PT Paracorp Group manufacturing operations. Built on Next.js 16 with live data from Snowflake and Azure AD authentication.
 
 ## What it does
 
 Displays Lead Time, Yield, Right First Time, Output, OEE, OPE, and Productivity across all plants in real time. Includes AI-generated executive summaries, Microsoft Teams alert notifications, an AI diagnostic chatbot, and a fullscreen Monitor Mode for factory floor display.
 
+## Owner
+
+- Business owner: <name, email>
+- Technical contact: Dio Arioseno, dio.arioseno@paracorpgroup.com
+- Backup contact: <name, email>
+- Team: <team>
+
+## Data sources
+
+| System | Object | Refresh |
+|---|---|---|
+| Snowflake | `MIGRATION.CONTROL_TOWER.CT_MANUF_*` (LEADTIME, E2E, OLAH, KEMAS, TRENDS) | Per ETL load; app cache 1 hour |
+| Snowflake | `DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_FG` / `_OLAH` | Per ETL load; app cache 1 hour |
+| ClickHouse (internal) | Same tables, used when `DATA_SOURCE=clickhouse` (Kubernetes) | Per ETL load; app cache 1 hour |
+
 ## Tech stack
 
-Next.js 14 (App Router) · TypeScript · Tailwind CSS · Snowflake SDK · NextAuth.js + Azure AD · Groq API · Nivo charts · Framer Motion
+Next.js 16 (App Router) · TypeScript · Tailwind CSS · Snowflake SDK · NextAuth.js + Azure AD · Groq API · Nivo charts · Framer Motion
 
 ## Getting started
 
@@ -72,3 +87,23 @@ Start with [CLAUDE.md](CLAUDE.md) for the operating manual. Then:
 ## Deployment
 
 Production deploys automatically to Vercel from the `main` branch. Snowflake and API credentials are set as Vercel environment variables.
+
+## What is in this repository, and what is not
+
+| Platform Team files (do not delete) | Owner |
+|---|---|
+| `.gitignore`, `.dockerignore` | Platform Team (project lines added below theirs) |
+| `CLAUDE.md` | Platform Team rules + project details |
+| `.env.example` | Seeded by Platform Team, extended by this project |
+| `.claude/skills/apply-event-tracking/` | Platform Team — usage-tracking standard |
+
+Application code, `package.json` + `pnpm-lock.yaml` (exact pins), `Dockerfile`, `.gitlab-ci.yml` and `k8s/` belong to this project.
+
+## Deploying to Kubernetes
+
+Staging runs at `https://poros-staging.paradev.io/ct-manuf` (push to `staging`; production stays on Vercel). Manifests, the Secret keys and the SSO callback are in [`k8s/README.md`](k8s/README.md). Check the container before pushing:
+
+```bash
+PORT=3000 HEALTH_PATH=/healthz PAGE_PATH=/login sh verify.sh
+```
+Data files, `.env*`, `node_modules/` and the old Git history are not in this repository.

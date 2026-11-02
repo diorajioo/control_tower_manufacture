@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ResponsiveLine } from "@nivo/line";
 import { LineDraw } from "@/components/charts/LineDraw";
@@ -62,7 +63,7 @@ export function LeadTimeTrendChart({ data, loading, filters }: {
     if (grain !== "month" || !filters || monthlyReady) return;
     let cancelled = false;
     setMonthlyLoading(true);
-    fetch(`/api/lead-time/trend?${new URLSearchParams({ ...filters, grain: "month" })}`)
+    fetch(withBase(`/api/lead-time/trend?${new URLSearchParams({ ...filters, grain: "month" })}`))
       .then((r) => r.json())
       .then((res) => { if (!cancelled && res?.total) setMonthly({ key: filterKey, trend: res }); })
       .catch(() => { /* keeps the previous lines */ })

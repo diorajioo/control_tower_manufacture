@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { getToken } from "next-auth/jwt";
 import { authOptions } from "@/lib/auth";
 import { sendGraphAlerts, resolveToken, sendCardTo } from "@/lib/graph/teams";
 import { sendTeamsAlerts, buildAlertCard, alertSummary } from "@/lib/alerts/teams";
 import { getTeamsSettings } from "@/lib/settings";
-import { normalizeRecipient, type RecipientConfig } from "@/lib/notifications/store";
+import { isServerAdmin } from "@/lib/serverAdmin";
+import type { RecipientConfig } from "@/lib/notifications/store";
 import { sendTestSummaries, dashboardUrl } from "@/lib/notifications/run";
 
 // A summary test reads the KPI snapshot and calls the AI
@@ -28,10 +28,10 @@ const TEST_ALERT = {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Sends from the connected sender to the recipients in the body: admins only, like saving them.
+  if (!isServerAdmin(session.user?.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({})) as { kind?: "alert" | "summary" };
-  const jwt = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  const sessionToken = jwt?.accessToken as string | undefined;
 
   const recipients: RecipientConfig[] = (await getTeamsSettings()).recipients;
 
@@ -42,12 +42,12 @@ export async function POST(req: NextRequest) {
 
   if (recipients.length > 0) {
     if (body.kind === "summary") {
-      const result = await sendTestSummaries(recipients, sessionToken);
+      const result = await sendTestSummaries(recipients);
       if (result.sent.length === 0) return fail(result.errors);
       return NextResponse.json({ ok: true, sent: result.sent.length, errors: result.errors });
     }
-    const token = await resolveToken(sessionToken);
-    if (!token) return fail(["No token available — connect a sender, or sign out and back in"]);
+    const token = await resolveToken();
+    if (!token) return fail(["No token available — connect a sender first"]);
     const card = buildAlertCard([TEST_ALERT], { plant: "All Plant", period: "Test", dashboardUrl: dashboardUrl() });
     const errors: string[] = [];
     let sent = 0;
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   // ── Legacy env paths ────────────────────────────────────────────────────────
   const opts = { plant: "All Plant", period: "Test", dashboardUrl: dashboardUrl() };
   if (process.env.TEAMS_RECIPIENTS) {
-    const result = await sendGraphAlerts([TEST_ALERT], { ...opts, accessToken: sessionToken });
+    const result = await sendGraphAlerts([TEST_ALERT], opts);
     if (!result.ok) return fail(result.errors);
     return NextResponse.json({ ok: true, sent: result.sent, mode: "graph" });
   }

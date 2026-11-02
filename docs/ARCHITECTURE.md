@@ -2,7 +2,7 @@
 
 ## Overview
 
-Next.js 15 App Router serves as both the frontend (React Server/Client Components) and backend (API Routes). No separate backend process. Snowflake is the sole data warehouse.
+Next.js 16 App Router serves as both the frontend (React Server/Client Components) and backend (API Routes). No separate backend process. Snowflake is the sole data warehouse.
 
 ```mermaid
 flowchart LR
@@ -146,8 +146,8 @@ User opens /dashboard
 
 1. User visits `/` → middleware checks session → redirects to `/login` if unauthenticated.
 2. Login page: Azure AD OAuth2 via NextAuth.js. User authenticates with corporate Microsoft account.
-3. Session stored in signed JWT cookie (NextAuth default).
-4. If Azure AD refresh token fails: `session.expires` is set to epoch 0; middleware redirects to `/login?error=SessionExpired`.
+3. Session stored in an encrypted JWT cookie with identity only (no Microsoft tokens — they overflowed the ingress's response-header buffer); it lasts 7 days.
+4. Settings → Teams → Connect sets a short-lived marker cookie and signs in again; the callback stores that sign-in's refresh token as the Teams sender, server-side (`lib/auth.ts`).
 5. Every API route verifies session before touching Snowflake.
 
 ## Monitor Mode Architecture
@@ -312,7 +312,8 @@ Rules: alerts go only to recipients of the same plant; `instant` alerts are dedu
 
 **Runner cadence**
 - Vercel Hobby: `vercel.json` cron `0 0 * * *` (07:00 WIB, once a day — plan limit). A schedule at another time goes out at the next 07:00 run.
-- Kubernetes (planned; image + manifests in `Dockerfile` and `k8s/`, see `k8s/README.md`): a CronJob every 15 minutes, set `NOTIF_RUNNER=frequent` and keep the Blob store (`BLOB_READ_WRITE_TOKEN`) — the platform requires stateless pods, so no volume; health check `GET /healthz`:
+- Kubernetes staging (since 2026-10-27, `https://poros-staging.paradev.io/ct-manuf`, manifests in the infra repo — `k8s/README.md`): no runner; the store is a JSON file in `/tmp` (ephemeral, separate from production's Blob store).
+- Kubernetes production (planned): a CronJob every 15 minutes, set `NOTIF_RUNNER=frequent` and keep the Blob store (`BLOB_READ_WRITE_TOKEN`) — the platform requires stateless pods, so no volume; health check `GET /healthz`:
 
 ```yaml
 apiVersion: batch/v1

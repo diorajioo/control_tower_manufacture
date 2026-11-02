@@ -6,6 +6,7 @@
 // app/layout.tsx; the CSS in app/globals.css animates the sidebar width and, with the same duration and easing,
 // the top bar's left padding, so the top bar content stays still while the menu slides away.
 
+import { withBase } from "@/lib/basePath";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +35,7 @@ export function SidebarBrand({ className }: { className?: string }) {
         <PanelLeftOpen size={17} strokeWidth={1.75} className="ct-icon-open" />
       </button>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/paragon-corp-white.e705509b.png" alt="Paragon Corp" className="w-36 h-auto" />
+      <img src={withBase("/paragon-corp-white.e705509b.png")} alt="Paragon Corp" className="w-36 h-auto" />
     </div>
   );
 }

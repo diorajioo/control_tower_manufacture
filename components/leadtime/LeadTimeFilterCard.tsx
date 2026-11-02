@@ -4,6 +4,7 @@
 // (No. PO · Activity · Line category · Line · SKU group · SKU · Variant — lib/leadTimeFilters.ts).
 // Changes apply at once (the global period / plant still go through Apply in the Header).
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useState } from "react";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { FIELD_LABEL, SelectField, MultiSelectField, type FieldOption } from "@/components/ui/FilterField";
@@ -49,7 +50,7 @@ export function LeadTimeFilterCard({ base, scope, onScope, basis, onBasis, unit,
     setOptions(null);
     const params = new URLSearchParams({ plant: base.plant, startDate: base.startDate, endDate: base.endDate });
     if (base.period) params.set("period", base.period);
-    fetch(`/api/lead-time/options?${params}`)
+    fetch(withBase(`/api/lead-time/options?${params}`))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled && d && !d.error) setOptions(d); })
       .catch(() => {});

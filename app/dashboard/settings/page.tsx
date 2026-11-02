@@ -1,7 +1,8 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { Suspense, useState, useEffect, useRef } from "react";
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Session } from "next-auth";
 import {
@@ -233,7 +234,7 @@ function SettingsShell() {
     setJabatan(localStorage.getItem("ct-user-jabatan") ?? "");
 
     // Load Teams settings from server so all devices stay in sync
-    fetch("/api/settings/teams")
+    fetch(withBase("/api/settings/teams"))
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data) {
@@ -839,7 +840,7 @@ function EmailTab({
     setTestState("loading");
     setTestMsg("");
     try {
-      const res = await fetch("/api/notifications/test", {
+      const res = await fetch(withBase("/api/notifications/test"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recipients: notif.recipients.map((r) => r.email) }),
@@ -1029,7 +1030,7 @@ const AUTOSAVE_MS = 800;
 async function persistTeams(n: TeamsNotifSettings): Promise<boolean> {
   try { localStorage.setItem("ct-teams-settings", JSON.stringify(n)); } catch { /* cache only */ }
   try {
-    const res = await fetch("/api/settings/teams", {
+    const res = await fetch(withBase("/api/settings/teams"), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled: n.enabled, recipients: n.recipients }),
@@ -1091,7 +1092,7 @@ function TeamsTab({
   const [senderMsg, setSenderMsg] = useState("");
 
   useEffect(() => {
-    fetch("/api/dashboard/plants")
+    fetch(withBase("/api/dashboard/plants"))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (Array.isArray(d?.plants)) setPlants(d.plants); })
       .catch(() => {});
@@ -1131,20 +1132,20 @@ function TeamsTab({
 
   // ── Sender connection ──
   const reloadSender = async () => {
-    const d = await fetch("/api/settings/teams").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const d = await fetch(withBase("/api/settings/teams")).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     if (d) setTeamsNotif({ ...teamsNotif, sender: d.sender, lastRun: d.lastRun });
   };
   const connectSender = async () => {
     setSenderState("busy"); setSenderMsg("");
-    const res = await fetch("/api/settings/teams/sender", { method: "POST" }).catch(() => null);
+    const res = await fetch(withBase("/api/settings/teams/sender"), { method: "POST" }).catch(() => null);
     const d = res ? await res.json().catch(() => ({})) : {};
     if (!res?.ok) { setSenderState("error"); setSenderMsg(d.error ?? "Could not connect the sender"); return; }
-    setSenderState("idle");
-    await reloadSender();
+    // Microsoft sign-in; on the way back the server stores this account as the sender (lib/auth.ts)
+    await signIn("azure-ad", { callbackUrl: withBase("/dashboard/settings?s=notifikasi") });
   };
   const disconnectSender = async () => {
     setSenderState("busy"); setSenderMsg("");
-    await fetch("/api/settings/teams/sender", { method: "DELETE" }).catch(() => null);
+    await fetch(withBase("/api/settings/teams/sender"), { method: "DELETE" }).catch(() => null);
     setSenderState("idle");
     await reloadSender();
   };
@@ -1155,7 +1156,7 @@ function TeamsTab({
     setTestMsg("");
     try {
       const recipients = teamsNotif.recipients.length > 0 ? teamsNotif.recipients : undefined;
-      const res = await fetch("/api/notifications/teams/test", {
+      const res = await fetch(withBase("/api/notifications/teams/test"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind, recipients }),
@@ -1163,7 +1164,7 @@ function TeamsTab({
       const data = (await res.json()) as { ok?: boolean; error?: string; hint?: string; sent?: number; errors?: string[] };
       if (!res.ok) {
         const hint = data.hint === "sign-out-signin"
-          ? " Try signing out and back in to refresh Teams permissions."
+          ? " Connect the sender again (Teams → Sender) to refresh its Teams permissions."
           : "";
         throw new Error((data.error ?? "Failed to send") + hint);
       }
@@ -1662,7 +1663,7 @@ function IntegrasiSection() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/settings/data-source")
+    fetch(withBase("/api/settings/data-source"))
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { setStatus(d); setLoading(false); })
       .catch(() => setLoading(false));

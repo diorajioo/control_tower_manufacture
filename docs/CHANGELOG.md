@@ -4,6 +4,34 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-11-02
+
+### Changed
+- **GitHub `main` and GitLab `staging` merged into one tree.** Staging's "Sync from GitHub main" merges had kept staging's files only, so staging never got Next.js 16.4.3, the session-based admin gate, the KPI failure banner or the Settings data-source status, and `main` lacked the Kubernetes staging work (base path, CSP nonce, CSRF guard, Kong sign-in fixes, ClickHouse fixes). Conflicts took the stricter side: Teams alerts rebuilt on the server **and** recipients from server settings only (client-sent recipients ignored, also for admins); no Microsoft token in the session; `session.user.isAdmin` from `isServerAdmin()`.
+
+## 2026-10-28
+
+### Fixed
+- **"Last sync" 7 hours in the future on ClickHouse**: ClickHouse returns `LOAD_TIMESTAMP` as WIB wall-clock without an offset (Snowflake adds `+0700`), and the server read it as UTC — the header showed "0s ago" and a load time 7 hours ahead. `/api/dashboard/etl` now reads an offset-less timestamp as WIB.
+- **Sign-in on Kubernetes (Kong)**: the session cookie no longer carries Microsoft's access + refresh tokens. Their ~5-8 KB of `Set-Cookie` overflowed Kong's response-header buffer, so the sign-in callback failed with a 502 or, after Kong's retry, `AADSTS54005` (code already redeemed). The cookie now holds identity only; sessions last 7 days from sign-in, absolute (`authAt` + `isSessionFresh()`; next-auth's own expiry slides). Sessions issued before this change are rejected once (sign in again) — this also stops old sessions flagged with a failed refresh from being revived. The Teams sender is connected through a fresh Microsoft sign-in started from Settings; the marker cookie is an HMAC bound to the clicking admin for 10 minutes (`lib/senderMarker.ts`), and `lib/auth.ts` stores the refresh token server-side. Interactive Teams sends use the connected sender / app token / `TEAMS_REFRESH_TOKEN`, no longer the user's own token, and `/api/auth/session` no longer hands the Graph access token to the browser.
+- **Output per Brand / Variant and Top SKU failed on ClickHouse** (`/api/dashboard/output-mix` 500, Code 215): `getOutputMix()` wrote `COALESCE(GRP, '(Not set)') AS GRP … GROUP BY COALESCE(GRP, …)`; ClickHouse reads `GRP` in the GROUP BY as the alias, Snowflake as the column. The inner column is now `GRP_RAW`.
+
+## 2026-10-27
+
+### Added
+- **Kubernetes staging** at `https://poros-staging.paradev.io/ct-manuf` — the shared dashboard host, one path per app (same pattern as affiliate-analytics). One container (Next.js serves pages, API and SSO). `.gitlab-ci.yml` uses the infra `k8s-monorepo-service` component; Ingress + ConfigMap in the infra repo; production stays on Vercel.
+- **Base path** (`NEXT_PUBLIC_BASE_PATH`, build arg): `basePath` in `next.config.mjs`, `withBase()` in `lib/basePath.ts` on every raw `fetch`, `<a href>`, `<img src>` and next-auth `callbackUrl`. SSO callback under it: `/ct-manuf/api/auth/callback/azure-ad`.
+
+### Changed
+- **Security (shared host)**: page CSP moved to `middleware.ts` with a per-request nonce + `strict-dynamic` (was `script-src 'unsafe-inline'`); `/api/*` answers with `default-src 'none'; sandbox`; next-auth cookies renamed `ct-manuf.*` and scoped to the base path; sign-in redirects only return into this app (`safeRedirect`, check: `npx tsx scripts/check-base-path.ts`); `/lead-time` and `/monitor` get the server-side session check `/dashboard` had. One-time effect: everyone signs in again (cookie rename).
+- **Dockerfile**: uid 1000 (`node`), `HOSTNAME=0.0.0.0` re-set at start (Kubernetes overrides it with the pod name), `NEXT_PUBLIC_BASE_PATH` build arg.
+- Teams card links built from `NEXTAUTH_URL`'s origin + base path (`dashboardUrl()`).
+- **OpenPanel on Kubernetes**: `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` is a Docker build arg, filled by CI from the variable `OPENPANEL_CLIENT_ID_STAGING` (staging's own OpenPanel project); empty = tracking off. Scroll-depth report names strip the base path (`AnalyticsBoot.reportFromPath`).
+- **Security review fixes**: `/api/notifications/teams` rebuilds alert text on the server (`alertsFromKpi(getKpiSnapshot())`) and takes only alert ids from the browser — any signed-in user could send arbitrary card text (links) from the company sender; client-sent recipients are admin-only. `/api/notifications/teams/test` is admin-only. Non-GET `/api/*` (except `/api/auth`) must carry an `Origin` matching the host — CSRF guard, because every `*.paradev.io` site is same-site. `/api/chat` keeps only `user` / `assistant` turns, ≤ 4,000 chars each. CSP `connect-src` trimmed to self + OpenPanel.
+
+### Fixed
+- Avatar menu "My profile" / "Settings" pointed to `/settings`, which does not exist — now `/dashboard/settings`.
+
 ## 2026-10-14
 
 ### Changed

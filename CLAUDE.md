@@ -123,7 +123,8 @@ https://paracorpgroup.sharepoint.com/:w:/s/DataEngineering/IQCKOkUYBmkZRailNr6rK
 ### Project specifics (platform)
 - Stack: Next.js 16.4.3 (App Router, TypeScript 5.9.3, React 18.3.1) on Node.js 24.22.1 (minimum; `engines` + `.nvmrc`) — one container, port 3000, health check `GET /healthz`.
 - Data sources: ClickHouse (internal) on Kubernetes, Snowflake `MIGRATION.CONTROL_TOWER` on Vercel until the move (`lib/db.ts`).
-- SSO: NextAuth Azure AD, callback `/api/auth/callback/azure-ad`.
+- SSO: NextAuth Azure AD, callback `/api/auth/callback/azure-ad` (staging: `https://poros-staging.paradev.io/ct-manuf/api/auth/callback/azure-ad`).
+- Staging URL: `https://poros-staging.paradev.io/ct-manuf` — a host shared with other dashboards, one path each. The image is built with `NEXT_PUBLIC_BASE_PATH=/ct-manuf`. **Every root-relative URL that is not `next/link` / `router` / `redirect()` — `fetch`, `<a href>`, `<img src>`, `signIn`/`signOut` `callbackUrl` — goes through `withBase()` (`lib/basePath.ts`)**, or it hits another dashboard. Page CSP (nonce) is set in `middleware.ts`; never add `'unsafe-inline'` to `script-src` — inline scripts take `nonce={nonce}` from the `x-nonce` header (see `app/layout.tsx`). Manifests: infra repo, see `k8s/README.md`.
 - Notification store: Vercel Blob (`BLOB_READ_WRITE_TOKEN`) — keeps the pod stateless.
 
 ### When I ask for a change

@@ -1,5 +1,6 @@
 "use client";
 
+import { withBase } from "@/lib/basePath";
 import { useEffect, useRef, useState } from "react";
 import { Bell, ArrowRight, ChevronDown, Check, Loader2, X, Send, Monitor, Lock, User, Settings, LogOut } from "lucide-react";
 
@@ -198,7 +199,7 @@ export function Header({
       let teamsRecipients: Array<{ email: string; kpis: Record<string, boolean> }> | undefined;
       // Prefer server settings for cross-device consistency, fall back to localStorage cache
       try {
-        const settingsRes = await fetch("/api/settings/teams");
+        const settingsRes = await fetch(withBase("/api/settings/teams"));
         if (settingsRes.ok) {
           const cfg = await settingsRes.json() as { enabled?: boolean; recipients?: typeof teamsRecipients };
           if (cfg.enabled && cfg.recipients?.length) teamsRecipients = cfg.recipients;
@@ -210,7 +211,7 @@ export function Header({
           if (cfg.enabled && cfg.recipients?.length) teamsRecipients = cfg.recipients;
         }
       }
-      const res = await fetch("/api/notifications/teams", {
+      const res = await fetch(withBase("/api/notifications/teams"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -245,7 +246,7 @@ export function Header({
   const [etlAt, setEtlAt] = useState<Date | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
-    fetch("/api/dashboard/etl")
+    fetch(withBase("/api/dashboard/etl"))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setEtlAt(d?.etlAt ? new Date(d.etlAt) : null))
       .catch(() => setEtlAt(null));
@@ -465,8 +466,8 @@ export function Header({
 
               {/* Menu items */}
               {[
-                { icon: <User size={15} strokeWidth={1.75} />, label: "My profile",  href: "/settings" },
-                { icon: <Settings size={15} strokeWidth={1.75} />, label: "Settings", href: "/settings" },
+                { icon: <User size={15} strokeWidth={1.75} />, label: "My profile",  href: withBase("/dashboard/settings") },
+                { icon: <Settings size={15} strokeWidth={1.75} />, label: "Settings", href: withBase("/dashboard/settings") },
               ].map(({ icon, label, href }) => (
                 <a key={label} href={href}
                   style={{
@@ -486,7 +487,7 @@ export function Header({
               {/* Divider + Sign out */}
               <div style={{ borderTop: "1px solid #f3f4f6" }}>
                 <button
-                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  onClick={() => signOut({ callbackUrl: withBase("/login") })}
                   style={{
                     width: "100%", padding: "11px 16px", textAlign: "left", background: "none", border: "none",
                     fontSize: 13, color: "#d92d20", fontWeight: 600, cursor: "pointer", fontFamily: "Lato, sans-serif",
