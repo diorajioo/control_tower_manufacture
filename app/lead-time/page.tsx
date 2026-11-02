@@ -88,7 +88,15 @@ export default function LeadTimePage() {
   const { status } = useSession();
   const router = useRouter();
   const [lastUpdated, setLastUpdated] = useState<Date>();
-  const [filters, setFilters] = useState<BaseFilters>(DEFAULT_FILTERS);
+  // Same saved Header filters as the Overview (`ct-filters`), so the page opens on the range the user just applied
+  const [filters, setFilters] = useState<BaseFilters>(() => {
+    try {
+      const stored = typeof window === "undefined" ? null : localStorage.getItem("ct-filters");
+      if (!stored) return DEFAULT_FILTERS;
+      const s = JSON.parse(stored) as Partial<BaseFilters>;
+      return { plant: s.plant ?? DEFAULT_FILTERS.plant, startDate: s.startDate ?? DEFAULT_FILTERS.startDate, endDate: s.endDate ?? DEFAULT_FILTERS.endDate, period: s.period ?? DEFAULT_FILTERS.period };
+    } catch { return DEFAULT_FILTERS; }
+  });
   const [plants, setPlants] = useState<string[]>(["All Plant"]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [tab, setTab] = useState<TabId>("analysis");
@@ -109,8 +117,9 @@ export default function LeadTimePage() {
 
   const handleRefresh = useCallback(() => { setRefreshKey((n) => n + 1); setLastUpdated(new Date()); }, []);
 
-  const analysis = useFetch<Analysis>(tab === "analysis" ? "/api/lead-time/analysis" : null, filters, dims, { scope }, refreshKey);
-  const charts   = useFetch<LeadTimeChartData>(tab === "ranking" ? "/api/lead-time/charts" : null, filters, dims, {}, refreshKey);
+  // Every visual follows Scope (gross start) and Basis (gross / nett) — CLAUDE.md → Filter contract
+  const analysis = useFetch<Analysis>(tab === "analysis" ? "/api/lead-time/analysis" : null, filters, dims, { scope, metric: basis }, refreshKey);
+  const charts   = useFetch<LeadTimeChartData>(tab === "ranking" ? "/api/lead-time/charts" : null, filters, dims, { scope, metric: basis }, refreshKey);
   const stages   = useFetch<{ plants: PlantBreakdown[]; targetDays: number; activities: PlantActivity[]; stages: StageStdPoint[] }>(
     tab === "pareto" || tab === "analysis" ? "/api/lead-time/stages" : null, filters, dims, { basis: scope }, refreshKey);
 
@@ -161,8 +170,13 @@ export default function LeadTimePage() {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Header
           plants={plants}
+          initialFilters={filters}
           onFilterChange={({ plant, startDate, endDate, period }) => {
             setFilters({ plant, startDate, endDate, period: period ?? "" });
+            try {
+              const prev = JSON.parse(localStorage.getItem("ct-filters") ?? "{}");
+              localStorage.setItem("ct-filters", JSON.stringify({ ...prev, plant, startDate, endDate, period: period ?? "" }));
+            } catch { /* ignore */ }
             setLastUpdated(new Date());
             trackFilterApplied("lead_time", "apply", { period: period ?? "", plant: Array.isArray(plant) ? plant.join(",") : (plant ?? "All") });
           }}
@@ -174,7 +188,7 @@ export default function LeadTimePage() {
           lastUpdated={lastUpdated}
           alertCount={0}
           alerts={[]}
-          onMonitorMode={() => router.push("/monitor?page=lead-time")}
+          onMonitorMode={() => router.push(`/monitor?page=lead-time&plant=${encodeURIComponent(filters.plant)}&period=${encodeURIComponent(filters.period)}&startDate=${filters.startDate}&endDate=${filters.endDate}`)}
           pageTitle="Lead Time"
         />
 
@@ -210,7 +224,7 @@ export default function LeadTimePage() {
                       basis={basis} scope={scope} unit={unit}
                       targetDays={a?.targetDays ?? LEAD_TIME_TARGET_DAYS}
                       loading={analysis.loading}
-                      poStageDays={a ? a.activities.filter((x) => x.stage === "PO").reduce((t, x) => t + x.nett, 0) : null}
+                      poStageDays={a ? a.activities.filter((x) => x.stage === "PO").reduce((t, x) => t + x.gross, 0) : null}
                       largest={largestBlock}
                     />
                   </KpiHighlightTarget>
@@ -232,6 +246,9 @@ export default function LeadTimePage() {
                 unit={unit}
                 onlyActivity={singleActivity}
                 detailHref={null}
+                scope={scope}
+                metric={basis}
+                refreshKey={refreshKey}
               />
               <LeadTimeBoxPlot data={a?.boxPlot ?? null} loading={analysis.loading} unit={unit} />
               <LeadTimeHistogram filters={tacticalFilters} basis={scope} metric={basis} unit={unit} detailHref={null}
@@ -259,6 +276,7 @@ export default function LeadTimePage() {
               <LeadTimeLineSection
                 filters={{ ...tacticalFilters, plant: selectedPlant ?? tacticalFilters.plant }}
                 unit={unit}
+                scope={scope}
                 refreshKey={refreshKey}
               />
             </>
@@ -267,7 +285,7 @@ export default function LeadTimePage() {
           {tab === "pareto" && (
             <>
               <TacticalParetoChart filters={tacticalFilters} stageStd={stages.data?.stages ?? []} stageLoading={stages.loading}
-                unit={unit} onlyActivity={singleActivity} detailHref={null} />
+                unit={unit} onlyActivity={singleActivity} detailHref={null} scope={scope} metric={basis} refreshKey={refreshKey} />
               <LeadTimePlantTable
                 data={stages.data?.plants ?? null}
                 activities={stages.data?.activities ?? []}
@@ -283,7 +301,7 @@ export default function LeadTimePage() {
           {tab === "ranking" && (
             <div className="flex flex-col gap-3.5">
               <LeadTimeTopSkuChart data={charts.data} loading={charts.loading} />
-              <LeadTimeSkuScatter filters={tacticalFilters} />
+              <LeadTimeSkuScatter filters={{ ...tacticalFilters, scope, metric: basis, refreshKey }} />
             </div>
           )}
         </main>

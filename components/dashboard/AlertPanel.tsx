@@ -291,6 +291,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
             <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border-t border-gray-100">
               <TrendingUp size={13} className="text-amber-500" />
               <span className="text-[11px] font-semibold text-gray-600">At-Risk POs</span>
+              <span className="text-[10px] text-gray-400">open today</span>
               <InfoTooltip
                 size={11}
                 width={272}
@@ -298,6 +299,7 @@ export function AlertPanel({ alerts, onDismiss, plant, period, startDate, endDat
                   { label: "Risk %",      text: "Predicted probability this PO exceeds the 13-day target. ≥ 50% = flagged." },
                   { label: "Days",        text: "Calendar days since PO Released." },
                   { label: "Last · Next", text: "Most-recent completed activity → next expected activity for this PO." },
+                  { label: "Scope",       text: "Live status: POs released in the last 60 days and not yet received at NDC. Follows the plant filter; the period and dates do not apply." },
                 ]}
                 footer="Logistic-regression model scored on: route-steps remaining, idle wait time, product late-rate history, and queue depth at the next step."
               />

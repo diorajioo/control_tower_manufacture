@@ -515,9 +515,13 @@ const paretoSeq = (stage: string) => {
 
 export function TacticalParetoChart({
   filters, stageStd, stageLoading, unit = "days", onlyActivity, detailHref = "/lead-time?tab=pareto",
-  showExtendedFilters = false,
+  showExtendedFilters = false, scope = "created", metric = "gross", refreshKey = 0,
 }: {
   filters: TacticalFilters; stageStd: StageStdPoint[]; stageLoading: boolean; unit?: LtUnit;
+  /** Gross starts at PO Created / Released; bars = gross or nett split (ltSplitSql) — they add up to that lead time */
+  scope?: "created" | "released";
+  metric?: "gross" | "nett";
+  refreshKey?: number;
   /** Show only this ACTIVITY (Lead Time page Activity filter) */
   onlyActivity?: string;
   /** "Open detail →" link; null hides it (already on the detail page) */
@@ -545,6 +549,8 @@ export function TacticalParetoChart({
   useEffect(() => {
     const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate });
     if (filters.period) params.set("period", filters.period);
+    params.set("scope", scope);
+    params.set("metric", metric);
     dimsToParams(filters.lt, params);
     setLoading(true);
     fetch(withBase(`/api/lead-time/charts?${params}`))
@@ -553,7 +559,7 @@ export function TacticalParetoChart({
       .catch(() => setRawStages(null))
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period, dimsKey(filters.lt)]);
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, dimsKey(filters.lt), scope, metric, refreshKey]);
 
   const f = ltFactor(unit);
   const stdMap = useMemo(() => new Map(stageStd.map(s => [s.stage, s.std * f])), [stageStd, f]);
@@ -730,7 +736,7 @@ export function TacticalParetoChart({
       ) : rows.length === 0 ? (
         <div className="h-[280px] flex items-center justify-center text-[11px] text-gray-400">No data for selected period</div>
       ) : (
-        <Fade depKey={`${group}|${sort}|${unit}|${wip}|${categoryFilter}|${rows.length}|${rows[0]?.stage}`}>
+        <Fade depKey={`${group}|${sort}|${unit}|${scope}|${metric}|${wip}|${categoryFilter}|${rows.length}|${rows[0]?.stage}`}>
         {/* Fades on Group Process / Process, Par / Seq, WIP, category, unit and new data */}
         <div style={{ height: group === "process" ? 336 : 280, position: "relative" }} onMouseLeave={() => setCumHover(null)}>
           <ResponsiveBar<ParetoRow>
@@ -879,6 +885,31 @@ const GROUP_PROCESS_PALETTE = [
   "#8b5cf6", "#ec4899", "#64748b",
 ];
 
+interface LtAnalysis {
+  gross: { avg: number | null; trend: number | null; poCount: number };
+  nett: { avg: number | null; trend: number | null; poCount: number };
+  weekly: { week: string; gross: number | null; nett: number | null }[];
+  composition: { va: number; nnva: number; unva: number; wip: number };
+  activities: { stage: string; activity: string; gross: number; nett: number }[];
+}
+
+/** /api/lead-time/analysis for the Tactical Lead Time section (Header filters + PO Created / Released + Gross / Nett). */
+function useLtAnalysis(filters: TacticalFilters, scope: "created" | "released", metric: LtMeasure) {
+  const [data, setData] = useState<LtAnalysis | null>(null);
+  const params = new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, scope, metric });
+  if (filters.period) params.set("period", filters.period);
+  const url = withBase(`/api/lead-time/analysis?${params}`);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled) setData(d && !d.error ? d : null); })
+      .catch(() => { if (!cancelled) setData(null); });
+    return () => { cancelled = true; };
+  }, [url]);
+  return data;
+}
+
 function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasis, onLtBasisChange, tacticalFilters }: TacticalViewProps) {
   // Toggles next to the title — they apply to this section only (unit everywhere, gross/nett on the card and histogram)
   const [unit, setUnit] = useState<LtUnit>("days");
@@ -892,16 +923,29 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
   const f = ltFactor(unit);
   const sfx = unit === "hours" ? "h" : "d";
 
-  const c = kpi?.leadTime.composition;
+  // Card trend / sparkline / PO count and both donuts follow PO Created / Released and Gross / Nett
+  // (/api/lead-time/analysis, same data as the Lead Time page); the KPI snapshot is PO Created only.
+  const analysis = useLtAnalysis(tacticalFilters, ltBasis, measure);
+
+  const comp = analysis?.composition;
+  const c = comp ? { vaDays: comp.va, nnvaDays: comp.nnva, unvaDays: comp.unva } : kpi?.leadTime.composition;
   // Network values from plantLT (getLeadTimeByPlant, per PO, gross follows ltBasis); nett does not depend on the basis
   const networkRow = plantLT?.plants.find((p) => p.plant === null);
   const gross = networkRow?.gross ?? kpi?.leadTime.grossDays;
   const nett = networkRow?.nett ?? kpi?.leadTime.nettDays;
   const maxGross = kpi?.leadTime.maxGrossDays ?? 0;
-  const poCount = kpi?.leadTime.poCount ?? 0;
-  const avgPoStage = kpi?.leadTime.avgPoStageDays ?? 0;
+  const poCount = analysis?.gross.poCount ?? kpi?.leadTime.poCount ?? 0;
+  // PO & approval = gross share of the PO stage (PO Created only — it is ~0 from PO Released)
+  const avgPoStage = analysis
+    ? (ltBasis === "created" ? analysis.activities.filter((x) => x.stage === "PO").reduce((t, x) => t + x.gross, 0) : 0)
+    : kpi?.leadTime.avgPoStageDays ?? 0;
   const poStagePct = gross && gross > 0 ? (avgPoStage / gross) * 100 : 0;
-  const groupProcess = kpi?.leadTime.groupProcess ?? [];
+  // Group Process donut: the ltSplitSql split per group (adds up to the card's gross / nett); PO left out for PO Released
+  const groupProcess = analysis
+    ? analysis.activities
+        .filter((x) => !(ltBasis === "released" && x.stage === "PO"))
+        .map((x) => ({ activity: x.stage, avgDays: measure === "nett" ? x.nett : x.gross }))
+    : kpi?.leadTime.groupProcess ?? [];
 
   const vanaSegments: DonutSegment[] = c ? [
     { color: "#067647", label: "VA",   sub: "Value Added",                 value: c.vaDays * f },
@@ -977,9 +1021,9 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
                 value={gross != null ? fmtLt(gross, unit) : null}
                 unit={unit}
                 ltUnit={unit}
-                trend={kpi?.leadTime.grossTrend ?? null}
+                trend={analysis ? analysis.gross.trend : kpi?.leadTime.grossTrend ?? null}
                 inverse
-                sparkline={kpi?.leadTime.sparkline?.map((v) => v * f)}
+                sparkline={(analysis ? analysis.weekly.map((w) => w.gross).filter((v): v is number => v != null) : kpi?.leadTime.sparkline)?.map((v) => v * f)}
                 sparkUnit="weeks"
                 ltDays={gross ?? undefined}
                 footerLeft={`End-to-end gross · ${ltBasis === "released" ? "PO Released" : "PO Created"} → Receive NDC`}
@@ -997,7 +1041,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
                 label="Lead Time"
                 value={nett != null ? fmtLt(nett, unit) : null}
                 unit={unit}
-                trend={kpi?.leadTime.nettTrend ?? null}
+                trend={analysis ? analysis.nett.trend : kpi?.leadTime.nettTrend ?? null}
                 inverse
                 footerLeft="End-to-end nett · time in active production activities"
                 noData={!kpi}
@@ -1023,7 +1067,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
 
       <LeadTimeHistogram filters={plantFilters} basis={ltBasis} metric={measure} unit={unit} />
 
-      <TacticalParetoChart filters={plantFilters} stageStd={stageStd} stageLoading={stageLoading} unit={unit} />
+      <TacticalParetoChart filters={plantFilters} stageStd={stageStd} stageLoading={stageLoading} unit={unit} scope={ltBasis} metric={measure} />
 
       {/* The table is its own card (ChartCard) with the Group Process / Process toggle */}
       {selectedPlant && (

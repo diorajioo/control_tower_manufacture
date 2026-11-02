@@ -27,7 +27,8 @@ const num = (v: unknown) => (v == null ? null : Number(Number(v).toFixed(3)));
 const trend = (cur: number | null, prev: number | null) =>
   cur == null || !prev ? null : Number((((cur - prev) / Math.abs(prev)) * 100).toFixed(1));
 
-async function run(plant: string, startDate: string, endDate: string, period: string | undefined, scope: "created" | "released", dims: string) {
+// metric (gross / nett) drives the composition and the box plot; stats, weekly and activities return both.
+async function run(plant: string, startDate: string, endDate: string, period: string | undefined, scope: "created" | "released", dims: string, metric: "gross" | "nett" = "gross") {
   const lt = JSON.parse(dims) as LtDims;
   const filters = { plant, startDate, endDate, period, lt };
   const prev = { plant, ...prevPeriod(startDate, endDate), lt };
@@ -36,8 +37,8 @@ async function run(plant: string, startDate: string, endDate: string, period: st
     getLeadTimeAnalysisStats(prev, scope),
     getLeadTimeAnalysisWeekly(filters, scope),
     getLeadTimeProcessBreakdown(filters, scope),
-    getLeadTimeComposition(filters),
-    getLeadTimeBoxPlot(filters),
+    getLeadTimeComposition(filters, { scope, metric }),
+    getLeadTimeBoxPlot(filters, scope, metric),
   ]);
   const block = (k: "GROSS" | "NETT") => {
     const s = stats as unknown as Record<string, unknown>, p = prevStats as unknown as Record<string, unknown>;
@@ -71,7 +72,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   };
 }
 
-const cached = unstable_cache(run, ["lead-time-analysis-v5"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["lead-time-analysis-v6"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -83,7 +84,8 @@ export async function GET(req: NextRequest) {
   const period    = sp.get("period")    ?? undefined;
   const scope     = sp.get("scope") === "released" ? "released" : "created";
   try {
-    return NextResponse.json(await cached(plant, startDate, endDate, period, scope, JSON.stringify(dimsFromParams(sp))));
+    const metric = sp.get("metric") === "nett" ? "nett" : "gross";
+    return NextResponse.json(await cached(plant, startDate, endDate, period, scope, JSON.stringify(dimsFromParams(sp)), metric));
   } catch (e) {
     console.error("[lead-time/analysis] failed:", (e as Error).message);
     return NextResponse.json({ error: "query_failed" }, { status: 500 });

@@ -178,7 +178,7 @@ export function LeadTimeCompositionCard({ comp, unit, loading }: {
       <div className="px-4 pt-3.5 pb-2 flex items-center gap-1.5">
         <span className={TITLE}>Lead time composition</span>
         <InfoTooltip size={12} width={260}
-          text="Average per PO: SUM(NET_LEADTIME) by ACTIVITY_CATEGORY. Activities can run in parallel, so the total is not the gross lead time." />
+          text="Average per PO by activity category, on the Scope and Basis above. Same split as the sunburst: when activities run in parallel the time goes to the one that started last, so VA + NNVA + UNVA = the lead time." />
       </div>
       <div className="px-4 pb-3.5 flex flex-col">
         {COMP.map((c, i) => {

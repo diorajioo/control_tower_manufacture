@@ -85,6 +85,10 @@ interface ScatterFilters {
   period?: string;
   /** Lead Time page filters (lib/leadTimeFilters.ts) */
   lt?: LtDims;
+  /** Lead Time page Scope / Basis (gross starts at PO Created or Released; gross or nett average) */
+  scope?: "created" | "released";
+  metric?: "gross" | "nett";
+  refreshKey?: number;
 }
 
 interface ScatterPoint { label: string; poCount: number; days: number }
@@ -109,6 +113,8 @@ function useScatterData(filters: ScatterFilters, dim: ScatterDim) {
       dim,
     });
     if (filters.period) params.set("period", filters.period);
+    params.set("scope", filters.scope ?? "created");
+    params.set("metric", filters.metric ?? "gross");
     dimsToParams(filters.lt, params);
 
     fetch(withBase(`/api/lead-time/scatter?${params}`))
@@ -116,7 +122,7 @@ function useScatterData(filters: ScatterFilters, dim: ScatterDim) {
       .then((rows: ScatterPoint[]) => { setData(rows); setLoading(false); })
       .catch(() => { setData([]); setLoading(false); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period, dim, dimsKey(filters.lt)]);
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, filters.scope, filters.metric, filters.refreshKey, dim, dimsKey(filters.lt)]);
 
   return { data, loading };
 }
@@ -152,7 +158,7 @@ export function LeadTimeSkuScatter({ filters }: { filters?: ScatterFilters }) {
   const dimLabel = DIM_OPTIONS.find((o) => o.value === dim)?.label ?? "SKU";
   const info = dim === "sku"
     ? "SKUs with fewer than 100 completed POs in the selected period are shown. SKUs with 100+ POs are few outliers that would compress the rest of the chart."
-    : `Average gross lead time vs PO count per ${dimLabel}.`;
+    : `Average ${filters?.metric === "nett" ? "nett" : "gross"} lead time vs PO count per ${dimLabel}.`;
 
   return (
     <div className="bg-white rounded-lg p-3 border border-[#EBEBEB] hover:shadow-[0px_8px_16px_-6px_rgba(42,61,74,0.12)] transition-shadow duration-200 flex flex-col min-w-0">

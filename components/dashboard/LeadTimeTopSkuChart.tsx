@@ -112,8 +112,8 @@ export function LeadTimeTopSkuChart({ data, loading }: { data: LeadTimeChartData
     <ChartCard
       title="Top 10 SKU by lead time"
       subtitle={isRange
-        ? "P10, average and P90 of gross lead time across the POs of each SKU."
-        : `Average gross lead time per PO, split by the SKU's VA, NNVA and UNVA share. ${sortBy
+        ? "P10, average and P90 of the lead time (Scope and Basis above) across the POs of each SKU."
+        : `Average lead time per PO (Scope and Basis above), split into VA, NNVA and UNVA — the three add up to it. ${sortBy
             ? `Sorted by ${CATEGORY_LABELS[sortBy]} (${sortBy}) · click it again to sort by lead time.`
             : "Sorted by lead time · click a segment to sort by that category."}`}
       info="Only SKUs with at least 5 completed POs in the selected period are included, so a single slow PO cannot put a SKU in the top 10. Range uses P10–P90 so one extreme PO does not stretch the axis."

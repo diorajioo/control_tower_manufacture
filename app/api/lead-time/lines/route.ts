@@ -12,9 +12,10 @@ export const maxDuration = 60;
 
 const r3 = (v: unknown) => (v == null ? null : Math.round(Number(v) * 1000) / 1000);
 
-async function run(plant: string, startDate: string, endDate: string, period: string | undefined, activity: LineActivity, dims: string) {
+// scope = where the average gross lead time per line starts (PO Created / Released).
+async function run(plant: string, startDate: string, endDate: string, period: string | undefined, activity: LineActivity, dims: string, scope: "created" | "released" = "created") {
   const lt = JSON.parse(dims) as LtDims;
-  const rows = await getLeadTimeByLineSku({ plant, startDate, endDate, period, lt }, activity);
+  const rows = await getLeadTimeByLineSku({ plant, startDate, endDate, period, lt }, activity, scope);
   const skus: Record<string, string> = {};
   return {
     skus,
@@ -25,7 +26,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   };
 }
 
-const cached = unstable_cache(run, ["lead-time-lines-v3"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["lead-time-lines-v4"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -40,7 +41,8 @@ export async function GET(req: NextRequest) {
   const activity: LineActivity = sp.get("lineActivity") === "mixing" ? "mixing" : "filpac";
 
   try {
-    return NextResponse.json(await cached(plant, startDate, endDate, period, activity, JSON.stringify(dimsFromParams(sp))));
+    const scope = sp.get("scope") === "released" ? "released" : "created";
+    return NextResponse.json(await cached(plant, startDate, endDate, period, activity, JSON.stringify(dimsFromParams(sp)), scope));
   } catch (e) {
     console.error("Lead time per line failed:", (e as Error).message);
     return NextResponse.json({ skus: {}, rows: [], error: "query_failed" }, { status: 500 });

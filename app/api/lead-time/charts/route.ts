@@ -10,15 +10,16 @@ export const maxDuration = 60;
 
 // Charts on /lead-time (Strategic): weekly trend per POSITION + overall, lead time vs PO count per SKU,
 // lead time per stage × VA/NNVA/UNVA (Pareto), and top 10 SKU by lead time (composition / P10–P90 range).
-async function runChartQueries(plant: string, startDate: string, endDate: string, period: string | undefined, dims: string) {
+// scope (PO Created / Released) and metric (gross / nett) drive the Pareto and the Top SKU (lib/queries.ts → ltSplitSql).
+async function runChartQueries(plant: string, startDate: string, endDate: string, period: string | undefined, dims: string, scope: "created" | "released" = "created", metric: "gross" | "nett" = "gross") {
   // dims = JSON of the Lead Time page filters (part of the cache key)
   const filters = { plant, startDate, endDate, period, lt: JSON.parse(dims) as LtDims };
   const [totalRes, byPosRes, bySkuRes, byStageRes, topSkuRes] = await Promise.allSettled([
     getLeadTimeWeekly(filters),
     getLeadTimeWeeklyByPosition(filters),
     getLeadTimeBySku(filters),
-    getLeadTimeByStageCategory(filters),
-    getLeadTimeTopSku(filters),
+    getLeadTimeByStageCategory(filters, scope, metric),
+    getLeadTimeTopSku(filters, scope, metric),
   ]);
 
   const failures = [["total", totalRes], ["byPosition", byPosRes], ["bySku", bySkuRes], ["byStage", byStageRes], ["topSku", topSkuRes]]
@@ -72,7 +73,7 @@ async function runChartQueries(plant: string, startDate: string, endDate: string
   };
 }
 
-const cached = unstable_cache(runChartQueries, ["lead-time-charts-v12"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runChartQueries, ["lead-time-charts-v13"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -84,5 +85,8 @@ export async function GET(req: NextRequest) {
   const endDate   = searchParams.get("endDate")   ?? new Date().toISOString().split("T")[0];
   const period    = searchParams.get("period")    ?? undefined;
 
-  return NextResponse.json(await cached(plant, startDate, endDate, period, JSON.stringify(dimsFromParams(searchParams))));
+  const scope     = searchParams.get("scope") === "released" ? "released" : "created";
+  const metric    = searchParams.get("metric") === "nett" ? "nett" : "gross";
+
+  return NextResponse.json(await cached(plant, startDate, endDate, period, JSON.stringify(dimsFromParams(searchParams)), scope, metric));
 }

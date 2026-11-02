@@ -332,7 +332,7 @@ A PO belongs to its **last plant**: the `PLANT` of its `CT_MANUF_LEADTIME` row w
 
 ## Lead time split per process (since 2026-11-02)
 
-One rule for the plant table ("Lead time breakdown per plant", Group Process and Process), the PO table and the sunburst — `ltSplitSql()` in `lib/queries.ts`:
+One rule for the plant table ("Lead time breakdown per plant", Group Process and Process), the PO table, the sunburst, the Pareto, the box plot, the VA / NNVA / UNVA composition (Lead Time page card + Tactical donut) and the Top SKU split — `ltSplitSql()` in `lib/queries.ts`. Each follows Scope (PO Created / Released) and Basis (gross / nett):
 
 - **Gross** — every minute of a PO's gross window (Scope start → RECEIVE NDC) belongs to exactly one activity row: the row that started last. Rows that run in parallel (UNBOX and FILPAC, many RECEIVE NDC pallets) hand the time over when the next one starts. All row types count (ACTUAL, WAITING, WIP). The process columns of a PO, a plant or the network add up to its gross lead time exactly.
 - **Nett** — NET_LEADTIME of the rows that make up nett (ACTUAL with a LINE_CATEGORY), so the columns add up to nett.

@@ -48,7 +48,7 @@ function compact(n: number) {
   return n.toLocaleString("en-US");
 }
 
-export function LeadTimeLineSection({ filters, unit, refreshKey = 0 }: { filters: Filters; unit: LtUnit; refreshKey?: number }) {
+export function LeadTimeLineSection({ filters, unit, scope = "created", refreshKey = 0 }: { filters: Filters; unit: LtUnit; scope?: "created" | "released"; refreshKey?: number }) {
   const [activity, setActivity] = useState<Activity>("filpac");
   const [line, setLine] = useState<string | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -59,7 +59,7 @@ export function LeadTimeLineSection({ filters, unit, refreshKey = 0 }: { filters
 
   useEffect(() => {
     let cancelled = false;
-    const params = dimsToParams(filters.lt, new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, lineActivity: activity }));
+    const params = dimsToParams(filters.lt, new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, lineActivity: activity, scope }));
     if (filters.period) params.set("period", filters.period);
     setLoading(true);
     fetch(withBase(`/api/lead-time/lines?${params}`))
@@ -69,7 +69,7 @@ export function LeadTimeLineSection({ filters, unit, refreshKey = 0 }: { filters
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period, lt, activity, refreshKey]);
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, lt, activity, scope, refreshKey]);
 
   // New data or another activity → no line selected
   useEffect(() => { setLine(null); }, [data]);
@@ -100,7 +100,7 @@ export function LeadTimeLineSection({ filters, unit, refreshKey = 0 }: { filters
     <div className="grid grid-cols-2 gap-3.5">
       <LineBubbleCard
         points={shown} allLines={lines} totalLines={lines.length} loading={loading} f={f} unitLabel={unitLabel}
-        activity={activity} onActivity={setActivity}
+        activity={activity} onActivity={setActivity} scope={scope}
         selected={line} onSelect={(l) => setLine((cur) => (cur === l ? null : l))}
       />
       <SkuLineTable
@@ -115,8 +115,9 @@ export function LeadTimeLineSection({ filters, unit, refreshKey = 0 }: { filters
 
 interface Datum { x: number; y: number; line: string; qty: number }
 
-function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, activity, onActivity, selected, onSelect }: {
+function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, activity, onActivity, selected, onSelect, scope }: {
   points: LinePoint[]; allLines: LinePoint[]; totalLines: number; loading: boolean; f: number; unitLabel: string;
+  scope: "created" | "released";
   activity: Activity; onActivity: (a: Activity) => void;
   selected: string | null; onSelect: (line: string) => void;
 }) {
@@ -156,7 +157,7 @@ function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, a
         <div className="flex items-center gap-2">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead Time per Line</p>
           <InfoTooltip size={13} width={300} rows={[
-            { label: "Lead time", text: `Average gross lead time (PO Released → NDC) per PO that ran on this line. Horizontal line = ${LEAD_TIME_TARGET_DAYS}-day target.` },
+            { label: "Lead time", text: `Average gross lead time (${scope === "released" ? "PO Released" : "PO Created"} → NDC) per PO that ran on this line. Horizontal line = ${LEAD_TIME_TARGET_DAYS}-day target.` },
             { label: "PO count", text: "POs completed in the period that ran on the line. Vertical line = avg across all lines." },
             { label: "Bubble size", text: "Volume = released quantity (pcs) of those POs." },
             { label: "Lines shown", text: `Lines with at least ${MIN_PO} POs (${points.length} of ${totalLines}). The table lists every line.` },

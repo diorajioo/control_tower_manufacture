@@ -44,15 +44,21 @@ const ltWhere = (f: QueryFilters) => {
 };
 const ltBinds = (f: QueryFilters): unknown[] => [...plantBinds(f.plant), ...activeDims(f.lt).flatMap((d) => d.values)];
 
+export type LtScopeArg = "created" | "released";
+export type LtMetricArg = "gross" | "nett";
+const ltStartSql = (scope: LtScopeArg = "created") => (scope === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL);
+/** Split column + the matching PO count column name for a Gross / Nett choice (ltSplitSql). */
+const splitCol = (metric: LtMetricArg = "gross") => (metric === "nett" ? "NETT_MIN" : "GROSS_MIN");
+
 // Lead time split per activity row, additive (one rule for the plant table, the PO table and the sunburst):
 //   GROSS_MIN — every minute of the PO's gross window (start → Receive NDC) belongs to exactly one row: the row that
 //               started last. Rows running in parallel hand the time over when the next one starts, so the rows of a PO
 //               add up to its gross lead time exactly. Every ACTIVITY_TYPE counts (ACTUAL, WAITING, WIP).
 //   NETT_MIN  — NET_LEADTIME of the rows that make up nett (ACTUAL with a LINE_CATEGORY), so they add up to nett.
-// `src` = an SQL source with the lead time columns (already filtered). The next start is MIN over the following rows
+// `src` = an SQL source with the lead time columns (already filtered); every source column is passed through. The next start is MIN over the following rows
 // (explicit frame) rather than LEAD(), which ClickHouse does not have.
 const ltSplitSql = (src: string, startSql: string) => `
-  SELECT r.PROCESS_ORDER_FG, r.PLANT, r.POSITION, r.ACTIVITY, r.ACTIVITY_SEQUENCE,
+  SELECT r.*,
     CASE WHEN w.w_start IS NULL OR w.w_end IS NULL THEN NULL
          ELSE GREATEST(DATEDIFF('minute', GREATEST(r.ACTIVITY_START, w.w_start), LEAST(COALESCE(r.next_start, w.w_end), w.w_end)), 0)
     END AS GROSS_MIN,
@@ -181,8 +187,32 @@ export async function getLeadTimeKPI(filters: QueryFilters) {
 // Per PO: SUM(NET_LEADTIME) per category, then AVG across POs (days).
 // WIP = UNVA rows with ACTIVITY_TYPE = 'WIP' (potential saving if WIP is removed).
 // Activities run in parallel, so VA + NNVA + UNVA can exceed gross lead time.
-export async function getLeadTimeComposition(filters: QueryFilters) {
+// With `split`, the categories come from ltSplitSql (gross or nett), so VA + NNVA + UNVA add up to the lead time
+// (Lead Time page + Tactical donut); without, the KPI snapshot's original NET_LEADTIME sums.
+export async function getLeadTimeComposition(filters: QueryFilters, split?: { scope: LtScopeArg; metric: LtMetricArg }) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  if (split) {
+    const binds = [...dateBinds, ...ltBinds(filters)];
+    const col = splitCol(split.metric);
+    const r = await executeQuery<{ VA: number; NNVA: number; UNVA: number; WIP: number }>(`
+      SELECT AVG(va) / 1440.0 AS VA, AVG(nnva) / 1440.0 AS NNVA, AVG(unva) / 1440.0 AS UNVA, AVG(wip) / 1440.0 AS WIP
+      FROM (
+        SELECT PROCESS_ORDER_FG,
+          SUM(CASE WHEN ACTIVITY_CATEGORY = 'VA'   THEN COALESCE(${col}, 0) ELSE 0 END) AS va,
+          SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN COALESCE(${col}, 0) ELSE 0 END) AS nnva,
+          SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN COALESCE(${col}, 0) ELSE 0 END) AS unva,
+          SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' AND ACTIVITY_TYPE = 'WIP' THEN COALESCE(${col}, 0) ELSE 0 END) AS wip,
+          SUM(${col}) AS total
+        FROM (${ltSplitSql(`
+          SELECT * FROM ${LT_TABLE}
+          WHERE ${datePred}
+            ${ltWhere(filters)}`, ltStartSql(split.scope))}) x
+        GROUP BY PROCESS_ORDER_FG
+      ) sub
+      WHERE total IS NOT NULL
+    `, [...binds, ...binds]);
+    return { va: r[0]?.VA ?? 0, nnva: r[0]?.NNVA ?? 0, unva: r[0]?.UNVA ?? 0, wip: r[0]?.WIP ?? 0 };
+  }
   const rows = await executeQuery<{ VA: number; NNVA: number; UNVA: number; WIP: number }>(`
     SELECT
       AVG(va_min)   / 1440.0 AS VA,
@@ -295,28 +325,29 @@ export async function getLeadTimeWeeklyByPosition(filters: QueryFilters, grain?:
 // X = COUNT(DISTINCT PROCESS_ORDER_FG), Y = AVG gross lead time (PO start → RECEIVE NDC stop) in days.
 // Limited to SKUs with fewer than 100 POs in the period (100+ = few outliers that compress the axis).
 // Lead time per stage (POSITION) × ACTIVITY_CATEGORY → Pareto stacked bar on /lead-time
-// DAYS = SUM(NET_LEADTIME) / COUNT(DISTINCT PO in period) / 1440 — contribution per PO, so bars add up.
+// DAYS = the ltSplitSql split (gross or nett) per PO, so the bars add up to the lead time.
 // WIP rows ("WIP AFTER <activity>") are also mapped to the stage of that activity (ATTACHED_STAGE),
 // so the chart can show WIP either as its own bar or folded into the stage it follows.
-export async function getLeadTimeByStageCategory(filters: QueryFilters) {
+export async function getLeadTimeByStageCategory(filters: QueryFilters, scope: LtScopeArg = "created", metric: LtMetricArg = "gross") {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const binds = [...dateBinds, ...ltBinds(filters)];
+  const col = splitCol(metric);
   // ACTIVITY_SEQUENCE = process flow order 1–45 (PO 1 → WIP AFTER PO 2 → WEIGHING 3 … RECEIVE NDC 45), one per activity.
-  // ACTIVITY_ID is not an order (every WIP activity has 99).
+  // ACTIVITY_ID is not an order (every WIP activity has 99). Days = the ltSplitSql split ÷ POs with a value, so the
+  // bars add up to the gross / nett lead time (Scope sets where gross starts).
   return executeQuery<{ STAGE: string; ACTIVITY: string; MIN_ACTIVITY_ID: number; MIN_SEQUENCE: number | null; ATTACHED_STAGE: string; CATEGORY: string; DAYS: number }>(`
-    WITH base AS (
-      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_ID, ACTIVITY_SEQUENCE, ACTIVITY_CATEGORY, NET_LEADTIME
-      FROM ${LT_TABLE}
+    WITH base AS (${ltSplitSql(`
+      SELECT * FROM ${LT_TABLE}
       WHERE ${datePred}
-        AND POSITION IS NOT NULL
-        ${ltWhere(filters)}
+        ${ltWhere(filters)}`, ltStartSql(scope))}
     ),
     act_pos AS (
       SELECT ACTIVITY, MAX(POSITION) AS PARENT_STAGE
       FROM base
-      WHERE POSITION <> 'WIP'
+      WHERE POSITION IS NOT NULL AND POSITION <> 'WIP'
       GROUP BY ACTIVITY
     ),
-    po AS (SELECT COUNT(DISTINCT PROCESS_ORDER_FG) AS N FROM base)
+    po AS (SELECT COUNT(*) AS N FROM (SELECT PROCESS_ORDER_FG, SUM(${col}) AS v FROM base GROUP BY PROCESS_ORDER_FG) x WHERE v IS NOT NULL)
     SELECT
       b.POSITION  AS STAGE,
       b.ACTIVITY  AS ACTIVITY,
@@ -324,21 +355,23 @@ export async function getLeadTimeByStageCategory(filters: QueryFilters) {
       MIN(b.ACTIVITY_SEQUENCE) AS MIN_SEQUENCE,
       CASE WHEN b.POSITION = 'WIP' THEN COALESCE(ap.PARENT_STAGE, 'WIP') ELSE b.POSITION END AS ATTACHED_STAGE,
       b.ACTIVITY_CATEGORY AS CATEGORY,
-      SUM(b.NET_LEADTIME) / 1440.0 / NULLIF(MAX(po.N), 0) AS DAYS
+      COALESCE(SUM(b.${col}), 0) / 1440.0 / NULLIF(MAX(po.N), 0) AS DAYS
     FROM base b
     LEFT JOIN act_pos ap
       ON b.POSITION = 'WIP' AND ap.ACTIVITY = REGEXP_REPLACE(b.ACTIVITY, '^WIP AFTER ', '')
     CROSS JOIN po
     WHERE b.ACTIVITY_CATEGORY IN ('VA', 'NNVA', 'UNVA')
+      AND b.POSITION IS NOT NULL
     GROUP BY b.POSITION, b.ACTIVITY, ATTACHED_STAGE, b.ACTIVITY_CATEGORY
-  `, [...dateBinds, ...ltBinds(filters)]);
+  `, [...binds, ...binds]);
 }
 
 // Box-plot percentiles per group process — min, p25, median, mean, p75, p90, max, count.
-// Groups POSITION codes into the 6 PROCESS_GROUPS; sums net lead time per PO per group first,
+// Groups POSITION codes into the 6 PROCESS_GROUPS; sums the ltSplitSql split (gross or nett) per PO per group first,
 // then computes percentiles across POs so they reflect per-PO-per-group experience.
-export async function getLeadTimeBoxPlot(filters: QueryFilters) {
+export async function getLeadTimeBoxPlot(filters: QueryFilters, scope: LtScopeArg = "created", metric: LtMetricArg = "gross") {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const binds = [...dateBinds, ...ltBinds(filters)];
   return executeQuery<{
     STAGE: string; PO_COUNT: number;
     MIN_DAYS: number; P25_DAYS: number; MEDIAN_DAYS: number; MEAN_DAYS: number;
@@ -355,12 +388,12 @@ export async function getLeadTimeBoxPlot(filters: QueryFilters) {
           WHEN POSITION = 'RECEIVE NDC'                          THEN 'ndc'
           WHEN POSITION = 'WIP'                                  THEN 'wip'
         END AS STAGE,
-        SUM(NET_LEADTIME) / 1440.0 AS days
-      FROM ${LT_TABLE}
-      WHERE ${datePred}
-        AND POSITION IS NOT NULL
-        AND POSITION IN ('PO','TIMBANG','OLAH','CUCI OLAH','KEMAS 1','KEMAS 2','CUCI KEMAS','RECEIVE NDC','WIP')
-        ${ltWhere(filters)}
+        SUM(${splitCol(metric)}) / 1440.0 AS days
+      FROM (${ltSplitSql(`
+        SELECT * FROM ${LT_TABLE}
+        WHERE ${datePred}
+          ${ltWhere(filters)}`, ltStartSql(scope))}) x
+      WHERE POSITION IN ('PO','TIMBANG','OLAH','CUCI OLAH','KEMAS 1','KEMAS 2','CUCI KEMAS','RECEIVE NDC','WIP')
       GROUP BY PROCESS_ORDER_FG, STAGE
     )
     SELECT
@@ -374,10 +407,10 @@ export async function getLeadTimeBoxPlot(filters: QueryFilters) {
       PERCENTILE_CONT(0.9)  WITHIN GROUP (ORDER BY days)         AS P90_DAYS,
       MAX(days)                                                   AS MAX_DAYS
     FROM base
-    WHERE STAGE IS NOT NULL
+    WHERE STAGE IS NOT NULL AND days IS NOT NULL
     GROUP BY STAGE
     ORDER BY STAGE
-  `, [...dateBinds, ...ltBinds(filters)]);
+  `, [...binds, ...binds]);
 }
 
 // Lead time per stage (POSITION): actual vs standard → Overview Tactical view
@@ -531,7 +564,9 @@ const SCATTER_DIM_COL: Record<ScatterDimension, string> = {
   sku:      "PRODUCT_CODE",
 };
 
-export async function getLeadTimeScatterByDim(filters: QueryFilters, dimension: ScatterDimension) {
+export async function getLeadTimeScatterByDim(filters: QueryFilters, dimension: ScatterDimension, scope: LtScopeArg = "created", metric: LtMetricArg = "gross") {
+  const startSql = ltStartSql(scope);
+  const nettSql = "SUM(CASE WHEN ACTIVITY_TYPE = 'ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END)";
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const col = SCATTER_DIM_COL[dimension];
   // Brand includes null rows (shown as "(No Brand)"); other dims filter null.
@@ -546,16 +581,12 @@ export async function getLeadTimeScatterByDim(filters: QueryFilters, dimension: 
       SELECT
         PROCESS_ORDER_FG,
         MAX(${col}) AS ${col},
-        DATEDIFF('minute',
-          ${LEAD_TIME_START_SQL},
-          ${NDC_RECEIVED_AT_SQL}
-        ) AS gross_minutes
+        ${metric === "nett" ? nettSql : `DATEDIFF('minute', ${startSql}, ${NDC_RECEIVED_AT_SQL})`} AS gross_minutes
       FROM ${LT_TABLE}
       WHERE ${datePred}
         ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
-      HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
-        AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
+      HAVING ${metric === "nett" ? `${nettSql} IS NOT NULL` : `${startSql} IS NOT NULL AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL`}
     ) sub
     ${nullFilter}
     GROUP BY ${nullLabel}
@@ -564,10 +595,13 @@ export async function getLeadTimeScatterByDim(filters: QueryFilters, dimension: 
 }
 
 // Top 10 SKU by lead time → composition / range chart on /lead-time
-// Per PO: gross lead time (PO start → RECEIVE NDC stop) + SUM(NET_LEADTIME) per ACTIVITY_CATEGORY.
-// Per SKU (≥5 POs): AVG / P10 / P90 of gross days, AVG VA / NNVA / UNVA days. Top 10 by AVG gross.
-export async function getLeadTimeTopSku(filters: QueryFilters) {
+// Per SKU (≥5 POs): AVG / P10 / P90 of the lead time (gross on the Scope, or nett) and AVG VA / NNVA / UNVA days
+// from the ltSplitSql split, so the three add up to the average. Top 10 by the average.
+export async function getLeadTimeTopSku(filters: QueryFilters, scope: LtScopeArg = "created", metric: LtMetricArg = "gross") {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const binds = [...dateBinds, ...ltBinds(filters)];
+  const col = splitCol(metric);
+  // Per PO: lead time (gross on the Scope, or nett) and its VA / NNVA / UNVA split (ltSplitSql) — the three add up to it.
   return executeQuery<{
     PRODUCT_CODE: string; PRODUCT_NAME: string; PO_COUNT: number;
     AVG_DAYS: number; P10_DAYS: number; P90_DAYS: number; VA: number; NNVA: number; UNVA: number;
@@ -577,37 +611,36 @@ export async function getLeadTimeTopSku(filters: QueryFilters) {
         PROCESS_ORDER_FG,
         MAX(PRODUCT_CODE) AS PRODUCT_CODE,
         MAX(PRODUCT_NAME) AS PRODUCT_NAME,
-        DATEDIFF('minute',
-          ${LEAD_TIME_START_SQL},
-          ${NDC_RECEIVED_AT_SQL}
-        ) / 1440.0 AS gross_days,
-        SUM(CASE WHEN ACTIVITY_CATEGORY = 'VA'   THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS va_days,
-        SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS nnva_days,
-        SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN NET_LEADTIME ELSE 0 END) / 1440.0 AS unva_days
-      FROM ${LT_TABLE}
-      WHERE ${datePred}
-        ${ltWhere(filters)}
+        ${metric === "nett"
+          ? "SUM(NETT_MIN) / 1440.0"
+          : `CASE WHEN ${ltStartSql(scope)} IS NOT NULL AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
+              THEN DATEDIFF('minute', ${ltStartSql(scope)}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 END`} AS lt_days,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'VA'   THEN COALESCE(${col}, 0) ELSE 0 END) / 1440.0 AS va_days,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'NNVA' THEN COALESCE(${col}, 0) ELSE 0 END) / 1440.0 AS nnva_days,
+        SUM(CASE WHEN ACTIVITY_CATEGORY = 'UNVA' THEN COALESCE(${col}, 0) ELSE 0 END) / 1440.0 AS unva_days
+      FROM (${ltSplitSql(`
+        SELECT * FROM ${LT_TABLE}
+        WHERE ${datePred}
+          ${ltWhere(filters)}`, ltStartSql(scope))}) x
       GROUP BY PROCESS_ORDER_FG
-      HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
-        AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
     )
     SELECT
       PRODUCT_CODE,
       MAX(PRODUCT_NAME)                                          AS PRODUCT_NAME,
       COUNT(*)                                                   AS PO_COUNT,
-      AVG(gross_days)                                            AS AVG_DAYS,
-      PERCENTILE_CONT(0.1) WITHIN GROUP (ORDER BY gross_days)    AS P10_DAYS,
-      PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY gross_days)    AS P90_DAYS,
+      AVG(lt_days)                                               AS AVG_DAYS,
+      PERCENTILE_CONT(0.1) WITHIN GROUP (ORDER BY lt_days)       AS P10_DAYS,
+      PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY lt_days)       AS P90_DAYS,
       AVG(va_days)                                               AS VA,
       AVG(nnva_days)                                             AS NNVA,
       AVG(unva_days)                                             AS UNVA
     FROM po
-    WHERE PRODUCT_CODE IS NOT NULL
+    WHERE PRODUCT_CODE IS NOT NULL AND lt_days IS NOT NULL
     GROUP BY PRODUCT_CODE
     HAVING COUNT(*) >= 5
     ORDER BY AVG_DAYS DESC
     LIMIT 10
-  `, [...dateBinds, ...ltBinds(filters)]);
+  `, [...binds, ...binds]);
 }
 
 export async function getLeadTimeByPosition(filters: QueryFilters) {
@@ -1767,7 +1800,8 @@ export async function getLeadTimePoList(filters: QueryFilters, basis: "created" 
 export type LineActivity = "mixing" | "filpac";
 const LINE_POSITIONS: Record<LineActivity, string[]> = { mixing: ["OLAH"], filpac: ["KEMAS 1", "KEMAS 2"] };
 
-export async function getLeadTimeByLineSku(filters: QueryFilters, activity: LineActivity = "filpac") {
+export async function getLeadTimeByLineSku(filters: QueryFilters, activity: LineActivity = "filpac", scope: LtScopeArg = "created") {
+  const startSql = ltStartSql(scope);
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
   const positions = LINE_POSITIONS[activity].map((p) => `'${p}'`).join(", ");
   // Two CTEs: gross reads all rows per PO so PO+NDC rows are visible (same pattern as getLeadTimeAnalysisStats);
@@ -1776,12 +1810,12 @@ export async function getLeadTimeByLineSku(filters: QueryFilters, activity: Line
     WITH gross AS (
       SELECT
         PROCESS_ORDER_FG,
-        DATEDIFF('minute', ${PO_RELEASED_AT_SQL}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 AS gross_days
+        DATEDIFF('minute', ${startSql}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 AS gross_days
       FROM ${LT_TABLE}
       WHERE ${datePred}
         ${ltWhere(filters)}
       GROUP BY PROCESS_ORDER_FG
-      HAVING ${PO_RELEASED_AT_SQL} IS NOT NULL AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
+      HAVING ${startSql} IS NOT NULL AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
     ),
     per_sku AS (
       SELECT
