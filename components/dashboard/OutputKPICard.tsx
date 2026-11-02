@@ -5,6 +5,7 @@ import { useI18n } from "@/lib/i18n";
 import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
 import { Fade } from "@/components/ui/Fade";
 import { KpiLabel, KpiTargetLine, StatusPill, KpiPriorLine, KpiSparkline, KpiFooter } from "@/components/ui/KpiCardParts";
+import { LineTooltip } from "@/components/charts/StandardLine";
 
 // ---------------------------------------------------------------------------
 // Status tone system
@@ -46,6 +47,9 @@ export interface OutputKPICardProps {
   bulkTrend:    number | null;
   sparkline:    number[];
   bulkSparkline: number[];
+  /** Prior-period values — shown in the full-number tooltip */
+  fgPrev?:      number;
+  bulkPrev?:    number;
   /** KPI id whose AI one-liner (KpiOneLiner) shows as a bar below the status rows */
   insightId?:   string;
   /** Click on the sparkline → switch the trend chart to Output */
@@ -63,6 +67,8 @@ export function OutputKPICard({
   bulkTrend,
   sparkline,
   bulkSparkline,
+  fgPrev,
+  bulkPrev,
   compact = false,
   insightId,
   onSparkClick,
@@ -70,6 +76,7 @@ export function OutputKPICard({
   // Size scale for spacing/sparkline: 1 = regular, 0.8 = compact. Font sizes are always regular.
   const z = (n: number) => (compact ? Math.round(n * 0.8 * 2) / 2 : n);
   const [mode, setMode] = useState<"fg" | "bulk">("fg");
+  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
   const { t } = useI18n();
 
   const primaryValue = mode === "fg" ? fgQty     : bulkQty;
@@ -88,7 +95,9 @@ export function OutputKPICard({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: z(12), minHeight: 24 }}>
           <KpiLabel
             label="Output"
-            info={mode === "fg" ? "Finished goods released to warehouse, in pcs." : "Bulk output accepted this period, in kg. Plant filter does not apply (source has no plant column)."}
+            info={mode === "fg"
+              ? "Finished goods released to warehouse, in pcs. Hover the number for the exact value. Plant = the plant of each batch's process order."
+              : "Bulk output accepted this period, in kg. Hover the number for the exact value. Plant = the plant of each batch's process order; batches without one count under All Plant only."}
           />
           <div style={{ background: "#f2f3f6", borderRadius: 7, padding: z(3), display: "flex", gap: z(2) }}>
             {(["fg", "bulk"] as const).map((m) => {
@@ -123,11 +132,16 @@ export function OutputKPICard({
         <div style={{ display: "flex", gap: z(16), alignItems: "flex-end", marginTop: z(8) }}>
           <Fade depKey={mode} className="flex-1 min-w-0">
             <div style={{ display: "flex", flexDirection: "column", gap: z(7), minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: z(6) }}>
+              {/* Hover → full numbers (both FG and Bulk, with prior period) */}
+              <div
+                style={{ display: "flex", alignItems: "baseline", gap: z(6), cursor: "default", alignSelf: "flex-start" }}
+                onMouseMove={(e) => setTip({ x: e.clientX, y: e.clientY })}
+                onMouseLeave={() => setTip(null)}
+              >
                 <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.015em", color: "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
                   {fmtMillions(primaryValue)}
                 </span>
-                <span style={{ fontSize: 12, color: "#98a2b3" }} title={`${primaryValue.toLocaleString("en-US")} ${primaryUnit}`}>{t("unit_million")} {primaryUnit}</span>
+                <span style={{ fontSize: 12, color: "#98a2b3" }}>{t("unit_million")} {primaryUnit}</span>
               </div>
               {/* No output target in the data yet (theoretical output) — the line stays so the anatomy matches */}
               <KpiTargetLine text={t("label_target_undefined")} />
@@ -143,6 +157,33 @@ export function OutputKPICard({
       </div>
 
       <KpiFooter z={z} />
+      {tip && <FullNumberTooltip x={tip.x} y={tip.y} mode={mode} fgQty={fgQty} bulkQty={bulkQty} fgPrev={fgPrev} bulkPrev={bulkPrev} />}
+    </div>
+  );
+}
+
+const full = (n: number) => Math.round(n).toLocaleString("en-US");
+
+/** Exact Output values at the cursor. Fixed position above everything, flipped to stay inside the viewport
+ *  (CLAUDE.md → tooltips never clipped; the card itself is overflow-hidden). */
+function FullNumberTooltip({ x, y, mode, fgQty, bulkQty, fgPrev, bulkPrev }: {
+  x: number; y: number; mode: "fg" | "bulk"; fgQty: number; bulkQty: number; fgPrev?: number; bulkPrev?: number;
+}) {
+  const W = 250, H = 120;
+  const left = x + 14 + W > window.innerWidth ? x - 14 - W : x + 14;
+  const top = y + 14 + H > window.innerHeight ? y - 14 - H : y + 14;
+  return (
+    <div className="pointer-events-none fixed z-[9999]" style={{ left, top }}>
+      <LineTooltip
+        title="Output"
+        nowrap
+        rows={[
+          { label: "Finished Goods", value: full(fgQty), unit: "pcs", strong: mode === "fg",
+            sub: fgPrev != null ? `Prior period ${full(fgPrev)} pcs` : undefined },
+          { label: "Bulk", value: full(bulkQty), unit: "kg", strong: mode === "bulk",
+            sub: bulkPrev != null ? `Prior period ${full(bulkPrev)} kg` : undefined },
+        ]}
+      />
     </div>
   );
 }

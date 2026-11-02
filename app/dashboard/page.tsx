@@ -404,6 +404,8 @@ export default function DashboardPage() {
                 bulkTrend={kpi?.output?.bulkTrend ?? null}
                 sparkline={kpi?.output?.sparkline ?? []}
                 bulkSparkline={kpi?.output?.bulkSparkline ?? []}
+                fgPrev={kpi?.output?.fgPrev}
+                bulkPrev={kpi?.output?.bulkPrev}
               />
             </KpiHighlightTarget>
             <KpiHighlightTarget id="productivity">

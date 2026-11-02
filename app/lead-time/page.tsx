@@ -245,6 +245,7 @@ export default function LeadTimePage() {
                 targetDays={stages.data?.targetDays ?? LEAD_TIME_TARGET_DAYS}
                 loading={stages.loading}
                 basis={scope}
+                metric={basis}
                 unit={unit}
                 selectedPlant={selectedPlant}
                 onRowClick={(p) => setSelectedPlant(p)}
@@ -273,6 +274,7 @@ export default function LeadTimePage() {
                 targetDays={stages.data?.targetDays ?? LEAD_TIME_TARGET_DAYS}
                 loading={stages.loading}
                 basis={scope}
+                metric={basis}
                 unit={unit}
               />
             </>

@@ -17,26 +17,31 @@ async function runStageQuery(plant: string, startDate: string, endDate: string, 
   const [rows, byPlant] = await Promise.all([getLeadTimeStageVsStd(filters), getLeadTimeByPlant(filters, LEAD_TIME_TARGET_DAYS, basis)]);
   const d2 = (n: number | null) => (n == null ? null : Number(n.toFixed(2)));
 
-  // Stage days per PO per plant; the network row sums all plants over the network PO count.
-  const poCount = new Map<string, number>();
-  for (const p of byPlant.plants) poCount.set(p.IS_NETWORK ? "" : String(p.PLANT), Number(p.PO_COUNT));
-  // Same rule per ACTIVITY (Process view of the plant table) — activity meta (stage, sequence) goes out once.
-  const stageDays = new Map<string, Record<string, number>>();
-  const activityDays = new Map<string, Record<string, number>>();
-  const add = (into: Map<string, Record<string, number>>, key: string, col: string, minutes: number) => {
-    const n = poCount.get(key);
-    if (!n) return;
+  // Days per PO per plant, split so the process columns add up to the plant's gross / nett (ltSplitSql in lib/queries.ts):
+  // gross minutes ÷ POs with a gross value, nett minutes ÷ POs with a nett value. The network row sums all plants.
+  const poCount = { gross: new Map<string, number>(), nett: new Map<string, number>() };
+  for (const p of byPlant.plants) {
+    const key = p.IS_NETWORK ? "" : String(p.PLANT);
+    poCount.gross.set(key, Number(p.GROSS_N));
+    poCount.nett.set(key, Number(p.NETT_N));
+  }
+  type Split = Map<string, Record<string, number>>;
+  const split = { stagesGross: new Map() as Split, stagesNett: new Map() as Split, actGross: new Map() as Split, actNett: new Map() as Split };
+  const add = (into: Split, n: Map<string, number>, key: string, col: string, minutes: number | null) => {
+    const po = n.get(key);
+    if (!po || minutes == null) return;
     const rec = into.get(key) ?? {};
-    rec[col] = (rec[col] ?? 0) + minutes / 1440 / n;
+    rec[col] = (rec[col] ?? 0) + Number(minutes) / 1440 / po;
     into.set(key, rec);
   };
   const activityMeta = new Map<string, { activity: string; stage: string; sequence: number | null }>();
   for (const s of byPlant.stages) {
-    const m = Number(s.MINUTES ?? 0);
-    add(stageDays, String(s.PLANT), s.STAGE, m);
-    add(stageDays, "", s.STAGE, m);
-    add(activityDays, String(s.PLANT), s.ACTIVITY, m);
-    add(activityDays, "", s.ACTIVITY, m);
+    for (const key of [String(s.PLANT), ""]) {
+      add(split.stagesGross, poCount.gross, key, s.STAGE, s.GROSS_MIN);
+      add(split.stagesNett, poCount.nett, key, s.STAGE, s.NETT_MIN);
+      add(split.actGross, poCount.gross, key, s.ACTIVITY, s.GROSS_MIN);
+      add(split.actNett, poCount.nett, key, s.ACTIVITY, s.NETT_MIN);
+    }
     const seq = s.SEQ == null ? null : Number(s.SEQ);
     const prev = activityMeta.get(s.ACTIVITY);
     if (!prev || (seq != null && (prev.sequence == null || seq < prev.sequence))) activityMeta.set(s.ACTIVITY, { activity: s.ACTIVITY, stage: s.STAGE, sequence: seq });
@@ -51,7 +56,8 @@ async function runStageQuery(plant: string, startDate: string, endDate: string, 
         return {
           plant: p.IS_NETWORK ? null : p.PLANT, poCount: Number(p.PO_COUNT), gross: d2(p.GROSS_DAYS), nett: d2(p.NETT_DAYS), onTimePct: d2(p.ONTIME_PCT),
           gauge: { onTime: Number(p.ONTIME_N ?? 0), atRisk: Number(p.ATRISK_N ?? 0), late: Number(p.LATE_N ?? 0) },
-          stages: round3(stageDays.get(key)), activities: round3(activityDays.get(key)),
+          stages: round3(split.stagesGross.get(key)), activities: round3(split.actGross.get(key)),
+          stagesNett: round3(split.stagesNett.get(key)), activitiesNett: round3(split.actNett.get(key)),
         };
       })
       .sort((a, b) => (a.plant == null ? -1 : b.plant == null ? 1 : a.plant.localeCompare(b.plant))),
@@ -64,7 +70,7 @@ async function runStageQuery(plant: string, startDate: string, endDate: string, 
   };
 }
 
-const cached = unstable_cache(runStageQuery, ["lead-time-stages-v8"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runStageQuery, ["lead-time-stages-v9"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);

@@ -16,8 +16,10 @@ import { FIELD, FIELD_ON, MENU } from "@/components/ui/FilterField";
 //                   · Receive NDC · WIP (every WIP activity)
 //   Process       — one column per ACTIVITY under its group header, in ACTIVITY_SEQUENCE order; the WIP group shows
 //                   the 5 largest WIP activities (network) + "Others (n processes)". A picker hides columns.
-// Cell = SUM(NET_LEADTIME) of the activity / POs of that plant (days, or hours). A plant's cell turns red when
-// it is above the network value of the same column. Plant, Gross and Nett stay visible when the table scrolls.
+// Cells follow the section's Gross / Nett toggle (`metric`) and add up to that row's Gross LT or Nett LT:
+//   Gross — the PO's gross window split over its activities (each minute goes to the activity that started last);
+//   Nett  — NET_LEADTIME of the nett rows (ACTUAL with a line). Rule: ltSplitSql in lib/queries.ts — the PO table
+//   and the sunburst use the same split. A plant's cell turns red when it is above the network value of the same column. Plant, Gross and Nett stay visible when the table scrolls.
 // Data: /api/lead-time/stages → plants (stages + activities per plant) and activities (stage, sequence).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -29,10 +31,13 @@ export interface PlantBreakdown {
   onTimePct: number | null;
   /** POs on time / at risk / late vs the target, on the selected basis (gauge on the Tactical Lead Time card) */
   gauge?: { onTime: number; atRisk: number; late: number };
-  /** days per PO per POSITION */
+  /** gross days per PO per POSITION (adds up to gross) */
   stages: Record<string, number>;
-  /** days per PO per ACTIVITY */
+  /** gross days per PO per ACTIVITY (adds up to gross) */
   activities?: Record<string, number>;
+  /** nett days per PO per POSITION / ACTIVITY (add up to nett) */
+  stagesNett?: Record<string, number>;
+  activitiesNett?: Record<string, number>;
 }
 
 export interface PlantActivity { activity: string; stage: string; sequence: number | null }
@@ -43,6 +48,10 @@ const GROUPS = PROCESS_GROUPS;
 const WIP_TOP = 5;
 
 interface Col { key: string; label: string; group: string; value: (row: PlantBreakdown) => number | undefined }
+type Metric = "gross" | "nett";
+
+const stagesOf = (r: PlantBreakdown | undefined, m: Metric) => (m === "nett" ? r?.stagesNett : r?.stages);
+const activitiesOf = (r: PlantBreakdown | undefined, m: Metric) => (m === "nett" ? r?.activitiesNett : r?.activities);
 
 // Values arrive in days; hours = × 24 with 1 decimal
 const fmtIn = (unit: "days" | "hours") => (n: number | null | undefined) =>
@@ -75,12 +84,14 @@ const STICKY = [
 ] as const;
 const stickyStyle = (i: 0 | 1 | 2) => ({ position: "sticky" as const, left: STICKY[i].left, minWidth: STICKY[i].w, width: STICKY[i].w, zIndex: 2 });
 
-export function LeadTimePlantTable({ data, activities = [], targetDays, loading, basis = "created", unit = "days", onRowClick, selectedPlant }: {
+export function LeadTimePlantTable({ data, activities = [], targetDays, loading, basis = "created", metric = "gross", unit = "days", onRowClick, selectedPlant }: {
   data: PlantBreakdown[] | null;
   activities?: PlantActivity[];
   targetDays: number;
   loading: boolean;
   basis?: "created" | "released";
+  /** Which total the process columns split: Gross LT or Nett LT (the section's Gross / Nett toggle) */
+  metric?: Metric;
   unit?: "days" | "hours";
   /** Called with the plant name when a plant row is clicked; null = deselect (network row clicked) */
   onRowClick?: (plant: string | null) => void;
@@ -102,24 +113,24 @@ export function LeadTimePlantTable({ data, activities = [], targetDays, loading,
         activities
           .filter((a) => (g.stages as readonly string[]).includes(a.stage))
           .sort((a, b) => (a.sequence ?? 999) - (b.sequence ?? 999))
-          .forEach((a) => cols.push({ key: a.activity, label: activityLabel(a.activity), group: g.id, value: (r) => r.activities?.[a.activity] }));
+          .forEach((a) => cols.push({ key: a.activity, label: activityLabel(a.activity), group: g.id, value: (r) => activitiesOf(r, metric)?.[a.activity] }));
         continue;
       }
       const wip = activities
         .filter((a) => a.stage === "WIP")
-        .sort((a, b) => (network?.activities?.[b.activity] ?? 0) - (network?.activities?.[a.activity] ?? 0));
+        .sort((a, b) => (activitiesOf(network, metric)?.[b.activity] ?? 0) - (activitiesOf(network, metric)?.[a.activity] ?? 0));
       wip.slice(0, WIP_TOP).forEach((a) =>
-        cols.push({ key: a.activity, label: activityLabel(a.activity), group: g.id, value: (r) => r.activities?.[a.activity] }));
+        cols.push({ key: a.activity, label: activityLabel(a.activity), group: g.id, value: (r) => activitiesOf(r, metric)?.[a.activity] }));
       const rest = wip.slice(WIP_TOP).map((a) => a.activity);
       if (rest.length > 0) {
-        cols.push({ key: "__wip_others", label: `Others (${rest.length} processes)`, group: g.id, value: (r) => sum(r.activities, rest) });
+        cols.push({ key: "__wip_others", label: `Others (${rest.length} processes)`, group: g.id, value: (r) => sum(activitiesOf(r, metric), rest) });
       }
     }
     return cols;
-  }, [activities, network]);
+  }, [activities, network, metric]);
 
   const groupCols = useMemo((): Col[] =>
-    GROUPS.map((g) => ({ key: g.id, label: g.label, group: g.id, value: (r: PlantBreakdown) => sum(r.stages, g.stages) })), []);
+    GROUPS.map((g) => ({ key: g.id, label: g.label, group: g.id, value: (r: PlantBreakdown) => sum(stagesOf(r, metric), g.stages) })), [metric]);
 
   const cols = view === "group" ? groupCols : processCols.filter((c) => !hidden.has(c.key));
   // Header groups for the Process view (consecutive columns of the same group)
@@ -158,10 +169,12 @@ export function LeadTimePlantTable({ data, activities = [], targetDays, loading,
   return (
     <ChartCard
       title="Lead time breakdown per plant"
-      subtitle={`${unit === "hours" ? "Hours" : "Days"} per PO · ${basisLabel}`}
-      info={`Each cell = net time of that process ÷ POs completed in the period. Red = plant is above the network value for that column (darker = further above). On-time = POs with gross lead time ≤ ${targetDays} days.`}
+      subtitle={`${unit === "hours" ? "Hours" : "Days"} per PO · ${basisLabel} · process columns add up to ${metric === "nett" ? "Nett" : "Gross"} LT`}
+      info={metric === "nett"
+        ? `Each process cell = its net working time (actual rows on a line) ÷ POs, so a row's process cells add up to its Nett LT. Red = plant is above the network value for that column (darker = further above). On-time = POs with gross lead time ≤ ${targetDays} days.`
+        : `Each process cell = the share of gross lead time spent in that process ÷ POs. When processes run in parallel, the time goes to the one that started last, so a row's process cells add up to its Gross LT. Red = plant is above the network value for that column (darker = further above). On-time = POs with gross lead time ≤ ${targetDays} days.`}
       actions={actions}
-      fadeKey={`${view}|${unit}|${hidden.size}|${network?.poCount ?? 0}|${network?.gross ?? ""}`}
+      fadeKey={`${view}|${metric}|${unit}|${hidden.size}|${network?.poCount ?? 0}|${network?.gross ?? ""}`}
     >
       {!network ? (
         <div style={{ height: 160 }}><EmptyState loading={loading} /></div>

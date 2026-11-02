@@ -1,7 +1,7 @@
 "use client";
 
-// Tactical → Output, row below the trend chart: FG released per brand / variant / SKU group (treemap)
-// next to the top 10 SKU by output. The treemap has no height of its own: it fills the row, whose
+// Tactical → Output, row below the trend chart: FG released (pcs) or Bulk (kg) per brand / variant / SKU group
+// (treemap; SKU group is FG only) next to the top 10 SKU by output. Tile = compact value, tooltip = full number. The treemap has no height of its own: it fills the row, whose
 // height comes from the SKU table, so both cards end on the same line.
 // Tile shade = share of released FG (darker = larger). No target data yet, so no health colors.
 // Long tails (355 variants) are cut to the top MAX_TILES; a caption states what the tiles cover.
@@ -22,7 +22,7 @@ type GroupDim = "brand" | "variant" | "su_group";
 
 interface GroupRow { name: string; qtyPo: number; qtyReal: number }
 interface SkuRow { code: string; name: string; qtyPo: number; qtyReal: number; pctContrib: number }
-interface Tile { id: string; value: number; qtyPo: number; share: number; color: string; text: string; opacity: number }
+interface Tile { id: string; value: number; qtyPo: number; share: number; color: string; text: string; opacity: number; unit: string }
 
 const MAX_TILES = 15;          // 16th+ group left out; the caption says how much the tiles cover
 const NAVY = [30, 64, 118];    // #1E4076
@@ -40,11 +40,13 @@ function shade(t: number): { color: string; text: string } {
   return { color: `rgb(${c[0]},${c[1]},${c[2]})`, text: k > 0.5 ? "#FFFFFF" : "#16305C" };
 }
 
-export function fmtPcs(v: number): string {
-  if (v >= 1e6) return `${(v / 1e6).toFixed(1)} M pcs`;
-  if (v >= 1e3) return `${(v / 1e3).toFixed(1)} K pcs`;
-  return `${Math.round(v).toLocaleString()} pcs`;
+export function fmtPcs(v: number, unit = "pcs"): string {
+  if (v >= 1e6) return `${(v / 1e6).toFixed(1)} M ${unit}`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)} K ${unit}`;
+  return `${Math.round(v).toLocaleString()} ${unit}`;
 }
+
+const fullQty = (v: number) => Math.round(v).toLocaleString("en-US");
 
 function TileNode({ node }: NodeProps<Tile>) {
   const { x, y, width: w, height: h } = node;
@@ -67,7 +69,7 @@ function TileNode({ node }: NodeProps<Tile>) {
       {showName && <p style={{ fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.id}</p>}
       {showDetail && (
         <>
-          <p style={{ fontSize: 10.5, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{fmtPcs(d.value)}</p>
+          <p style={{ fontSize: 10.5, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{fmtPcs(d.value, d.unit)}</p>
           <p style={{ fontSize: 10.5, whiteSpace: "nowrap", opacity: 0.85, fontVariantNumeric: "tabular-nums" }}>{d.share.toFixed(1)}%</p>
         </>
       )}
@@ -91,15 +93,19 @@ export function OutputMixRow({ filters, metric, pick, onPick }: {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  const unit = metric === "bulk" ? "kg" : "pcs";
+  // Bulk batches have no SKU group: fall back to Brand
+  useEffect(() => { if (metric === "bulk" && dim === "su_group") setDim("brand"); }, [metric, dim]);
+
   useEffect(() => {
-    if (metric === "bulk") { setGroups([]); setSkus([]); setLoading(false); return; }
+    if (metric === "bulk" && dim === "su_group") return;
     setLoading(true);
     setError(false);
     // Treemap ignores a pick on its own dimension (it highlights instead); the SKU table follows every pick
     const gp = outputParams(filters, pick, dim);
-    gp.set("dim", dim); gp.set("part", "groups");
+    gp.set("dim", dim); gp.set("part", "groups"); gp.set("metric", metric);
     const sp = outputParams(filters, pick, []);
-    sp.set("dim", dim); sp.set("part", "skus");
+    sp.set("dim", dim); sp.set("part", "skus"); sp.set("metric", metric);
     const get = (p: URLSearchParams) => fetch(withBase(`/api/dashboard/output-mix?${p}`)).then((r) => (r.ok ? r.json() : Promise.reject()));
     Promise.all([get(gp), get(sp)])
       .then(([g, k]) => { setGroups(g.groups ?? []); setSkus(k.skus ?? []); })
@@ -115,19 +121,19 @@ export function OutputMixRow({ filters, metric, pick, onPick }: {
     const max = top[0].qtyReal;
     const tiles: Tile[] = top.map((g) => ({
       id: g.name, value: g.qtyReal, qtyPo: g.qtyPo, share: (g.qtyReal * 100) / total, ...shade(g.qtyReal / max),
-      opacity: pickOpacity(pick, dim, g.name),
+      opacity: pickOpacity(pick, dim, g.name), unit,
     }));
     const shown = tiles.reduce((s, x) => s + x.share, 0);
     return { tiles, coverage: valid.length > top.length ? { shown: top.length, total: valid.length, share: shown } : null };
-  }, [groups, pick, dim]);
+  }, [groups, pick, dim, unit]);
 
   const dimOptions: { key: GroupDim; label: string }[] = [
     { key: "brand", label: t("output_mix_dim_brand") },
     { key: "variant", label: t("output_mix_dim_variant") },
-    { key: "su_group", label: t("output_mix_dim_su_group") },
+    ...(metric === "bulk" ? [] : [{ key: "su_group" as const, label: t("output_mix_dim_su_group") }]),
   ];
 
-  const emptyText = metric === "bulk" ? t("output_line_bulk_coming_soon") : error ? t("output_mix_error") : t("output_trend_no_data");
+  const emptyText = error ? t("output_mix_error") : t("output_trend_no_data");
 
   return (
     <div className="grid grid-cols-2 gap-4 items-stretch" style={{ fontFamily: "Lato, sans-serif" }}>
@@ -135,7 +141,7 @@ export function OutputMixRow({ filters, metric, pick, onPick }: {
       <div className={CARD}>
         <div style={{ padding: "11px 13px 8px", display: "flex", alignItems: "center", gap: 6 }}>
           <p style={TITLE}>{t(DIM_TITLE[dim])}</p>
-          <InfoTooltip text={t("output_mix_tooltip")} size={13} width={240} />
+          <InfoTooltip text={t(metric === "bulk" ? "output_mix_tooltip_bulk" : "output_mix_tooltip")} size={13} width={240} />
           <ToggleSelect<GroupDim> ariaLabel={t("output_mix_group_by")} options={dimOptions} value={dim} onChange={setDim} align="right" />
         </div>
         {loading ? (
@@ -143,7 +149,7 @@ export function OutputMixRow({ filters, metric, pick, onPick }: {
         ) : tiles.length === 0 ? (
           <div style={EMPTY}>{emptyText}</div>
         ) : (
-          <Fade depKey={`${dim}|${filters.plant}|${filters.startDate}|${filters.endDate}|${filters.period}|${pick && pick.dim !== dim ? `${pick.dim}:${pick.value}` : ""}`}>
+          <Fade depKey={`${metric}|${dim}|${filters.plant}|${filters.startDate}|${filters.endDate}|${filters.period}|${pick && pick.dim !== dim ? `${pick.dim}:${pick.value}` : ""}`}>
             <div style={{ position: "relative", flex: 1, minHeight: 200, margin: "0 13px 13px" }}>
               <div style={{ position: "absolute", inset: 0 }}>
                 <ResponsiveTreeMapHtml<Tile>
@@ -162,7 +168,7 @@ export function OutputMixRow({ filters, metric, pick, onPick }: {
                     <LineTooltip
                       title={node.data.id}
                       rows={[
-                        { label: t("output_mix_tt_released"), value: fmtPcs(node.data.value), strong: true },
+                        { label: t(metric === "bulk" ? "output_mix_tt_released_bulk" : "output_mix_tt_released"), value: fullQty(node.data.value), unit: node.data.unit, strong: true },
                         { label: t("output_mix_tt_share"), value: `${node.data.share.toFixed(1)}%` },
                         { label: t("output_mix_tt_pos"), value: node.data.qtyPo.toLocaleString() },
                       ]}
@@ -173,7 +179,7 @@ export function OutputMixRow({ filters, metric, pick, onPick }: {
             </div>
             {coverage && (
               <p style={{ margin: "-6px 13px 10px", fontSize: 10, color: "#98a2b3" }}>
-                {t("output_mix_coverage")
+                {t(metric === "bulk" ? "output_mix_coverage_bulk" : "output_mix_coverage")
                   .replace("{n}", String(coverage.shown))
                   .replace("{total}", String(coverage.total))
                   .replace("{pct}", Math.min(coverage.share, 99.9).toFixed(1))}
@@ -183,14 +189,14 @@ export function OutputMixRow({ filters, metric, pick, onPick }: {
         )}
       </div>
 
-      <TopSkuTable skus={skus} loading={loading} emptyText={emptyText} />
+      <TopSkuTable skus={skus} loading={loading} emptyText={emptyText} metric={metric} />
     </div>
   );
 }
 
 // ── Top SKU by output ─────────────────────────────────────────────────────────
 
-function TopSkuTable({ skus, loading, emptyText }: { skus: SkuRow[]; loading: boolean; emptyText: string }) {
+function TopSkuTable({ skus, loading, emptyText, metric }: { skus: SkuRow[]; loading: boolean; emptyText: string; metric: "fg" | "bulk" }) {
   const { t } = useT();
   const [sortCol, setSortCol] = useState<keyof SkuRow>("qtyReal");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -226,7 +232,7 @@ function TopSkuTable({ skus, loading, emptyText }: { skus: SkuRow[]; loading: bo
     <div className={TABLE_CARD}>
       <div style={{ padding: "11px 13px 8px", display: "flex", alignItems: "center", gap: 6, minHeight: 45 }}>
         <p style={TITLE}>{t("output_sku_title")}</p>
-        <InfoTooltip text={t("output_sku_tooltip")} size={13} width={240} />
+        <InfoTooltip text={t(metric === "bulk" ? "output_sku_tooltip_bulk" : "output_sku_tooltip")} size={13} width={240} />
       </div>
       {loading ? (
         <div style={{ height: 260, background: "#f9fafb" }} className="animate-pulse" />
@@ -239,8 +245,8 @@ function TopSkuTable({ skus, loading, emptyText }: { skus: SkuRow[]; loading: bo
               <tr>
                 <TH col="name"       label={t("output_sku_th_sku")} />
                 <TH col="qtyPo"      label={t("output_line_th_qty_po")} right />
-                <TH col="qtyReal"    label={t("output_line_th_qty_real")} right />
-                <TH                  label={t("output_line_th_theoretical")} right />
+                <TH col="qtyReal"    label={t(metric === "bulk" ? "output_line_th_qty_real_bulk" : "output_line_th_qty_real")} right />
+                <TH                  label={t(metric === "bulk" ? "output_line_th_theoretical_bulk" : "output_line_th_theoretical")} right />
                 <TH                  label={t("output_line_th_gap")} right />
                 <TH col="pctContrib" label={t("output_line_th_pct_contrib")} right />
               </tr>
@@ -252,7 +258,7 @@ function TopSkuTable({ skus, loading, emptyText }: { skus: SkuRow[]; loading: bo
                     {s.name}
                   </td>
                   <td style={num}>{s.qtyPo.toLocaleString()}</td>
-                  <td style={num}>{s.qtyReal.toLocaleString()}</td>
+                  <td style={num}>{fullQty(s.qtyReal)}</td>
                   <td style={dash}>—</td>
                   <td style={dash}>—</td>
                   <td style={{ ...num, fontWeight: 700 }}>{s.pctContrib.toFixed(1)}%</td>

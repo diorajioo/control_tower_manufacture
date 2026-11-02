@@ -30,7 +30,9 @@ ${KPI_RELATIONSHIPS}
 
 ${NARRATIVE_RULES}
 
-Analyze only Lead Time, Output and Productivity. Do not mention OEE, OPE, yield/bulk/pack loss, RFT or energy.
+Analyze only Lead Time, Output and Productivity. Do not mention OEE, OPE, Yield Loss (bulk loss or pack loss), RFT or energy.
+Output has two values and both belong in the summary: whenever you cite Output, give Released FG (pcs) and Bulk output (kg),
+each with its own [kpi:output] tag — e.g. "Released FG reached 12.4M pcs [kpi:output] from 1.9M kg of bulk [kpi:output]".
 
 After the paragraph, write a new line with exactly [[CARDS]] and then one line per KPI card, in this format:
 leadtime: <one-liner>

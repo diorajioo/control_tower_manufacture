@@ -7,6 +7,16 @@ Derived from git log and conversation history. Most recent changes first.
 ## 2026-11-02
 
 ### Changed
+- **Lead time breakdown adds up.** Plant table, PO table and sunburst share one split (`ltSplitSql`): gross time goes to the activity that started last, nett = NET_LEADTIME of the nett rows, so the process columns add up to Gross LT / Nett LT (J2 YTD was 24.93 d of groups vs 15.75 d gross). The plant table follows the Gross / Nett toggle. Sunburst slices no longer show values.
+- **Output follows the plant filter** (FG and Bulk card, sparklines, Tactical Output) through each row's FG process order.
+- **Tactical Output FG / Bulk**: every Output visual switches to Bulk (kg) — total + achievement vs theoretical kg, SKU & PO, per plant / form, trend with theoretical kg, per mixing line with theoretical + gap, per brand / variant, top bulk SKU. Mini cards and donuts now follow the Output click filter (`/api/dashboard/output-stats`).
+- **Output tooltips**: the Output KPI card shows the exact FG and Bulk values (and prior period) on hover; the brand / variant treemap, trend and SKU table show full numbers.
+- **AI Summary** cites Bulk kg next to Released FG (the prompt's "yield/bulk/pack loss" exclusion made the model skip bulk). Cache `ai_summary_*_v7`.
+- CLAUDE.md: **Filter contract** rule for every new or changed visual; open gaps in `docs/KNOWN_ISSUES.md`.
+
+## 2026-11-02 (merge)
+
+### Changed
 - **GitHub `main` and GitLab `staging` merged into one tree.** Staging's "Sync from GitHub main" merges had kept staging's files only, so staging never got Next.js 16.4.3, the session-based admin gate, the KPI failure banner or the Settings data-source status, and `main` lacked the Kubernetes staging work (base path, CSP nonce, CSRF guard, Kong sign-in fixes, ClickHouse fixes). Conflicts took the stricter side: Teams alerts rebuilt on the server **and** recipients from server settings only (client-sent recipients ignored, also for admins); no Microsoft token in the session; `session.user.isAdmin` from `isServerAdmin()`.
 
 ## 2026-10-28

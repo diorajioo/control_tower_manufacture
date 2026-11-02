@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getOutputMix, type OutputGroupDim } from "@/lib/queries";
+import { getOutputMix, getBulkOutputMix, type OutputGroupDim } from "@/lib/queries";
 import { parseOutputSel } from "@/lib/outputSel";
 
 const DIMS: OutputGroupDim[] = ["brand", "variant", "su_group"];
@@ -21,7 +21,11 @@ export async function GET(req: NextRequest) {
   const part      = partParam === "groups" || partParam === "skus" ? partParam : "all";
 
   try {
-    const { groups, skus } = await getOutputMix({ plant, startDate, endDate, period }, dim, parseOutputSel(sp), part);
+    // Bulk: brand / variant only (bulk batches have no SKU group); SKUs = bulk codes
+    const bulk = sp.get("metric") === "bulk";
+    const { groups, skus } = bulk
+      ? await getBulkOutputMix({ plant, startDate, endDate, period }, dim === "variant" ? "variant" : "brand", parseOutputSel(sp), part)
+      : await getOutputMix({ plant, startDate, endDate, period }, dim, parseOutputSel(sp), part);
     return NextResponse.json({
       groups: groups.map((g) => ({ name: g.GRP, qtyPo: Number(g.QTY_PO ?? 0), qtyReal: Number(g.QTY_REAL ?? 0) })),
       skus: skus.map((s) => ({

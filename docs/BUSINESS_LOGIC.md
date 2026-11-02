@@ -16,7 +16,7 @@ All KPI queries accept these filters, applied identically across every metric:
 
 Filters persist to `localStorage` key `ct-filters`. All KPI cards and charts respond to the same filter state simultaneously.
 
-**Important exception:** `DATAMART_PRODUCTION_OUTPUT_OLAH` has no PLANT column. The plant filter is silently not applied for Bulk Output and Bulk Loss queries.
+**Output datamarts (since 2026-11-02):** `DATAMART_PRODUCTION_OUTPUT_FG` and `DATAMART_PRODUCTION_OUTPUT_OLAH` have no PLANT column. Output takes the plant of each row's FG process order (`SNFG_NAME` / `SNFG_COMPONENT_NAME` → owner plant in `LT_TABLE`): ~99% of FG rows and ~92% of Bulk rows (99.6% of kg) have one; the rest count under All Plant only (`outputPlantWhere()` in `lib/queries.ts`). **Bulk Loss** still ignores the plant filter.
 
 ---
 
@@ -82,7 +82,7 @@ pack_loss_pct = SUM(QTY_FG_RETUR) / SUM(QTY_TOTAL) × 100
 
 #### 2b. Bulk Loss % (pengolahan)
 **Table:** `DATAMART_PRODUCTION_OUTPUT_OLAH`, date column: `CORRECTION_DATE`
-⚠️ Plant filter NOT applied (table has no PLANT column).
+⚠️ Plant filter NOT applied to Bulk Loss (Output uses the PO's plant — see Filters).
 
 ```
 bulk_loss_pct = ABS((theoretical - realization) / theoretical) × 100
@@ -117,7 +117,9 @@ rft_pct = COUNT(ACTIVITY ≠ 'ADJUST') / COUNT(ACTIVITY) × 100
 | **Bulk Output** | `DATAMART_PRODUCTION_OUTPUT_OLAH` | `SUM(REALIZATION_QUANTITY)` | kg |
 
 Date columns: `CORRECTION_DATE` for both.
-⚠️ Both tables have no PLANT column — plant filter not applied.
+Plant: through each row's FG process order (see Filters → Output datamarts). YTD check: FG per plant matches the lead time RELEASE_QTY per plant within 0.5%.
+
+**Tactical Output section, FG / Bulk toggle:** every visual (Total & Achievement, SKU & PO, per plant, per form, trend, per line, per brand / variant, top SKU) follows the toggle, the Header filters and the section's click filter. Bulk reads only `DATAMART_PRODUCTION_OUTPUT_OLAH` (kg, `CORRECTION_DATE`): PO = `NOMO_NAME` (bulk process order), SKU = `COITEM_BULK_CODE`, form = `MATERIAL_FORM_NAME`, line = `LINE_NAME` (mixing line), brand / variant = `PRODUCT_BRAND_NAME` / `VARIANT_NAME`; no SKU group. Bulk achievement = realized ÷ theoretical kg (`THEORETICAL_QUANTITY`), gap = realized − theoretical; the trend draws theoretical kg as the dashed line. FG has no theoretical quantity yet.
 
 No threshold color coding — Output is informational.
 
@@ -326,6 +328,17 @@ A PO belongs to its **last plant**: the `PLANT` of its `CT_MANUF_LEADTIME` row w
 
 - **Dimension filters** (No. PO, Activity, Line category, Line, SKU group, SKU, Variant) select whole POs: a PO is kept when it has at least one `CT_MANUF_LEADTIME` row matching each set value; every figure is then computed on those POs with all their activities. Activity also limits the sunburst and the Pareto to that activity.
 - **Lead Time card**: average per PO — gross = Scope start (PO Created or Released) → RECEIVE NDC; nett = SUM(NET_LEADTIME) of ACTUAL rows with a LINE_CATEGORY. Median and P25–P75 over the same POs. Status: gross vs 13-day target (on track / ≤ +15% at risk / above); nett has no target → change vs prior period.
-- **Sunburst** (time per group process and process): per activity, SUM over POs ÷ all POs, so values add up. Gross = activity span (first start → last stop per PO); Nett = SUM(NET_LEADTIME). Groups = `PROCESS_GROUPS`; the PO group is left out for Scope = PO Released. The centre is the sum of the groups ("total time"); activities overlap, so it is larger than the lead time. Known data effect: an activity recorded on several overlapping rows can have nett > gross (e.g. Receive NDC YTD nett 3.07 d vs span 1.06 d).
+- **Sunburst** (time per group process and process): the lead time split below, so the slices add up to the Lead Time card (gross or nett per PO). Groups = `PROCESS_GROUPS`; the PO group is left out for Scope = PO Released. No values on the slices (2026-11-02); hover and the list show them.
+
+## Lead time split per process (since 2026-11-02)
+
+One rule for the plant table ("Lead time breakdown per plant", Group Process and Process), the PO table and the sunburst — `ltSplitSql()` in `lib/queries.ts`:
+
+- **Gross** — every minute of a PO's gross window (Scope start → RECEIVE NDC) belongs to exactly one activity row: the row that started last. Rows that run in parallel (UNBOX and FILPAC, many RECEIVE NDC pallets) hand the time over when the next one starts. All row types count (ACTUAL, WAITING, WIP). The process columns of a PO, a plant or the network add up to its gross lead time exactly.
+- **Nett** — NET_LEADTIME of the rows that make up nett (ACTUAL with a LINE_CATEGORY), so the columns add up to nett.
+- Per plant / network: minutes ÷ POs with a gross (or nett) value — the same POs as the Gross LT / Nett LT columns.
+- The plant table follows the section's Gross / Nett toggle (Tactical) or Basis (Lead Time page).
+
+Before 2026-11-02 the columns summed NET_LEADTIME of every row (incl. WAITING / WIP) and overlapping rows counted twice, e.g. J2 YTD: groups 24.93 d vs gross 15.75 d. Checked YTD: every plant, the network, the sunburst and all 21,913 POs add up exactly.
 
 - **Lead Time card note**: written by code (median, P25–P75, target, gap). An AI draft replaces it when available: the AI gets only the variables shown on the page (+ largest group process) and its text is accepted only if every number in it is one of those variables (`lib/leadTimeNote.ts`).

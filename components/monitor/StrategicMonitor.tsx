@@ -30,6 +30,7 @@ interface KPIResponse {
   rightFirstTime: { value: number; trend: number | null; sparkline: number[] };
   output: {
     bulkQty: number; fgQty: number;
+    fgPrev?: number; bulkPrev?: number;
     fgTrend: number | null; bulkTrend: number | null;
     sparkline: number[]; bulkSparkline: number[];
   };
@@ -126,6 +127,8 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
                 bulkTrend={kpi?.output?.bulkTrend ?? null}
                 sparkline={kpi?.output?.sparkline ?? []}
                 bulkSparkline={kpi?.output?.bulkSparkline ?? []}
+                fgPrev={kpi?.output?.fgPrev}
+                bulkPrev={kpi?.output?.bulkPrev}
               />
             </KpiHighlightTarget>
             <KpiHighlightTarget id="productivity">

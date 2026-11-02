@@ -70,7 +70,7 @@ function plantE2E(cur: PlantDrivers, prev: PlantDrivers) {
   }));
 }
 
-function prevPeriod(startDate: string, endDate: string) {
+export function prevPeriod(startDate: string, endDate: string) {
   const startDt = new Date(startDate);
   const endDt = new Date(endDate);
   const durationMs = endDt.getTime() - startDt.getTime();

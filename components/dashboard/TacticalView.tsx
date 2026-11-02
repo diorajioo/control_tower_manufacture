@@ -1038,6 +1038,7 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
         targetDays={plantLT?.targetDays ?? 13}
         loading={stageLoading}
         basis={ltBasis}
+        metric={measure}
         unit={unit}
         selectedPlant={selectedPlant}
         onRowClick={(p) => setSelectedPlant(p)}
@@ -1116,12 +1117,13 @@ function ProductivitySection({ kpi, loading }: Pick<TacticalViewProps, "kpi" | "
 
 // ── Output Trend chart ────────────────────────────────────────────────────────
 
-type OutputBarDatum = { label: string; date: string; Actual: number; theoretical: number } & BarDatum;
+type OutputBarDatum = { label: string; date: string; Actual: number; theoretical: number; raw: number; rawTheo: number; hasTheo: number } & BarDatum;
 const ACTUAL_BAR_COLOR = "#4A6BA3";
 const THEO_LINE_COLOR  = "#667085";
 
 function TheoreticalLineLayer({ bars, yScale }: BarCustomLayerProps<OutputBarDatum>) {
-  const visible = bars.filter((b) => String(b.key).endsWith("Actual"));
+  // Drawn only where the source has a theoretical quantity (Bulk); FG has none yet
+  const visible = bars.filter((b) => String(b.key).endsWith("Actual") && b.data.data.hasTheo === 1);
   if (!visible.length) return null;
   const pts = visible.map((b) => ({
     x: b.x + b.width / 2,
@@ -1150,20 +1152,23 @@ function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
 }) {
   const { t } = useT();
   const [grain, setGrain] = useState<"month" | "week">("month");
-  const [rawData, setRawData] = useState<{ date: string; value: number }[]>([]);
+  const [rawData, setRawData] = useState<{ date: string; value: number; theo: number | null }[]>([]);
   const [loading, setLoading] = useState(false);
+  const unit = metric === "bulk" ? "kg" : "pcs";
 
   useEffect(() => {
-    if (metric === "bulk") { setRawData([]); setLoading(false); return; }
     setLoading(true);
     const params = outputParams(filters, pick, "bucket");
-    params.set("kpiType", "output");
     params.set("grain", grain);
-    fetch(withBase(`/api/dashboard/trends?${params}`))
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setRawData((d?.trendSeries ?? []).map((row: Record<string, unknown>) => ({ date: String(row.date), value: Number(row["All plants"] ?? 0) }))))
-      .catch(() => setRawData([]))
-      .finally(() => setLoading(false));
+    // FG: released FG per plant series (trends route, "All plants" row); Bulk: realized vs theoretical kg
+    const req = metric === "bulk"
+      ? fetch(withBase(`/api/dashboard/output-bulk-trend?${params}`))
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => (d?.series ?? []).map((p: { date: string; real: number; theoretical: number | null }) => ({ date: p.date, value: p.real, theo: p.theoretical })))
+      : (params.set("kpiType", "output"), fetch(withBase(`/api/dashboard/trends?${params}`)))
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => (d?.trendSeries ?? []).map((row: Record<string, unknown>) => ({ date: String(row.date), value: Number(row["All plants"] ?? 0), theo: null })));
+    req.then(setRawData).catch(() => setRawData([])).finally(() => setLoading(false));
   }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric, grain, pick]);
 
   const barData: OutputBarDatum[] = rawData.map((p) => {
@@ -1171,16 +1176,16 @@ function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
     const label = grain === "week"
       ? `W${String(Math.ceil(dt.getUTCDate() / 7)).padStart(2, "0")} ${dt.toLocaleString("en-US", { month: "short", timeZone: "UTC" })}`
       : dt.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-    return { label, date: p.date, Actual: Number((p.value / 1_000_000).toFixed(2)), theoretical: 0 };
+    return { label, date: p.date, Actual: Number((p.value / 1_000_000).toFixed(2)), theoretical: (p.theo ?? 0) / 1_000_000, raw: p.value, rawTheo: p.theo ?? 0, hasTheo: p.theo == null ? 0 : 1 };
   });
-  const maxVal = Math.max(...barData.map((d) => d.Actual), 1);
+  const maxVal = Math.max(...barData.map((d) => Math.max(d.Actual, d.theoretical)), 1);
 
   return (
     <div className="rounded-lg border border-[#EBEBEB] bg-white p-4" style={{ fontFamily: "Lato, sans-serif" }}>
       <div className="flex items-center justify-between mb-3 gap-3">
         <div className="flex items-center gap-1.5">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{t("output_trend_title")}</p>
-          <InfoTooltip text={t("output_trend_tooltip")} size={13} width={240} />
+          <InfoTooltip text={t(metric === "bulk" ? "output_trend_tooltip_bulk" : "output_trend_tooltip")} size={13} width={240} />
         </div>
         <ToggleSelect<"month" | "week">
           ariaLabel="Trend grain"
@@ -1191,11 +1196,7 @@ function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
         />
       </div>
 
-      {metric === "bulk" ? (
-        <div style={{ height: 240, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <p style={{ fontSize: 11, color: "#98a2b3", fontWeight: 600 }}>{t("output_bulk_coming_soon")}</p>
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div style={{ height: 240, borderRadius: 6, background: "#f9fafb" }} className="animate-pulse" />
       ) : barData.length === 0 ? (
         <div style={{ height: 240, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1224,7 +1225,7 @@ function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
               axisLeft={{
                 tickSize: 0, tickPadding: 8,
                 format: (v) => Number(v).toFixed(1),
-                legend: t("output_fg_unit_mpcs"), legendOffset: -44, legendPosition: "middle",
+                legend: t(metric === "bulk" ? "output_bulk_unit_mkg" : "output_fg_unit_mpcs"), legendOffset: -44, legendPosition: "middle",
               }}
               axisBottom={{ tickSize: 0, tickPadding: 8 }}
               layers={["grid", "axes", "bars", TheoreticalLineLayer]}
@@ -1232,8 +1233,10 @@ function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
                 <LineTooltip
                   title={d.label}
                   rows={[
-                    { label: t("chart_actual"),            color: ACTUAL_BAR_COLOR, value: `${d.Actual.toFixed(2)}M pcs` },
-                    { label: t("output_legend_theoretical"), color: THEO_LINE_COLOR, value: t("empty_no_data") },
+                    { label: t("chart_actual"), color: ACTUAL_BAR_COLOR, value: Math.round(d.raw).toLocaleString("en-US"), unit },
+                    d.hasTheo !== 1
+                      ? { label: t("output_legend_theoretical"), color: THEO_LINE_COLOR, value: t("empty_no_data") }
+                      : { label: t("output_legend_theoretical"), color: THEO_LINE_COLOR, value: Math.round(d.rawTheo).toLocaleString("en-US"), unit },
                   ]}
                 />
               )}
@@ -1274,9 +1277,9 @@ function TopLineByOutputTable({ filters, metric, pick, onPick }: {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   useEffect(() => {
-    if (metric === "bulk") { setRows([]); setLoading(false); return; }
     setLoading(true);
     const params = outputParams(filters, pick, "line");
+    params.set("metric", metric);
     fetch(withBase(`/api/dashboard/output-line?${params}`))
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setRows(d?.lines ?? []))
@@ -1316,14 +1319,10 @@ function TopLineByOutputTable({ filters, metric, pick, onPick }: {
         <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", flex: 1 }}>
           {t("output_line_title")}
         </p>
-        <InfoTooltip text={t("output_line_tooltip")} size={13} width={220} />
+        <InfoTooltip text={t(metric === "bulk" ? "output_line_tooltip_bulk" : "output_line_tooltip")} size={13} width={220} />
       </div>
       {loading ? (
         <div style={{ height: 260, background: "#f9fafb" }} className="animate-pulse" />
-      ) : metric === "bulk" ? (
-        <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a2b3", fontSize: 11, fontWeight: 600 }}>
-          {t("output_line_bulk_coming_soon")}
-        </div>
       ) : rows.length === 0 ? (
         <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a2b3", fontSize: 11 }}>
           {t("output_trend_no_data")}
@@ -1335,8 +1334,8 @@ function TopLineByOutputTable({ filters, metric, pick, onPick }: {
               <tr>
                 <TH col="line"        label={t("th_line")} />
                 <TH col="qtyPo"       label={t("output_line_th_qty_po")}      right />
-                <TH col="qtyReal"     label={t("output_line_th_qty_real")}    right />
-                <TH col="theoretical" label={t("output_line_th_theoretical")} right />
+                <TH col="qtyReal"     label={t(metric === "bulk" ? "output_line_th_qty_real_bulk" : "output_line_th_qty_real")}    right />
+                <TH col="theoretical" label={t(metric === "bulk" ? "output_line_th_theoretical_bulk" : "output_line_th_theoretical")} right />
                 <TH col="gap"         label={t("output_line_th_gap")}         right />
                 <TH col="pctContrib"  label={t("output_line_th_pct_contrib")} right />
               </tr>
@@ -1358,10 +1357,14 @@ function TopLineByOutputTable({ filters, metric, pick, onPick }: {
                     {row.qtyPo.toLocaleString()}
                   </td>
                   <td style={{ padding: "6px 10px", textAlign: "right", color: "#344054", fontVariantNumeric: "tabular-nums" }}>
-                    {row.qtyReal.toLocaleString()}
+                    {Math.round(row.qtyReal).toLocaleString()}
                   </td>
-                  <td style={{ padding: "6px 10px", textAlign: "right", color: "#98a2b3" }}>—</td>
-                  <td style={{ padding: "6px 10px", textAlign: "right", color: "#98a2b3" }}>—</td>
+                  <td style={{ padding: "6px 10px", textAlign: "right", color: row.theoretical == null ? "#98a2b3" : "#344054", fontVariantNumeric: "tabular-nums" }}>
+                    {row.theoretical == null ? "—" : Math.round(row.theoretical).toLocaleString()}
+                  </td>
+                  <td style={{ padding: "6px 10px", textAlign: "right", color: row.gap == null ? "#98a2b3" : row.gap < 0 ? "#d92d20" : "#344054", fontVariantNumeric: "tabular-nums" }}>
+                    {row.gap == null ? "—" : `${row.gap >= 0 ? "+" : "−"}${Math.round(Math.abs(row.gap)).toLocaleString()}`}
+                  </td>
                   <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700, color: "#344054", fontVariantNumeric: "tabular-nums" }}>
                     {row.pctContrib.toFixed(1)}%
                   </td>
@@ -1377,13 +1380,17 @@ function TopLineByOutputTable({ filters, metric, pick, onPick }: {
 
 // ── Output KPI mini-cards ─────────────────────────────────────────────────────
 
-function OutputFGCard({ fgQty, fgTrend, noData }: {
-  fgQty: number; fgTrend: number | null; noData?: boolean;
+function OutputFGCard({ metric, qty, trend, theoretical, noData }: {
+  metric: "fg" | "bulk"; qty: number; trend: number | null; theoretical?: number | null; noData?: boolean;
 }) {
   const { t } = useT();
-  const toneKey = noData ? "neutral" : trendToneKey(fgTrend, false);
+  const toneKey = noData ? "neutral" : trendToneKey(trend, false);
   const tone = TONE_TREND[toneKey];
-  const fgM = fgQty / 1_000_000;
+  const qtyM = qty / 1_000_000;
+  // Achievement only where the source has a theoretical quantity (Bulk batches); FG has none yet
+  const achievement = !noData && theoretical ? (qty / theoretical) * 100 : null;
+  const gap = !noData && theoretical ? qty - theoretical : null;
+  const unit = metric === "bulk" ? "kg" : "pcs";
   return (
     <div style={{
       background: "white", border: "1px solid #EBEBEB", borderRadius: 8,
@@ -1391,21 +1398,21 @@ function OutputFGCard({ fgQty, fgTrend, noData }: {
       height: "100%", fontFamily: "Lato, sans-serif",
     }}>
       <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.06em", color: "#64748b", textTransform: "uppercase" }}>
-        {t("output_fg_card_title")}
+        {t(metric === "bulk" ? "output_bulk_card_title" : "output_fg_card_title")}
       </span>
       <div style={{ flex: 1, display: "flex", gap: 10, marginTop: 10, alignItems: "flex-start" }}>
-        {/* Left: total */}
+        {/* Left: total (full number on hover) */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 10, color: "#98a2b3", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("output_fg_label_total")}</span>
           <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-            <span style={{
+            <span title={noData ? undefined : `${Math.round(qty).toLocaleString("en-US")} ${unit}`} style={{
               fontSize: 28, fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums",
               color: noData ? "#d0d5dd" : "#101828",
             }}>
-              {noData ? "—" : fgM.toFixed(2)}
+              {noData ? "—" : qtyM.toFixed(2)}
             </span>
           </div>
-          <span style={{ fontSize: 10.5, color: "#98a2b3" }}>{t("output_fg_unit_mpcs")}</span>
+          <span style={{ fontSize: 10.5, color: "#98a2b3" }}>{t(metric === "bulk" ? "output_bulk_unit_mkg" : "output_fg_unit_mpcs")}</span>
           <StatusDot color={noData ? "#667085" : tone.color} label={noData ? t("status_no_data") : tone.label} />
         </div>
         {/* Divider */}
@@ -1413,22 +1420,26 @@ function OutputFGCard({ fgQty, fgTrend, noData }: {
         {/* Right: achievement */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 10, color: "#98a2b3", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("output_fg_label_achievement")}</span>
-          <span style={{ fontSize: 22, fontWeight: 700, color: "#d0d5dd", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>—</span>
-          <span style={{ fontSize: 11, color: "#98a2b3" }}>{t("output_line_th_gap")} —</span>
+          <span style={{ fontSize: 22, fontWeight: 700, color: achievement == null ? "#d0d5dd" : "#101828", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+            {achievement == null ? "—" : `${achievement.toFixed(1)}%`}
+          </span>
+          <span style={{ fontSize: 11, color: "#98a2b3", fontVariantNumeric: "tabular-nums" }}>
+            {t("output_line_th_gap")} {gap == null ? "—" : `${gap >= 0 ? "+" : "−"}${Math.round(Math.abs(gap)).toLocaleString("en-US")} ${unit}`}
+          </span>
         </div>
       </div>
       <div style={{
         borderTop: "1px solid #eceef2", marginTop: 10, paddingTop: 6,
         fontSize: 11, color: "#667085",
       }}>
-        {t("output_fg_footer")}
+        {t(metric === "bulk" ? "output_bulk_footer" : "output_fg_footer")}
       </div>
     </div>
   );
 }
 
-function OutputCountCard({ skuCount, poCount, noData }: {
-  skuCount?: number; poCount?: number; noData?: boolean;
+function OutputCountCard({ metric, skuCount, poCount, noData }: {
+  metric: "fg" | "bulk"; skuCount?: number; poCount?: number; noData?: boolean;
 }) {
   const { t } = useT();
   const avgPo = (skuCount && skuCount > 0 && poCount) ? (poCount / skuCount).toFixed(0) : null;
@@ -1439,7 +1450,7 @@ function OutputCountCard({ skuCount, poCount, noData }: {
       height: "100%", fontFamily: "Lato, sans-serif",
     }}>
       <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.06em", color: "#64748b", textTransform: "uppercase" }}>
-        {t("output_count_title")}
+        {t(metric === "bulk" ? "output_count_title_bulk" : "output_count_title")}
       </span>
       {noData ? (
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a2b3", fontSize: 11 }}>
@@ -1469,8 +1480,9 @@ function OutputCountCard({ skuCount, poCount, noData }: {
   );
 }
 
-function OutputPieCard({ title, pickLabel, segments, noData, pickDim, pick, onPick }: {
+function OutputPieCard({ title, pickLabel, segments, noData, pickDim, pick, onPick, unit = "pcs" }: {
   title: string;
+  unit?: "pcs" | "kg";
   /** Short name for the filter chip, e.g. "Plant" */
   pickLabel: string;
   segments: { label: string; qty: number; color: string }[];
@@ -1500,7 +1512,7 @@ function OutputPieCard({ title, pickLabel, segments, noData, pickDim, pick, onPi
         <div style={{ marginTop: 8, display: "flex", gap: 10, alignItems: "center", flex: 1 }}>
           <div style={{ flexShrink: 0 }}>
             <PieChart
-              segments={donutSegs} size={90} unit="M pcs" fmt={fmtM}
+              segments={donutSegs} size={90} unit={`M ${unit}`} fmt={fmtM}
               onSelect={(label) => onPick({ dim: pickDim, value: label, label: `${pickLabel}: ${label}` })}
               opacityOf={(label) => pickOpacity(pick, pickDim, label)}
             />
@@ -1533,6 +1545,30 @@ function OutputPieCard({ title, pickLabel, segments, noData, pickDim, pick, onPi
   );
 }
 
+interface OutputStats {
+  total: number; prevTotal: number; trend: number | null; theoretical: number | null;
+  skuCount: number; poCount: number;
+  byPlant: { name: string; qty: number }[]; byForm: { name: string; qty: number }[];
+}
+
+/** /api/dashboard/output-stats for one Output visual: header filters + FG / Bulk + the pick (unless `own` made it). */
+function useOutputStats(filters: TacticalFilters, metric: "fg" | "bulk", pick: OutputPick | null, own: OutputPickDim | OutputPickDim[]) {
+  const params = outputParams(filters, pick, own);
+  params.set("metric", metric);
+  const url = withBase(`/api/dashboard/output-stats?${params}`);
+  const [state, setState] = useState<{ url: string; data: OutputStats | null; loading: boolean }>({ url: "", data: null, loading: true });
+  useEffect(() => {
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true }));
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: OutputStats | null) => { if (!cancelled) setState({ url, data: d, loading: false }); })
+      .catch(() => { if (!cancelled) setState({ url, data: null, loading: false }); });
+    return () => { cancelled = true; };
+  }, [url]);
+  return state;
+}
+
 function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps, "kpi" | "loading"> & { tacticalFilters: TacticalFilters }) {
   const { t } = useT();
   const [metric, setMetric] = useState<"fg" | "bulk">("fg");
@@ -1548,24 +1584,18 @@ function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps
     return () => document.removeEventListener("keydown", esc);
   }, [pick]);
 
-  const plantSegs = useMemo<{ label: string; qty: number; color: string }[]>(() => {
-    if (metric !== "fg") return [];
-    const drivers = kpi?.output?.plantDrivers;
-    if (!drivers || drivers.length === 0) return [];
-    return [...drivers]
-      .filter((d) => d.fg > 0)
-      .sort((a, b) => b.fg - a.fg)
-      .map((d, i) => ({ label: d.plant, qty: d.fg, color: PLANT_COLORS[i % PLANT_COLORS.length] as string }));
-  }, [kpi?.output?.plantDrivers, metric]);
+  // Mini cards + donuts follow the header filters, FG / Bulk and the pick (/api/dashboard/output-stats).
+  // A donut that owns the pick keeps all its slices (it highlights instead) — same rule as the other Output charts.
+  const cards = useOutputStats(tacticalFilters, metric, pick, []);
+  const plantStats = useOutputStats(tacticalFilters, metric, pick, "plant");
+  const formStats = useOutputStats(tacticalFilters, metric, pick, "form");
 
-  const formSegs = useMemo<{ label: string; qty: number; color: string }[]>(() => {
-    if (metric !== "fg") return [];
-    const forms = kpi?.output?.byForm;
-    if (!forms || forms.length === 0) return [];
-    return forms
-      .filter((f) => f.qty > 0)
-      .map((f, i) => ({ label: f.form, qty: f.qty, color: SERIES_COLORS[i % SERIES_COLORS.length] as string }));
-  }, [kpi?.output?.byForm, metric]);
+  const plantSegs = useMemo(() => (plantStats.data?.byPlant ?? [])
+    .filter((d) => d.qty > 0)
+    .map((d, i) => ({ label: d.name, qty: d.qty, color: PLANT_COLORS[i % PLANT_COLORS.length] as string })), [plantStats.data]);
+  const formSegs = useMemo(() => (formStats.data?.byForm ?? [])
+    .filter((f) => f.qty > 0)
+    .map((f, i) => ({ label: f.name, qty: f.qty, color: SERIES_COLORS[i % SERIES_COLORS.length] as string })), [formStats.data]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -1602,22 +1632,25 @@ function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps
       />
 
       <div className="grid grid-cols-4 gap-3">
-        {loading ? (
+        {loading || (cards.loading && !cards.data) ? (
           Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
             <OutputFGCard
-              fgQty={kpi?.output.fgQty ?? 0}
-              fgTrend={kpi?.output.fgTrend ?? null}
-              noData={!kpi}
+              metric={metric}
+              qty={cards.data?.total ?? 0}
+              trend={cards.data?.trend ?? null}
+              theoretical={cards.data?.theoretical}
+              noData={!cards.data}
             />
             <OutputCountCard
-              skuCount={kpi?.output.skuCount}
-              poCount={kpi?.output.poCount}
-              noData={!kpi}
+              metric={metric}
+              skuCount={cards.data?.skuCount}
+              poCount={cards.data?.poCount}
+              noData={!cards.data}
             />
-            <OutputPieCard title={t("output_pie_plant")} pickLabel={t("output_pick_plant")} segments={plantSegs} noData={!kpi || metric !== "fg"} pickDim="plant" pick={pick} onPick={onPick} />
-            <OutputPieCard title={t("output_pie_form")}  pickLabel={t("output_pick_form")}  segments={formSegs}  noData={!kpi || metric !== "fg"} pickDim="form"  pick={pick} onPick={onPick} />
+            <OutputPieCard title={t("output_pie_plant")} pickLabel={t("output_pick_plant")} segments={plantSegs} noData={!plantStats.data} unit={metric === "bulk" ? "kg" : "pcs"} pickDim="plant" pick={pick} onPick={onPick} />
+            <OutputPieCard title={t("output_pie_form")}  pickLabel={t("output_pick_form")}  segments={formSegs}  noData={!formStats.data}  unit={metric === "bulk" ? "kg" : "pcs"} pickDim="form"  pick={pick} onPick={onPick} />
           </>
         )}
       </div>

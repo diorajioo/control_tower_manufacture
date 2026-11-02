@@ -2,6 +2,17 @@
 
 ---
 
+## Filter contract gaps (audit 2026-11-02)
+
+Visuals that do not yet follow every filter of their section (CLAUDE.md → Filter contract). Output gaps were fixed on 2026-11-02; these remain:
+
+- **Tactical Lead Time Gross card**: with PO Released, the value is Released but the trend %, sparkline and gauge PO total come from the KPI snapshot (PO Created) — `TacticalView.tsx` Lead Time section.
+- **PO Created / Released and Gross / Nett ignored** by the Tactical Pareto and the VA/NNVA/UNVA + Group Process donuts; on the Lead Time page by Pareto, Box plot (nett only), Top SKU, Scatter and Composition (Scope). Lead Time per Line avg gross is always PO Released (`getLeadTimeByLineSku`).
+- **AI Risks** localStorage key is plant + period only — a new Custom date range shows the previous range's risks (`AIRisksPanel.tsx`).
+- **Risk scores** (Overview alert bar) are fetched with the plant only, not the dates.
+- **Lead Time → Monitor** button opens the monitor without the page's filters.
+- Lead Time page Refresh does not refetch Pareto / Scatter; the page Header does not read the saved `ct-filters`.
+
 ## Critical
 
 ### Next.js 14 Is Out Of Security Support

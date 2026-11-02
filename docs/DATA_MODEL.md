@@ -107,7 +107,9 @@ Source for: Bulk Output (kg), Bulk Loss.
 | `THEORETICAL_QUANTITY` | number | Expected/planned bulk quantity (kg) |
 | `CORRECTION_DATE` | date | **Date filter column** |
 
-⚠️ **This table has no PLANT column.** Plant filter is not applied here. Data covers all plants combined.
+Other columns used: `SNFG_COMPONENT_NAME` (FG process order → plant via `LT_TABLE`), `NOMO_NAME` (bulk process order), `COITEM_BULK_CODE` / `BULK_NAME` (bulk SKU), `LINE_NAME` (mixing line), `MATERIAL_FORM_NAME`, `PRODUCT_BRAND_NAME`, `VARIANT_NAME`.
+
+⚠️ **No PLANT column.** Output gets the plant of `SNFG_COMPONENT_NAME`'s PO (~92% of rows, 99.6% of kg); Bulk Loss is all plants. Data quirk: a few rows have `MATERIAL_FORM_NAME = 'J6'`.
 
 ---
 
@@ -120,7 +122,9 @@ Source for: FG Output (pcs).
 | `QUANTITY` | number | Finished Goods quantity produced (pcs) |
 | `CORRECTION_DATE` | date | **Date filter column** |
 
-⚠️ **This table has no PLANT column.** Plant filter is not applied here.
+Other columns used: `SNFG_NAME` (FG process order → plant via `LT_TABLE`), `LINE_NAME`, `MATERIAL_FORM_NAME`, `PRODUCT_BRAND_NAME`.
+
+⚠️ **No PLANT column.** Plant = the plant of `SNFG_NAME`'s PO (~99% of rows).
 
 ---
 

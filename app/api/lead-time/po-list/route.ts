@@ -32,7 +32,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   };
 }
 
-const cached = unstable_cache(run, ["lead-time-po-list-v1"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["lead-time-po-list-v2"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);

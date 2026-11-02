@@ -44,6 +44,33 @@ const ltWhere = (f: QueryFilters) => {
 };
 const ltBinds = (f: QueryFilters): unknown[] => [...plantBinds(f.plant), ...activeDims(f.lt).flatMap((d) => d.values)];
 
+// Lead time split per activity row, additive (one rule for the plant table, the PO table and the sunburst):
+//   GROSS_MIN — every minute of the PO's gross window (start → Receive NDC) belongs to exactly one row: the row that
+//               started last. Rows running in parallel hand the time over when the next one starts, so the rows of a PO
+//               add up to its gross lead time exactly. Every ACTIVITY_TYPE counts (ACTUAL, WAITING, WIP).
+//   NETT_MIN  — NET_LEADTIME of the rows that make up nett (ACTUAL with a LINE_CATEGORY), so they add up to nett.
+// `src` = an SQL source with the lead time columns (already filtered). The next start is MIN over the following rows
+// (explicit frame) rather than LEAD(), which ClickHouse does not have.
+const ltSplitSql = (src: string, startSql: string) => `
+  SELECT r.PROCESS_ORDER_FG, r.PLANT, r.POSITION, r.ACTIVITY, r.ACTIVITY_SEQUENCE,
+    CASE WHEN w.w_start IS NULL OR w.w_end IS NULL THEN NULL
+         ELSE GREATEST(DATEDIFF('minute', GREATEST(r.ACTIVITY_START, w.w_start), LEAST(COALESCE(r.next_start, w.w_end), w.w_end)), 0)
+    END AS GROSS_MIN,
+    CASE WHEN r.ACTIVITY_TYPE = 'ACTUAL' AND r.LINE_CATEGORY IS NOT NULL THEN r.NET_LEADTIME END AS NETT_MIN
+  FROM (
+    SELECT s.*,
+      MIN(s.ACTIVITY_START) OVER (PARTITION BY s.PROCESS_ORDER_FG
+        ORDER BY s.ACTIVITY_START, s.ACTIVITY_SEQUENCE, s.ACTIVITY_STOP
+        ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_start
+    FROM (${src}) s
+    WHERE s.ACTIVITY_START IS NOT NULL
+  ) r
+  LEFT JOIN (
+    SELECT PROCESS_ORDER_FG, ${startSql} AS w_start, ${NDC_RECEIVED_AT_SQL} AS w_end
+    FROM (${src}) s
+    GROUP BY PROCESS_ORDER_FG
+  ) w ON w.PROCESS_ORDER_FG = r.PROCESS_ORDER_FG`;
+
 // Trend granularity for line charts. Only these two literals are ever put into DATE_TRUNC.
 export type TrendGrain = "week" | "month";
 const truncUnit = (grain?: string): TrendGrain => (grain === "month" ? "month" : "week");
@@ -380,8 +407,8 @@ export async function getLeadTimeStageVsStd(filters: QueryFilters) {
 // Lead time breakdown per plant → Overview Tactical table. Network row = GROUPING(PLANT) = 1.
 // Per PO: gross (PO start → RECEIVE NDC stop) and nett (ACTUAL, LINE_CATEGORY NOT NULL) as in getLeadTimeKPI.
 // ONTIME_PCT = share of POs with gross ≤ targetDays. Stage minutes are summed per plant × POSITION;
-// divide by PO_COUNT for days per PO (same basis as getLeadTimeStageVsStd).
-// basis = where gross starts (Overview Tactical toggle); stage minutes do not depend on it.
+// divide by GROSS_N / NETT_N for days per PO, so the process columns add up to gross / nett (ltSplitSql).
+// basis = where gross starts (Overview Tactical toggle) — it also sets the window the gross split covers.
 export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: number, basis: "created" | "released" = "created") {
   const startSql = basis === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
@@ -393,7 +420,7 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
       ${ltWhere(filters)}`;
 
   const [plantRows, stageRows] = await Promise.all([
-    executeQuery<{ IS_NETWORK: number; PLANT: string | null; PO_COUNT: number; GROSS_DAYS: number; NETT_DAYS: number; ONTIME_PCT: number | null; ONTIME_N: number; ATRISK_N: number; LATE_N: number }>(`
+    executeQuery<{ IS_NETWORK: number; PLANT: string | null; PO_COUNT: number; GROSS_N: number; NETT_N: number; GROSS_DAYS: number; NETT_DAYS: number; ONTIME_PCT: number | null; ONTIME_N: number; ATRISK_N: number; LATE_N: number }>(`
       WITH base AS (${base}),
       -- Plant rows: per (plant, PO). Network row: per PO over all its rows — a PO made in one plant and
       -- packed in another has no start or no end inside either plant, so a per-plant split would drop it
@@ -425,6 +452,8 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
         0 AS IS_NETWORK,
         PLANT,
         COUNT(*) AS PO_COUNT,
+        COUNT(gross_minutes) AS GROSS_N,
+        COUNT(nett_minutes) AS NETT_N,
         AVG(gross_minutes) / 1440.0 AS GROSS_DAYS,
         AVG(nett_minutes) / 1440.0 AS NETT_DAYS,
         COUNT_IF(gross_minutes <= ? * 1440) * 100.0 / NULLIF(COUNT(gross_minutes), 0) AS ONTIME_PCT,
@@ -439,6 +468,8 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
         1 AS IS_NETWORK,
         NULL AS PLANT,
         COUNT(*) AS PO_COUNT,
+        COUNT(gross_minutes) AS GROSS_N,
+        COUNT(nett_minutes) AS NETT_N,
         AVG(gross_minutes) / 1440.0 AS GROSS_DAYS,
         AVG(nett_minutes) / 1440.0 AS NETT_DAYS,
         COUNT_IF(gross_minutes <= ? * 1440) * 100.0 / NULLIF(COUNT(gross_minutes), 0) AS ONTIME_PCT,
@@ -448,13 +479,14 @@ export async function getLeadTimeByPlant(filters: QueryFilters, targetDays: numb
         COUNT_IF(gross_minutes > ? * 1440 * 1.15) AS LATE_N
       FROM po_network
     `, [...binds, ...Array(5).fill(targetDays), ...Array(5).fill(targetDays)]),
-    // Per activity (Process view of the plant table); the route also sums them per POSITION
-    executeQuery<{ PLANT: string; STAGE: string; ACTIVITY: string; SEQ: number | null; MINUTES: number }>(`
-      SELECT PLANT, POSITION AS STAGE, ACTIVITY, MIN(ACTIVITY_SEQUENCE) AS SEQ, SUM(NET_LEADTIME) AS MINUTES
-      FROM (${base}) b
+    // Per activity (Process view of the plant table), split so the columns add up to gross / nett (ltSplitSql);
+    // the route also sums them per POSITION
+    executeQuery<{ PLANT: string; STAGE: string; ACTIVITY: string; SEQ: number | null; GROSS_MIN: number | null; NETT_MIN: number | null }>(`
+      SELECT PLANT, POSITION AS STAGE, ACTIVITY, MIN(ACTIVITY_SEQUENCE) AS SEQ, SUM(GROSS_MIN) AS GROSS_MIN, SUM(NETT_MIN) AS NETT_MIN
+      FROM (${ltSplitSql(base, startSql)}) b
       WHERE POSITION IS NOT NULL
       GROUP BY 1, 2, 3
-    `, binds),
+    `, [...binds, ...binds]),
   ]);
 
   return { plants: plantRows, stages: stageRows };
@@ -843,25 +875,172 @@ export async function getOutputDetailStats(filters: QueryFilters) {
   };
 }
 
+// ── Output datamarts: plant + cross-filter ────────────────────────────────────────────────────────────────────
+// The FG and Bulk datamarts have no PLANT column. Each row carries its FG process order (FG: SNFG_NAME, Bulk:
+// SNFG_COMPONENT_NAME), so the plant is the PO's owner plant from LT_TABLE — the same plant the Lead Time and
+// Tactical FG charts use. ~99% of FG rows and ~92% of Bulk rows (99.6% of kg) have a PO in the lead time data;
+// rows without one only count under All Plant.
+const OUTPUT_PO_COL = { fg: "SNFG_NAME", bulk: "SNFG_COMPONENT_NAME" } as const;
+const outputPlantWhere = (plant: string | undefined, poCol: string) =>
+  hasPlant(plant) ? `AND ${poCol} IN (SELECT PROCESS_ORDER_FG FROM ${LT_TABLE} WHERE PLANT = ?)` : "";
+
+// ── Output — Bulk (Tactical → Output, FG / Bulk toggle = Bulk) ────────────────────────────────────────────────
+// One source for every Bulk chart: DATAMART_PRODUCTION_OUTPUT_OLAH, kg, dated by CORRECTION_DATE (same as the
+// Bulk KPI card). A row = one bulk batch: NOMO_NAME = bulk process order, COITEM_BULK_CODE / BULK_NAME = bulk SKU.
+// Cross-filter (OutputSel) reads the batch's own columns; SKU group does not exist for bulk.
+const BULK_SEL_COL: Partial<Record<OutputSelDim, string>> = {
+  brand: "PRODUCT_BRAND_NAME", variant: "VARIANT_NAME", line: "LINE_NAME", form: "MATERIAL_FORM_NAME",
+};
+export type BulkGroupDim = "brand" | "variant";
+
+/** Filtered bulk rows (with PLANT) as an SQL source + its binds. */
+function bulkRows(filters: QueryFilters, sel?: OutputSel | null): { sql: string; binds: unknown[] } {
+  const { sql: datePred, binds: dateBinds } = periodDateWhere("b.CORRECTION_DATE", filters.period, filters.startDate, filters.endDate);
+  const col = sel ? BULK_SEL_COL[sel.dim] : undefined;
+  const selSql = !col ? "" : sel!.value === OUTPUT_NOT_SET ? `AND b.${col} IS NULL` : `AND b.${col} = ?`;
+  const selBinds = !col || sel!.value === OUTPUT_NOT_SET ? [] : [sel!.value];
+  return {
+    sql: `
+      SELECT b.*, p.PLANT
+      FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH b
+      LEFT JOIN (SELECT PROCESS_ORDER_FG, MAX(PLANT) AS PLANT FROM ${LT_TABLE} GROUP BY PROCESS_ORDER_FG) p
+        ON p.PROCESS_ORDER_FG = b.SNFG_COMPONENT_NAME
+      WHERE ${datePred}
+        ${hasPlant(filters.plant) ? "AND p.PLANT = ?" : ""}
+        ${selSql}`,
+    binds: [...dateBinds, ...plantBinds(filters.plant), ...selBinds],
+  };
+}
+
+/** Bulk per mixing line: batches, realized vs theoretical kg, share of the total. */
+export async function getBulkOutputByLine(filters: QueryFilters, sel?: OutputSel | null) {
+  const src = bulkRows(filters, sel);
+  return executeQuery<{ LINE_NAME: string; QTY_PO: number; QTY_REAL: number; QTY_THEO: number; PCT_CONTRIBUTION: number }>(`
+    WITH b AS (${src.sql}),
+    totals AS (SELECT NULLIF(SUM(REALIZATION_QUANTITY), 0) AS grand_total FROM b)
+    SELECT b.LINE_NAME,
+      COUNT(DISTINCT b.NOMO_NAME)                                  AS QTY_PO,
+      SUM(b.REALIZATION_QUANTITY)                                  AS QTY_REAL,
+      SUM(b.THEORETICAL_QUANTITY)                                  AS QTY_THEO,
+      SUM(b.REALIZATION_QUANTITY) * 100.0 / MAX(t.grand_total)     AS PCT_CONTRIBUTION
+    FROM b CROSS JOIN totals t
+    WHERE b.LINE_NAME IS NOT NULL
+    GROUP BY b.LINE_NAME
+    ORDER BY QTY_REAL DESC
+  `, src.binds);
+}
+
+/** Bulk per brand / variant (treemap) and the top 10 bulk SKUs. */
+export async function getBulkOutputMix(filters: QueryFilters, dim: BulkGroupDim = "brand", sel?: OutputSel | null, part: "all" | "groups" | "skus" = "all") {
+  const src = bulkRows(filters, sel);
+  const col = dim === "variant" ? "VARIANT_NAME" : "PRODUCT_BRAND_NAME";
+  const [groups, skus] = await Promise.all([
+    part === "skus" ? Promise.resolve([]) : executeQuery<{ GRP: string; QTY_PO: number; QTY_REAL: number }>(`
+      SELECT COALESCE(GRP_RAW, '(Not set)') AS GRP, COUNT(DISTINCT NOMO_NAME) AS QTY_PO, SUM(REALIZATION_QUANTITY) AS QTY_REAL
+      FROM (SELECT ${col} AS GRP_RAW, NOMO_NAME, REALIZATION_QUANTITY FROM (${src.sql}) x) g
+      GROUP BY COALESCE(GRP_RAW, '(Not set)')
+      ORDER BY QTY_REAL DESC
+    `, src.binds),
+    part === "groups" ? Promise.resolve([]) : executeQuery<{ PRODUCT_CODE: string; PRODUCT_NAME: string; QTY_PO: number; QTY_REAL: number; PCT_CONTRIBUTION: number }>(`
+      WITH b AS (${src.sql}),
+      totals AS (SELECT NULLIF(SUM(REALIZATION_QUANTITY), 0) AS GRAND_TOTAL FROM b)
+      SELECT b.COITEM_BULK_CODE AS PRODUCT_CODE, MAX(b.BULK_NAME) AS PRODUCT_NAME,
+        COUNT(DISTINCT b.NOMO_NAME) AS QTY_PO, SUM(b.REALIZATION_QUANTITY) AS QTY_REAL,
+        SUM(b.REALIZATION_QUANTITY) * 100.0 / MAX(t.GRAND_TOTAL) AS PCT_CONTRIBUTION
+      FROM b CROSS JOIN totals t
+      WHERE b.COITEM_BULK_CODE IS NOT NULL
+      GROUP BY b.COITEM_BULK_CODE
+      ORDER BY QTY_REAL DESC
+      LIMIT 10
+    `, src.binds),
+  ]);
+  return { groups, skus };
+}
+
+/** Bulk realized vs theoretical kg per week / month (Output trend bars, Bulk). */
+export async function getBulkOutputTrend(filters: QueryFilters, grain?: TrendGrain, sel?: OutputSel | null) {
+  const src = bulkRows(filters, sel);
+  return executeQuery<{ BUCKET: string; QTY_REAL: number; QTY_THEO: number }>(`
+    SELECT DATE_TRUNC('${truncUnit(grain)}', CORRECTION_DATE::DATE) AS BUCKET,
+      SUM(REALIZATION_QUANTITY) AS QTY_REAL, SUM(THEORETICAL_QUANTITY) AS QTY_THEO
+    FROM (${src.sql}) x
+    GROUP BY 1
+    ORDER BY 1
+  `, src.binds);
+}
+
+/** Output section mini cards + donuts, following the plant filter and the Output cross-filter.
+ *  FG: total from the FG datamart (same as the KPI card); SKU / PO counts, per plant and per form from the lead
+ *  time POs (RELEASE_QTY), as the other Tactical FG charts. Bulk: everything from the Bulk datamart. */
+export async function getOutputStats(filters: QueryFilters, metric: "fg" | "bulk", sel?: OutputSel | null) {
+  if (metric === "bulk") {
+    const src = bulkRows(filters, sel);
+    const [tot, byPlant, byForm] = await Promise.all([
+      executeQuery<{ TOTAL: number; THEO: number | null; SKU_COUNT: number; PO_COUNT: number }>(`
+        SELECT SUM(REALIZATION_QUANTITY) AS TOTAL, SUM(THEORETICAL_QUANTITY) AS THEO, COUNT(DISTINCT COITEM_BULK_CODE) AS SKU_COUNT, COUNT(DISTINCT NOMO_NAME) AS PO_COUNT
+        FROM (${src.sql}) x`, src.binds),
+      executeQuery<{ GRP: string; QTY: number }>(`
+        SELECT PLANT AS GRP, SUM(REALIZATION_QUANTITY) AS QTY FROM (${src.sql}) x WHERE PLANT IS NOT NULL GROUP BY 1 ORDER BY QTY DESC`, src.binds),
+      executeQuery<{ GRP: string; QTY: number }>(`
+        SELECT COALESCE(MATERIAL_FORM_NAME, 'Other') AS GRP, SUM(REALIZATION_QUANTITY) AS QTY FROM (${src.sql}) x GROUP BY 1 ORDER BY QTY DESC`, src.binds),
+    ]);
+    return { total: Number(tot[0]?.TOTAL ?? 0), theoretical: tot[0]?.THEO == null ? null : Number(tot[0].THEO),
+      skuCount: Number(tot[0]?.SKU_COUNT ?? 0), poCount: Number(tot[0]?.PO_COUNT ?? 0),
+      byPlant: byPlant.map((r) => ({ name: r.GRP, qty: Number(r.QTY ?? 0) })), byForm: byForm.map((r) => ({ name: r.GRP, qty: Number(r.QTY ?? 0) })) };
+  }
+  const corr = periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate);
+  const done = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const fgSel = outputSelWhere(sel, OUTPUT_PO_COL.fg);
+  const ltSel = outputSelWhere(sel);
+  const perPo = `
+    SELECT PROCESS_ORDER_FG, MAX(PLANT) AS PLANT, MAX(SEDIAAN) AS FORM, MAX(PRODUCT_CODE) AS PRODUCT_CODE, MAX(RELEASE_QTY) AS QTY
+    FROM ${LT_TABLE}
+    WHERE ${done.sql}
+      ${plantWhere(filters.plant)}
+      ${ltSel.sql}
+    GROUP BY PROCESS_ORDER_FG`;
+  const ltBindsAll = [...done.binds, ...plantBinds(filters.plant), ...ltSel.binds];
+  const [tot, counts, byPlant, byForm] = await Promise.all([
+    executeQuery<{ TOTAL: number }>(`
+      SELECT SUM(QUANTITY) AS TOTAL
+      FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_FG
+      WHERE ${corr.sql}
+        ${outputPlantWhere(filters.plant, OUTPUT_PO_COL.fg)}
+        ${fgSel.sql}`, [...corr.binds, ...plantBinds(filters.plant), ...fgSel.binds]),
+    executeQuery<{ SKU_COUNT: number; PO_COUNT: number }>(`
+      SELECT COUNT(DISTINCT PRODUCT_CODE) AS SKU_COUNT, COUNT(DISTINCT PROCESS_ORDER_FG) AS PO_COUNT FROM (${perPo}) x`, ltBindsAll),
+    executeQuery<{ GRP: string; QTY: number }>(`
+      SELECT PLANT AS GRP, SUM(QTY) AS QTY FROM (${perPo}) x WHERE PLANT IS NOT NULL AND QTY IS NOT NULL GROUP BY 1 ORDER BY QTY DESC`, ltBindsAll),
+    executeQuery<{ GRP: string; QTY: number }>(`
+      SELECT FORM AS GRP, SUM(QTY) AS QTY FROM (${perPo}) x WHERE FORM IS NOT NULL AND QTY IS NOT NULL GROUP BY 1 ORDER BY QTY DESC`, ltBindsAll),
+  ]);
+  return { total: Number(tot[0]?.TOTAL ?? 0), theoretical: null as number | null, skuCount: Number(counts[0]?.SKU_COUNT ?? 0), poCount: Number(counts[0]?.PO_COUNT ?? 0),
+    byPlant: byPlant.map((r) => ({ name: r.GRP, qty: Number(r.QTY ?? 0) })), byForm: byForm.map((r) => ({ name: r.GRP, qty: Number(r.QTY ?? 0) })) };
+}
+
 // Output (Bulk) → DATAMART_PRODUCTION_OUTPUT_OLAH.REALIZATION_QUANTITY filtered on CORRECTION_DATE
 // Output (FG)   → DATAMART_PRODUCTION_OUTPUT_FG.QUANTITY filtered on CORRECTION_DATE
+// Plant filter through the row's FG process order (outputPlantWhere).
 export async function getOutputKPI(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate);
-  const [bulkRows, fgRows] = await Promise.all([
+  const binds = [...dateBinds, ...plantBinds(filters.plant)];
+  const [bulk, fgRows] = await Promise.all([
     executeQuery<{ TOTAL_BULK: number }>(`
       SELECT SUM(REALIZATION_QUANTITY) AS TOTAL_BULK
       FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
       WHERE ${datePred}
-    `, dateBinds),
+        ${outputPlantWhere(filters.plant, OUTPUT_PO_COL.bulk)}
+    `, binds),
     executeQuery<{ TOTAL_FG: number }>(`
       SELECT SUM(QUANTITY) AS TOTAL_FG
       FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_FG
       WHERE ${datePred}
-    `, dateBinds),
+        ${outputPlantWhere(filters.plant, OUTPUT_PO_COL.fg)}
+    `, binds),
   ]);
 
   return {
-    acceptedBulkKg: bulkRows[0]?.TOTAL_BULK ?? 0,
+    acceptedBulkKg: bulk[0]?.TOTAL_BULK ?? 0,
     releasedFgPcs: fgRows[0]?.TOTAL_FG ?? 0,
   };
 }
@@ -1116,12 +1295,13 @@ export async function getOutputWeekly(filters: QueryFilters) {
       SUM(QUANTITY) AS TOTAL_FG
     FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_FG
     WHERE ${datePred}
+      ${outputPlantWhere(filters.plant, OUTPUT_PO_COL.fg)}
     GROUP BY 1
     ORDER BY 1
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
-// Output Bulk weekly series → sparkline for dashboard card (no PLANT col in this table)
+// Output Bulk weekly series → sparkline for dashboard card (plant through the PO, outputPlantWhere)
 export async function getBulkOutputWeekly(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("CORRECTION_DATE", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ WEEK: string; TOTAL_BULK: number }>(`
@@ -1130,9 +1310,10 @@ export async function getBulkOutputWeekly(filters: QueryFilters) {
       SUM(REALIZATION_QUANTITY) AS TOTAL_BULK
     FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH
     WHERE ${datePred}
+      ${outputPlantWhere(filters.plant, OUTPUT_PO_COL.bulk)}
     GROUP BY 1
     ORDER BY 1
-  `, dateBinds);
+  `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
 // Bulk Loss % weekly series → sparkline for dashboard card (no PLANT col)
@@ -1513,8 +1694,8 @@ export async function getLeadTimeDistributionBins(filters: QueryFilters, basis: 
 // Lead Time page → Analysis tab: one row per PO under the distribution histogram (same population as
 // getLeadTimeDistributionBins: completed in the period, ACTUAL rows, Lead Time page filters). Gross = start
 // (PO Created / Released) → RECEIVE NDC; nett = active time (LINE_CATEGORY rows). Per process group (PROCESS_GROUPS):
-// gross = sum of each activity's span (first start → last stop), nett = sum of NET_LEADTIME — same formulas as the
-// sunburst, per PO. The browser bins the POs with the same rule as the SQL to filter by a clicked bar.
+// the ltSplitSql split, so the group columns add up to the PO's gross / nett — same rule as the plant table and the
+// sunburst. The browser bins the POs with the same rule as the SQL to filter by a clicked bar.
 const PO_GROUP_COLS: { key: string; positions: string[] }[] = [
   { key: "PO",       positions: ["PO"] },
   { key: "WEIGHING", positions: ["TIMBANG"] },
@@ -1535,8 +1716,8 @@ export async function getLeadTimePoList(filters: QueryFilters, basis: "created" 
   const nettMinutes = "SUM(CASE WHEN LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME END)";
   const groupCols = PO_GROUP_COLS.map(({ key, positions }) => {
     const inList = positions.map((p) => `'${p}'`).join(", ");
-    return `SUM(CASE WHEN POSITION IN (${inList}) THEN span_min END) / 1440.0 AS G_${key},
-      SUM(CASE WHEN POSITION IN (${inList}) THEN net_min END) / 1440.0 AS N_${key}`;
+    return `SUM(CASE WHEN POSITION IN (${inList}) THEN GROSS_MIN END) / 1440.0 AS G_${key},
+      SUM(CASE WHEN POSITION IN (${inList}) THEN NETT_MIN END) / 1440.0 AS N_${key}`;
   }).join(",\n      ");
   return executeQuery<LeadTimePoRow>(`
     WITH lt_rows AS (
@@ -1559,18 +1740,14 @@ export async function getLeadTimePoList(filters: QueryFilters, basis: "created" 
       FROM lt_rows
       GROUP BY PROCESS_ORDER_FG
     ),
-    act AS (
-      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY,
-        GREATEST(COALESCE(DATEDIFF('minute', MIN(ACTIVITY_START), MAX(ACTIVITY_STOP)), 0), 0) AS span_min,
-        COALESCE(SUM(NET_LEADTIME), 0) AS net_min
-      FROM lt_rows
-      WHERE POSITION IS NOT NULL
-      GROUP BY PROCESS_ORDER_FG, POSITION, ACTIVITY
-    ),
+    -- Group columns: the split that adds up to gross / nett (ltSplitSql) — every row type, not only ACTUAL
     grp AS (
       SELECT PROCESS_ORDER_FG,
       ${groupCols}
-      FROM act
+      FROM (${ltSplitSql(`
+        SELECT * FROM ${LT_TABLE}
+        WHERE PO_FG_DONE_DATE IS NOT NULL AND ${datePred}
+          ${ltWhere(filters)}`, startSql)}) x
       GROUP BY PROCESS_ORDER_FG
     )
     SELECT po.PROCESS_ORDER_FG, po.PRODUCT_CODE, po.PRODUCT_NAME, po.PLANT, po.GROSS_DAYS, po.NETT_DAYS,
@@ -1579,7 +1756,7 @@ export async function getLeadTimePoList(filters: QueryFilters, basis: "created" 
     WHERE po.GROSS_DAYS IS NOT NULL OR po.NETT_DAYS IS NOT NULL
     ORDER BY po.GROSS_DAYS DESC NULLS LAST
     LIMIT 50000
-  `, [...dateBinds, ...ltBinds(filters)]);
+  `, Array(3).fill([...dateBinds, ...ltBinds(filters)]).flat());
 }
 
 // Lead Time page → Analysis tab: "Lead Time per Line" bubble chart + "Lead Time SKU per Line" table.
@@ -1738,30 +1915,31 @@ export async function getLeadTimeAnalysisWeekly(filters: QueryFilters, scope: "c
  * Time per activity per PO (Group Process and Process sunburst). Values are summed over POs ÷ all POs, so they add up.
  * Gross = span of the activity (first start → last stop) per PO; Nett = SUM(NET_LEADTIME).
  */
-export async function getLeadTimeProcessBreakdown(filters: QueryFilters) {
+export async function getLeadTimeProcessBreakdown(filters: QueryFilters, scope: "created" | "released" = "created") {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("PO_FG_DONE_DATE", filters.period, filters.startDate, filters.endDate);
+  const startSql = scope === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
+  const binds = [...dateBinds, ...ltBinds(filters)];
+  // ltSplitSql: gross ÷ POs with a gross value, nett ÷ POs with a nett value, so the activities add up to the
+  // Lead Time card's gross / nett average.
   return executeQuery<{ STAGE: string; ACTIVITY: string; SEQ: number | null; GROSS_DAYS: number; NETT_DAYS: number }>(`
-    WITH lt_rows AS (
-      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY, ACTIVITY_SEQUENCE, ACTIVITY_START, ACTIVITY_STOP, NET_LEADTIME
-      FROM ${LT_TABLE}
+    WITH split AS (${ltSplitSql(`
+      SELECT * FROM ${LT_TABLE}
       WHERE ${datePred}
-        ${ltWhere(filters)}
+        ${ltWhere(filters)}`, startSql)}
     ),
-    n AS (SELECT COUNT(DISTINCT PROCESS_ORDER_FG) AS N FROM lt_rows),
-    act AS (
-      SELECT PROCESS_ORDER_FG, POSITION, ACTIVITY, MIN(ACTIVITY_SEQUENCE) AS SEQ,
-        DATEDIFF('minute', MIN(ACTIVITY_START), MAX(ACTIVITY_STOP)) AS span_min,
-        SUM(NET_LEADTIME) AS net_min
-      FROM lt_rows
-      WHERE POSITION IS NOT NULL
-      GROUP BY PROCESS_ORDER_FG, POSITION, ACTIVITY
-    )
-    SELECT a.POSITION AS STAGE, a.ACTIVITY AS ACTIVITY, MIN(a.SEQ) AS SEQ,
-      SUM(GREATEST(COALESCE(a.span_min, 0), 0)) / 1440.0 / NULLIF(MAX(n.N), 0) AS GROSS_DAYS,
-      SUM(COALESCE(a.net_min, 0)) / 1440.0 / NULLIF(MAX(n.N), 0) AS NETT_DAYS
-    FROM act a CROSS JOIN n
-    GROUP BY a.POSITION, a.ACTIVITY
-  `, [...dateBinds, ...ltBinds(filters)]);
+    po AS (
+      SELECT PROCESS_ORDER_FG, SUM(GROSS_MIN) AS g, SUM(NETT_MIN) AS n
+      FROM split
+      GROUP BY PROCESS_ORDER_FG
+    ),
+    cnt AS (SELECT COUNT(g) AS GN, COUNT(n) AS NN FROM po)
+    SELECT s.POSITION AS STAGE, s.ACTIVITY AS ACTIVITY, MIN(s.ACTIVITY_SEQUENCE) AS SEQ,
+      COALESCE(SUM(s.GROSS_MIN), 0) / 1440.0 / NULLIF(MAX(c.GN), 0) AS GROSS_DAYS,
+      COALESCE(SUM(s.NETT_MIN), 0) / 1440.0 / NULLIF(MAX(c.NN), 0) AS NETT_DAYS
+    FROM split s CROSS JOIN cnt c
+    WHERE s.POSITION IS NOT NULL
+    GROUP BY s.POSITION, s.ACTIVITY
+  `, [...binds, ...binds]);
 }
 
 /** Dropdown values for the Lead Time page filters, for the current period and plant (other filters ignored). */

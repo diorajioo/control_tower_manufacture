@@ -35,7 +35,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
     getLeadTimeAnalysisStats(filters, scope),
     getLeadTimeAnalysisStats(prev, scope),
     getLeadTimeAnalysisWeekly(filters, scope),
-    getLeadTimeProcessBreakdown(filters),
+    getLeadTimeProcessBreakdown(filters, scope),
     getLeadTimeComposition(filters),
     getLeadTimeBoxPlot(filters),
   ]);
@@ -71,7 +71,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   };
 }
 
-const cached = unstable_cache(run, ["lead-time-analysis-v4"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["lead-time-analysis-v5"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
