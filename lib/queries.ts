@@ -1623,6 +1623,26 @@ export async function getTrendKPIByPlant(
         ORDER BY WEEK
       `, [startDate, endDate]);
 
+    case "output_bulk": {
+      // Output trend when the Output card is on Bulk: kg per week / month (CORRECTION_DATE, same as the card).
+      // Plant = the batch's FG process order owner plant (outputPlantWhere). Per-plant lines leave out batches
+      // without a PO in the lead time data; "All plants" counts every batch — the same total as the card.
+      const bulkSrc = `
+        SELECT DATE_TRUNC('${unit}', b.CORRECTION_DATE::DATE) AS WEEK, p.PLANT, b.REALIZATION_QUANTITY AS KG
+        FROM DATAMART.MANUFACTURE.DATAMART_PRODUCTION_OUTPUT_OLAH b
+        LEFT JOIN (SELECT PROCESS_ORDER_FG, MAX(PLANT) AS PLANT FROM ${LT_TABLE} GROUP BY PROCESS_ORDER_FG) p
+          ON p.PROCESS_ORDER_FG = b.SNFG_COMPONENT_NAME
+        WHERE b.CORRECTION_DATE::DATE BETWEEN ${dateRange}
+          ${hasPlant(plant) ? "AND p.PLANT = ?" : ""}`;
+      const binds = [startDate, endDate, ...plantBinds(plant)];
+      return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
+        SELECT WEEK, PLANT, SUM(KG) AS KPI_VALUE FROM (${bulkSrc}) x WHERE PLANT IS NOT NULL GROUP BY WEEK, PLANT
+        UNION ALL
+        SELECT WEEK, 'All plants' AS PLANT, SUM(KG) AS KPI_VALUE FROM (${bulkSrc}) x GROUP BY WEEK
+        ORDER BY WEEK
+      `, [...binds, ...binds]);
+    }
+
     default:
       return [] as { WEEK: string; PLANT: string; KPI_VALUE: number }[];
   }

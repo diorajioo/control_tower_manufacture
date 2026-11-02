@@ -13,6 +13,7 @@ Derived from git log and conversation history. Most recent changes first.
 - **Output tooltips**: the Output KPI card shows the exact FG and Bulk values (and prior period) on hover; the brand / variant treemap, trend and SKU table show full numbers.
 - **AI Summary** cites Bulk kg next to Released FG (the prompt's "yield/bulk/pack loss" exclusion made the model skip bulk). Cache `ai_summary_*_v7`.
 - CLAUDE.md: **Filter contract** rule for every new or changed visual; open gaps in `docs/KNOWN_ISSUES.md`.
+- **Metric Trend chart, Output**: follows the Output card's FG / Bulk toggle (Bulk = kg per plant via the batch's PO, "All plants" = the card total); tooltip shows full numbers with thousand separators (incl. Mean / UCL / LCL).
 - **Filter contract gaps fixed.** Tactical Lead Time: card trend / sparkline / PO count and both donuts follow PO Created / Released and Gross / Nett (`/api/lead-time/analysis`); the Pareto too. Lead Time page: Pareto, box plot, composition, Top SKU and scatter follow Scope and Basis, all on the `ltSplitSql` split, so VA + NNVA + UNVA and the Pareto bars add up to the lead time; Lead Time per Line follows Scope (was always PO Released); Pareto and scatter refetch on Refresh; the page opens on the saved Header filters and the Monitor button keeps them. AI Risks cache key includes the dates. "PO & approval" on the Lead Time card uses the gross split of the PO stage.
 
 ## 2026-11-02 (merge)

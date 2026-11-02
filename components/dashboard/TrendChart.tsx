@@ -33,6 +33,13 @@ interface TrendChartProps {
   hideSelector?: boolean;
   hoveredPlant?: string | null;
   onPlantHover?: (plant: string | null) => void;
+  /** Output card FG / Bulk toggle: Output shows released FG (pcs) or bulk (kg) */
+  outputMode?: "fg" | "bulk";
+}
+
+// Tooltip numbers: thousand separators, never abbreviated — counts (pcs, kg) whole, the rest 2 decimals
+function formatFull(v: number, whole: boolean): string {
+  return v.toLocaleString("en-US", whole ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // 8,288,526 → "8.29M"; small values keep one decimal
@@ -48,7 +55,7 @@ const KPI_TAB_LABELS: Record<string, string> = {
   output:   "chart_tab_output",
 };
 
-export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, fillHeight = false, hideSelector = false, hoveredPlant = null, onPlantHover }: TrendChartProps) {
+export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, fillHeight = false, hideSelector = false, hoveredPlant = null, onPlantHover, outputMode = "fg" }: TrendChartProps) {
   const [data,    setData]    = useState<Record<string, unknown>[]>([]);
   const [plants,  setPlants]  = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -86,7 +93,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
   const isPct = isPChart || (displayedKpiType !== "output" && displayedKpiType !== "productivity" && displayedKpiType !== "leadtime");
   const unitLabel = displayedKpiType === "leadtime"
     ? (ltMode === "pct" ? `% PO > ${LEAD_TIME_TARGET_DAYS} d` : "days")
-    : displayedKpiType === "rft" ? "% RFT" : selectedKpi.unit;
+    : displayedKpiType === "rft" ? "% RFT"
+    : displayedKpiType === "output" && outputMode === "bulk" ? "kg" : selectedKpi.unit;
   const countLabel = displayedKpiType === "leadtime" ? "POs" : "activities";
   // Overall = the "All plants" series from the API (default); By plant = one line per plant.
   // Yield Loss has no PLANT column in its source, so By plant is locked.
@@ -105,8 +113,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
     // Ignore responses from a previous metric/filter: a slow Lead Time query must not overwrite the newly picked tab
     let stale = false;
     setLoading(true);
-    // OPE is derived from OEE × 0.8 — fetch OEE data and scale client-side
-    const fetchType = kpiType === "ope" ? "oee" : kpiType;
+    // OPE is derived from OEE × 0.8 — fetch OEE data and scale client-side. Output follows the card's FG / Bulk.
+    const fetchType = kpiType === "ope" ? "oee" : kpiType === "output" && outputMode === "bulk" ? "output_bulk" : kpiType;
     const params = new URLSearchParams({
       plant:     filters.plant,
       startDate: filters.startDate,
@@ -140,7 +148,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       .finally(() => { if (!stale) setLoading(false); });
     return () => { stale = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.plant, filters.startDate, filters.endDate, kpiType, grain]);
+  }, [filters.plant, filters.startDate, filters.endDate, kpiType, grain, outputMode]);
 
   // Replays the line draw-in when the shown data changes (every fetch: metric, grain, filters) or the view — not on hover
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -322,11 +330,15 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
                     return grain === "month" ? format(d, "MMMM yyyy") : `Week of ${format(d, "dd MMM yyyy")}`;
                   } catch { return x; }
                 })();
-                const rows = rowsAtX(nivoData, x, isPct ? "%" : selectedKpi.unit).map((r) => {
+                // Full numbers with thousand separators (Output = whole pcs / kg); % keeps 1 decimal
+                const whole = displayedKpiType === "output";
+                const fmtTip = (v: number) => (isPct ? `${v.toFixed(1)}%` : formatFull(v, whole));
+                const rows = rowsAtX(nivoData, x, isPct ? "%" : unitLabel).map((r) => {
+                  const shown = { ...r, value: typeof r.value === "number" && !isPct ? formatFull(r.value, whole) : r.value };
                   const lim = limits[r.label]?.[x];
-                  if (!lim) return r;
+                  if (!lim) return shown;
                   const st = effectivePointStats?.[x]?.[r.label];
-                  return { ...r, sub: <>{effectivePointStats ? "p̄" : "Mean"} {fmtValue(lim.mean)} · UCL <span style={{ color: "#f5a39a" }}>{fmtValue(lim.ucl)}</span> · LCL <span style={{ color: "#f5a39a" }}>{fmtValue(lim.lcl)}</span>{st ? ` · ${st.late.toLocaleString("en-US")}/${st.n.toLocaleString("en-US")} ${countLabel}` : ""}</> };
+                  return { ...shown, sub: <>{effectivePointStats ? "p̄" : "Mean"} {fmtTip(lim.mean)} · UCL <span style={{ color: "#f5a39a" }}>{fmtTip(lim.ucl)}</span> · LCL <span style={{ color: "#f5a39a" }}>{fmtTip(lim.lcl)}</span>{st ? ` · ${st.late.toLocaleString("en-US")}/${st.n.toLocaleString("en-US")} ${countLabel}` : ""}</> };
                 });
                 return <LineTooltip title={dateLabel} rows={rows} />;
               }}

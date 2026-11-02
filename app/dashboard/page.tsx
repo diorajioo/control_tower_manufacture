@@ -117,6 +117,8 @@ export default function DashboardPage() {
   const [activeView,    setActiveView]    = useState<"strategic" | "tactical">("strategic");
   const [ltBasis,       setLtBasis]       = useState<"created" | "released">("created");
   const [kpiType,       setKpiType]       = useState("leadtime");
+  // Output card FG / Bulk toggle — also switches the Metric Trend chart when it shows Output
+  const [outputMode,    setOutputMode]    = useState<"fg" | "bulk">("fg");
   const [prodView,      setProdView]      = useState<ProdView>("e2e");
   const [fetchError,    setFetchError]    = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(() => {
@@ -397,6 +399,8 @@ export default function DashboardPage() {
               <OutputKPICard
                 compact
                 insightId="output"
+                mode={outputMode}
+                onModeChange={setOutputMode}
                 onSparkClick={() => showTrend("output")}
                 fgQty={kpi?.output?.fgQty ?? 0}
                 bulkQty={kpi?.output?.bulkQty ?? 0}
@@ -516,7 +520,7 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div ref={trendRef} className="h-full min-h-0 min-w-0">
-                  <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} fillHeight />
+                  <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} outputMode={outputMode} fillHeight />
                 </div>
                 <AIRisksPanel
                   kpi={kpi}

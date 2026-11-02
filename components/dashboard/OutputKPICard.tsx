@@ -54,6 +54,9 @@ export interface OutputKPICardProps {
   insightId?:   string;
   /** Click on the sparkline → switch the trend chart to Output */
   onSparkClick?: () => void;
+  /** Controlled FG / Bulk toggle — the page passes it on to the Metric Trend chart */
+  mode?:         "fg" | "bulk";
+  onModeChange?: (m: "fg" | "bulk") => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,10 +75,14 @@ export function OutputKPICard({
   compact = false,
   insightId,
   onSparkClick,
+  mode: modeProp,
+  onModeChange,
 }: OutputKPICardProps) {
   // Size scale for spacing/sparkline: 1 = regular, 0.8 = compact. Font sizes are always regular.
   const z = (n: number) => (compact ? Math.round(n * 0.8 * 2) / 2 : n);
-  const [mode, setMode] = useState<"fg" | "bulk">("fg");
+  const [localMode, setLocalMode] = useState<"fg" | "bulk">("fg");
+  const mode = modeProp ?? localMode;
+  const setMode = onModeChange ?? setLocalMode;
   const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
   const { t } = useI18n();
 

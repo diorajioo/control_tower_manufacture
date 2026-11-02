@@ -53,6 +53,7 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
   const [loading,      setLoading]      = useState(true);
   const [alerts,       setAlerts]       = useState<KPIAlert[]>([]);
   const [kpiType,      setKpiType]      = useState("leadtime");
+  const [outputMode,   setOutputMode]   = useState<"fg" | "bulk">("fg");
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const summaryAbort = useRef<AbortController | null>(null);
 
@@ -120,6 +121,8 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
               <OutputKPICard
                 compact
                 insightId="output"
+                mode={outputMode}
+                onModeChange={setOutputMode}
                 onSparkClick={() => setKpiType("output")}
                 fgQty={kpi?.output?.fgQty ?? 0}
                 bulkQty={kpi?.output?.bulkQty ?? 0}
@@ -205,7 +208,7 @@ export function StrategicMonitor({ filters }: { filters: MonitorFilters; onExit?
           </>
         ) : (
           <>
-            <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} fillHeight />
+            <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} outputMode={outputMode} fillHeight />
             <AIRisksPanel kpi={kpi} alerts={visibleAlerts} filters={filters} ready={!loading && kpi !== null} />
           </>
         )}
