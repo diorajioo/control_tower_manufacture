@@ -266,7 +266,7 @@ function summaryFacts(plant: string, kpi: any, network: any): { lines: string[];
     const prodCause = stripLargest(cardCause(kpi, "productivity"));
     const check = cardCause(kpi, "check");
     lines.push(
-      `- Lead time: ${g.toFixed(2)} days vs ${LEAD_TIME_TARGET_DAYS}-day target, ${vsPrior(lt.grossTrend)}${waiting !== null ? `; ${waiting}% of it is waiting outside active processing` : ""}`,
+      `- Lead time: ${g.toFixed(2)} days vs ${LEAD_TIME_TARGET_DAYS}-day target, ${vsPrior(lt.grossTrend)}${waiting !== null ? `; ${waiting}% of it is PO and WIP waiting` : ""}`,
       ltCause ? `- Lead time cause: ${ltCause}` : "",
       `- Output: Released FG ${compact(o.fgQty ?? 0)} pcs, ${vsPrior(o.fgTrend)}`,
       outCause ? `- Output cause: ${outCause}` : "",
@@ -297,7 +297,7 @@ function summaryFacts(plant: string, kpi: any, network: any): { lines: string[];
   const prodGap = (p.e2e ?? 0) - (np.e2e ?? 0);
   lines.push(
     `- Lead time: ${plant} ${g.toFixed(2)} days (${vsPrior(lt.grossTrend)}) · network ${(nlt.grossDays ?? 0).toFixed(2)} days · target ${LEAD_TIME_TARGET_DAYS} days · ${plant} is ${Math.abs(ltGap) < 0.05 ? "level with" : ltGap < 0 ? "faster than" : "slower than"} the network`,
-    ltCause || waiting !== null ? `- Lead time cause (${plant}): ${[ltCause, waiting !== null ? `${waiting}% of ${plant} lead time is waiting outside active processing` : ""].filter(Boolean).join("; ")}` : "",
+    ltCause || waiting !== null ? `- Lead time cause (${plant}): ${[ltCause, waiting !== null ? `${waiting}% of ${plant} lead time is PO and WIP waiting` : ""].filter(Boolean).join("; ")}` : "",
     `- Output: ${outText}`,
     `- Productivity: ${plant} E2E ${(p.e2e ?? 0).toFixed(1)} pcs/manhour (${vsPrior(p.e2eTrend)}) · network ${(np.e2e ?? 0).toFixed(1)} pcs/manhour · ${plant} is ${Math.abs(prodGap) < 0.05 ? "level with" : prodGap > 0 ? "above" : "below"} the network`,
   );

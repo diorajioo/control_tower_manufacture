@@ -1,6 +1,7 @@
 "use client";
 
 import { withBase } from "@/lib/basePath";
+import { prodToday, prodYearStart } from "@/lib/productionDay";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -72,8 +73,8 @@ function useAlertCount() {
   useEffect(() => {
     let f = {
       plant:     "All Plant",
-      startDate: `${new Date().getFullYear()}-01-01`,
-      endDate:   new Date().toISOString().split("T")[0],
+      startDate: prodYearStart(),
+      endDate:   prodToday(),
       period:    "YTD",
     };
     try {

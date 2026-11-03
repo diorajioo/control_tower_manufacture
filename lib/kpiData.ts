@@ -1,6 +1,7 @@
 // KPI snapshot behind /api/dashboard/kpi — moved out of the route so server code
 // (e.g. Teams alerts) reads the same cached data without an HTTP round trip.
 import { unstable_cache } from "next/cache";
+import { prodDay, prodToday, ymd } from "@/lib/productionDay";
 import {
   getLeadTimeKPI,
   getLeadTimeByPosition,
@@ -83,15 +84,13 @@ export function prevPeriod(startDate: string, endDate: string) {
 }
 
 function daysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().split("T")[0];
+  return ymd(prodDay(-n));
 }
 
 /** Server-side date resolution for preset periods — mirrors client-side Header.tsx logic. */
 function resolvePeriodDates(period: string): { startDate: string; endDate: string } {
-  const today = new Date().toISOString().split("T")[0];
-  const year  = new Date().getFullYear();
+  const today = prodToday();
+  const year  = prodDay().getUTCFullYear();
   switch (period) {
     case "Today": return { startDate: today, endDate: today };
     case "YTD":   return { startDate: `${year}-01-01`, endDate: today };
@@ -351,7 +350,7 @@ const fetchByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runKPIQueries(plant, startDate, endDate, period);
   },
-  ["kpi-by-period-v14"],
+  ["kpi-by-period-v17"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 
@@ -359,7 +358,7 @@ const fetchByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string) => {
     return runKPIQueries(plant, startDate, endDate, undefined);
   },
-  ["kpi-by-dates-v14"],
+  ["kpi-by-dates-v17"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 

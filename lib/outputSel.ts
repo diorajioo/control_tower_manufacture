@@ -1,5 +1,5 @@
 // Output cross-filter params (Tactical → Output, CLAUDE.md → Chart cross-filter). Parsed by the Output
-// API routes; applied in SQL by outputSelWhere() in lib/queries.ts.
+// API routes; applied in SQL by fgRows() / bulkRows() in lib/queries.ts.
 
 export type OutputSelDim = "brand" | "variant" | "su_group" | "line" | "form";
 export interface OutputSel { dim: OutputSelDim; value: string }

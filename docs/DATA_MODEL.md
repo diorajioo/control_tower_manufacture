@@ -32,7 +32,7 @@ Source for: Lead Time, Right First Time (RFT), Lead Time position breakdown.
 
 **Gross LT:** spans from `MIN(ACTIVITY_START where ACTIVITY='PO')` to `MAX(ACTIVITY_STOP where ACTIVITY='RECEIVE NDC')` per `PROCESS_ORDER_FG`.
 
-**Nett LT:** `SUM(NET_LEADTIME)` where `ACTIVITY_TYPE = 'ACTUAL'` and `LINE_CATEGORY IS NOT NULL`.
+**Nett LT:** first `TIMBANG` start → last `RECEIVE NDC` stop per PO, minus the WIP time inside that window (`docs/BUSINESS_LOGIC.md` → Lead Time). `NET_LEADTIME` is no longer used for nett.
 
 **RFT:** `COUNT(ACTIVITY ≠ 'ADJUST') / COUNT(ACTIVITY)`.
 

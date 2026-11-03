@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prodToday } from "@/lib/productionDay";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getOutputByLine, getBulkOutputByLine } from "@/lib/queries";
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const plant     = sp.get("plant")     ?? "All Plant";
-  const startDate = sp.get("startDate") ?? new Date().toISOString().split("T")[0];
+  const startDate = sp.get("startDate") ?? prodToday();
   const endDate   = sp.get("endDate")   ?? startDate;
   const period    = sp.get("period")    ?? undefined;
 
@@ -28,6 +29,16 @@ export async function GET(req: NextRequest) {
       });
     }
     const rows = await getOutputByLine(filters, parseOutputSel(sp));
+    return NextResponse.json({
+      lines: rows.map((r) => ({
+        line:        r.LINE_NAME,
+        qtyPo:       Number(r.QTY_PO ?? 0),
+        qtyReal:     Number(r.QTY_REAL ?? 0),
+        theoretical: null,
+        gap:         null,
+        pctContrib:  Number(Number(r.PCT_CONTRIBUTION ?? 0).toFixed(1)),
+      })),
+    });
   } catch (err) {
     console.error("output-line error:", err);
     return NextResponse.json({ error: "Query failed" }, { status: 500 });

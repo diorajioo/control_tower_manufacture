@@ -97,7 +97,8 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
     : displayedKpiType === "output" && outputMode === "bulk" ? "kg" : selectedKpi.unit;
   const countLabel = displayedKpiType === "leadtime" ? "POs" : "activities";
   // Overall = the "All plants" series from the API (default); By plant = one line per plant.
-  // Yield Loss has no PLANT column in its source, so By plant is locked.
+  // Yield Loss has no PLANT column in its source, so By plant is locked. Output's plant = the plant of its form
+  // (outputTrendByPlant() in lib/queries.ts).
   const OVERALL = "All plants";
   const plantLocked = displayedKpiType === "bulkloss";
   const [pView, setPView] = useState<"overall" | "plant">("overall");

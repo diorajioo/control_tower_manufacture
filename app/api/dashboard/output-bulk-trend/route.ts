@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prodToday } from "@/lib/productionDay";
 import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
@@ -19,13 +20,13 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   };
 }
 
-const cached = unstable_cache(run, ["output-bulk-trend-v1"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["output-bulk-trend-v3"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const sp = req.nextUrl.searchParams;
-  const startDate = sp.get("startDate") ?? new Date().toISOString().split("T")[0];
+  const startDate = sp.get("startDate") ?? prodToday();
   try {
     return NextResponse.json(await cached(
       sp.get("plant") ?? "All Plant", startDate, sp.get("endDate") ?? startDate, sp.get("period") ?? "",

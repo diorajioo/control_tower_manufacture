@@ -1,6 +1,7 @@
 "use client";
 
 import { withBase } from "@/lib/basePath";
+import { prodDay, prodToday, prodYearStart, ymd } from "@/lib/productionDay";
 import { useEffect, useRef, useState } from "react";
 import { Bell, ArrowRight, ChevronDown, Check, Loader2, X, Send, Monitor, Lock, User, Settings, LogOut } from "lucide-react";
 
@@ -35,24 +36,25 @@ import type { KPIAlert } from "@/lib/alerts";
 
 const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
-function today() { return new Date().toISOString().split("T")[0]; }
-function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split("T")[0]; }
-function firstOfMonth() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; }
-function firstOfLastMonth() { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; }
-function lastOfLastMonth() { const d = new Date(); d.setDate(0); return d.toISOString().split("T")[0]; }
+// Presets count in production days (07:00 → 07:00 WIB, lib/productionDay.ts): before 07:00 "today" is still yesterday.
+function today() { return prodToday(); }
+function daysAgo(n: number) { return ymd(prodDay(-n)); }
+function firstOfMonth() { const d = prodDay(); d.setUTCDate(1); return ymd(d); }
+function firstOfLastMonth() { const d = prodDay(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); return ymd(d); }
+function lastOfLastMonth() { const d = prodDay(); d.setUTCDate(0); return ymd(d); }
 function mondayOfWeek(offset = 0) {
-  const d = new Date(); const day = d.getDay();
-  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day) + offset * 7);
-  return d.toISOString().split("T")[0];
+  const d = prodDay(); const day = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() + (day === 0 ? -6 : 1 - day) + offset * 7);
+  return ymd(d);
 }
 function sundayOfLastWeek() {
-  const d = new Date(); const day = d.getDay();
-  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day) - 1);
-  return d.toISOString().split("T")[0];
+  const d = prodDay(); const day = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() + (day === 0 ? -6 : 1 - day) - 1);
+  return ymd(d);
 }
 
 const PERIOD_PRESETS = [
-  { key: "YTD",        label: "YTD",               getValue: () => ({ start: `${new Date().getFullYear()}-01-01`, end: today() }) },
+  { key: "YTD",        label: "YTD",               getValue: () => ({ start: prodYearStart(), end: today() }) },
   { key: "ThisMonth",  label: "This Month",          getValue: () => ({ start: firstOfMonth(),     end: today() }) },
   { key: "LastMonth",  label: "Last Month",         getValue: () => ({ start: firstOfLastMonth(), end: lastOfLastMonth() }) },
   { key: "Last30Days", label: "Last 30 Days",       getValue: () => ({ start: daysAgo(30),        end: today() }) },
@@ -121,7 +123,7 @@ export function Header({
   const [applied, setApplied] = useState(() => ({
     plant:     initialFilters?.plant     ?? "All Plant",
     period:    initialFilters?.period    ?? "YTD",
-    startDate: initialFilters?.startDate ?? `${new Date().getFullYear()}-01-01`,
+    startDate: initialFilters?.startDate ?? prodYearStart(),
     endDate:   initialFilters?.endDate   ?? today(),
     dataLevel: initialFilters?.dataLevel ?? "Daily",
   }));

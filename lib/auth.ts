@@ -5,6 +5,7 @@ import AzureADProvider from "next-auth/providers/azure-ad";
 import { AUTH_COOKIES, CONNECT_SENDER_COOKIE, SESSION_MAX_AGE_S, isSessionFresh, safeRedirect, withBase } from "@/lib/basePath";
 import { connectSender } from "@/lib/settings";
 import { isServerAdmin } from "@/lib/serverAdmin";
+import { canAccess } from "@/lib/access";
 import { isSenderMarkerValid } from "@/lib/senderMarker";
 
 // Delegated Graph scopes for Teams DM notifications, requested at every sign-in so the account can be
@@ -23,7 +24,7 @@ async function connectSenderIfRequested(token: JWT, refreshToken: string) {
   if (!marker) return;
   try { jar.set(CONNECT_SENDER_COOKIE.name, "", { ...CONNECT_SENDER_COOKIE.options, maxAge: 0 }); } catch { /* expires on its own */ }
   // Only the admin who clicked Connect, within 10 minutes (HMAC-bound marker, lib/senderMarker.ts)
-  if (!isSenderMarkerValid(marker, token.sub) || !token.email || !isServerAdmin(token.email)) return;
+  if (!isSenderMarkerValid(marker, token.sub) || !token.email || !(await isServerAdmin(token.email))) return;
   await connectSender({ email: token.email, name: token.name ?? undefined, refreshToken })
     .catch((err) => console.error("[auth] connecting the Teams sender failed:", err));
 }
@@ -60,6 +61,9 @@ export const authOptions: NextAuthOptions = {
   cookies: AUTH_COOKIES,
   callbacks: {
     redirect: ({ url, baseUrl }) => safeRedirect(url, baseUrl),
+    // Dashboard access list (Settings → Admin, lib/access.ts). false → next-auth sends the browser to the error
+    // page (/login) with ?error=AccessDenied, which explains it.
+    signIn: async ({ user }) => canAccess(user.email),
     async jwt({ token, account }) {
       // The token holds identity + sign-in time only. Microsoft's access + refresh tokens (~6 KB
       // encrypted) pushed the Set-Cookie headers past the ingress's response-header buffer: Kong
@@ -73,6 +77,8 @@ export const authOptions: NextAuthOptions = {
       // old ones carrying Microsoft tokens or a failed-refresh flag). Throwing makes next-auth clear
       // the cookie and answer with no session, so getServerSession() returns null everywhere.
       if (!isSessionFresh(token)) throw new Error("Session expired or issued before 2026-10-28: sign in again");
+      // Removed from the access list (or the list switched on) → the session ends at the next request
+      if (!(await canAccess(token.email))) throw new Error("No access to this dashboard: not on the access list");
       return token;
     },
     async session({ session, token }) {
@@ -80,7 +86,7 @@ export const authOptions: NextAuthOptions = {
         (session.user as typeof session.user & { id: string }).id = token.sub;
       }
       (session.user as typeof session.user & { isAdmin: boolean }).isAdmin =
-        isServerAdmin(token.email as string);
+        await isServerAdmin(token.email as string);
       return session;
     },
   },

@@ -4,9 +4,30 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
-## 2026-11-02
+## 2026-11-03
+
+### Added
+- **Dashboard access list** (Settings → Admin): admins choose *Everyone at Paracorp* or *Only people on the list*, add / remove people and other admins. Checked at sign-in and on every session read (removed people are signed out within 30 s); denied accounts see why on the login page. `ADMIN_EMAILS` still works and shows as server config. `lib/access.ts`, `/api/settings/access`.
+
+### Fixed
+- **Lead Time per Line follows Gross / Nett** (filter contract audit): the bubble's lead time was always gross; `/api/lead-time/lines` now takes `metric` and the y axis shows the average gross or nett per PO of the line (SCI04 YTD: 16.48 d gross, 3.38 d nett). The SKU per Line table keeps the process time at the line.
+- **Distribution histogram refetches on Refresh** (Lead Time page).
 
 ### Changed
+- **Nett lead time redefined** (user definition): first Weighing → last Receive NDC minus WIP time; WAITING counts, PO is outside. POs without Weighing start at their first non-PO / non-WIP activity. Network YTD 5.03 → 2.34 d (J2 2.48, J4 2.59, J6 1.96, J1 1.85). One rule everywhere (`ltSplitSql` NETT_MIN, `ltNettPerPoSql`): card, plant / PO tables (columns add up to Nett), histogram, sunburst, Pareto, box plot, composition, Top SKU, scatter, line bubble, AI context, chat, Teams. Cache keys bumped (lead-time routes, kpi v17, AI summary v8, AI risks v4).
+- **Sunburst centre has no total** (Lead Time page): the number read as a second average next to the Lead Time card. Zoomed into a group, the centre shows the group name and "‹ back".
+- **Sunburst slice values are back** (time + unit inside each slice wide enough for the text), reverting the 2026-11-02 removal at the user's request.
+- **Lead Time per PO** says which lead time its process columns add up to ("Process columns add up to Gross / Nett", like the plant table); the ⓘ no longer claims they can exceed the lead time.
+
+## 2026-11-02
+
+### Fixed
+- **Top Line by Output empty on FG**: `/api/dashboard/output-line` ran the FG query but returned no response (the return was lost in 5e3f608 when the Bulk branch was added).
+
+### Changed
+- **Production day 07:00 → 07:00 WIB.** Every date filter, Header preset and week / month bucket counts a timestamp before 07:00 in the previous day, so weeks start Monday 07:00 (`lib/productionDay.ts`). "Today" before 07:00 still shows the previous day. Output is unchanged: its `CORRECTION_DATE` has no time.
+- **Output FG breakdowns read the FG datamart.** Per line, brand, variant, SKU group, top SKU, form, SKU & PO counts and the Output trend (Overview and Tactical) read `DATAMART_PRODUCTION_OUTPUT_FG` on `CORRECTION_DATE` (`fgRows()`), the same rows as the card, so every breakdown adds up to the card total. Fixes the per-line chart, which counted a PO on every line of its route (LWO01 = 224 M pcs YTD vs 349 M total) and now shows filling / packing lines; rows without a line show as "(Not set)".
+- **Output plant = the plant of its form** (LIQUID → J2, SEMISOLID → J4, POWDER → J1, J6), since the datamarts have no PLANT column. Plant filter, Output per Plant donut (replaces the Output per Form donut, which showed the same split), Metric Trend By plant (FG and Bulk) and the AI plant drivers all use it and add up to the card. Before, plant came from the FG process order in the lead time data (FG ~1%, Bulk ~0.4% of kg unmatched).
 - **Lead time breakdown adds up.** Plant table, PO table and sunburst share one split (`ltSplitSql`): gross time goes to the activity that started last, nett = NET_LEADTIME of the nett rows, so the process columns add up to Gross LT / Nett LT (J2 YTD was 24.93 d of groups vs 15.75 d gross). The plant table follows the Gross / Nett toggle. Sunburst slices no longer show values.
 - **Output follows the plant filter** (FG and Bulk card, sparklines, Tactical Output) through each row's FG process order.
 - **Tactical Output FG / Bulk**: every Output visual switches to Bulk (kg) — total + achievement vs theoretical kg, SKU & PO, per plant / form, trend with theoretical kg, per mixing line with theoretical + gap, per brand / variant, top bulk SKU. Mini cards and donuts now follow the Output click filter (`/api/dashboard/output-stats`).

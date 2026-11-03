@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prodToday, prodYearStart } from "@/lib/productionDay";
 import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
@@ -25,7 +26,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   };
 }
 
-const cached = unstable_cache(run, ["lead-time-options-v2"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["lead-time-options-v3"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -34,8 +35,8 @@ export async function GET(req: NextRequest) {
   try {
     return NextResponse.json(await cached(
       sp.get("plant") ?? "All Plant",
-      sp.get("startDate") ?? `${new Date().getFullYear()}-01-01`,
-      sp.get("endDate") ?? new Date().toISOString().split("T")[0],
+      sp.get("startDate") ?? prodYearStart(),
+      sp.get("endDate") ?? prodToday(),
       sp.get("period") ?? undefined,
     ));
   } catch (e) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { withBase } from "@/lib/basePath";
+import { prodToday, prodYearStart } from "@/lib/productionDay";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useI18n } from "@/lib/i18n";
@@ -124,8 +125,8 @@ export default function DashboardPage() {
   const [filters, setFilters] = useState<Filters>(() => {
     const defaults: Filters = {
       plant:     "All Plant",
-      startDate: `${new Date().getFullYear()}-01-01`,
-      endDate:   new Date().toISOString().split("T")[0],
+      startDate: prodYearStart(),
+      endDate:   prodToday(),
       dataLevel: "Daily",
       period:    "YTD",
     };

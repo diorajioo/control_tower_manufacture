@@ -7,6 +7,7 @@ import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { activityLabel, PROCESS_GROUPS } from "@/lib/leadTimeStages";
 import { cn } from "@/lib/utils";
 import { FIELD, FIELD_ON, MENU } from "@/components/ui/FilterField";
+import { NETT_DEFINITION } from "@/lib/leadTimeDefinition";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lead time breakdown per plant (Overview → Tactical view).
@@ -18,7 +19,7 @@ import { FIELD, FIELD_ON, MENU } from "@/components/ui/FilterField";
 //                   the 5 largest WIP activities (network) + "Others (n processes)". A picker hides columns.
 // Cells follow the section's Gross / Nett toggle (`metric`) and add up to that row's Gross LT or Nett LT:
 //   Gross — the PO's gross window split over its activities (each minute goes to the activity that started last);
-//   Nett  — NET_LEADTIME of the nett rows (ACTUAL with a line). Rule: ltSplitSql in lib/queries.ts — the PO table
+//   Nett  — the same split from the first Weighing to Receive NDC, PO and WIP left out. Rule: ltSplitSql in lib/queries.ts — the PO table
 //   and the sunburst use the same split. A plant's cell turns red when it is above the network value of the same column. Plant, Gross and Nett stay visible when the table scrolls.
 // Data: /api/lead-time/stages → plants (stages + activities per plant) and activities (stage, sequence).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -171,7 +172,7 @@ export function LeadTimePlantTable({ data, activities = [], targetDays, loading,
       title="Lead time breakdown per plant"
       subtitle={`${unit === "hours" ? "Hours" : "Days"} per PO · ${basisLabel} · process columns add up to ${metric === "nett" ? "Nett" : "Gross"} LT`}
       info={metric === "nett"
-        ? `Each process cell = its net working time (actual rows on a line) ÷ POs, so a row's process cells add up to its Nett LT. Red = plant is above the network value for that column (darker = further above). On-time = POs with gross lead time ≤ ${targetDays} days.`
+        ? `Nett = ${NETT_DEFINITION}. Each process cell = its share of that time ÷ POs (parallel processes: the time goes to the one that started last), so a row's process cells add up to its Nett LT. Red = plant is above the network value for that column (darker = further above). On-time = POs with gross lead time ≤ ${targetDays} days.`
         : `Each process cell = the share of gross lead time spent in that process ÷ POs. When processes run in parallel, the time goes to the one that started last, so a row's process cells add up to its Gross LT. Red = plant is above the network value for that column (darker = further above). On-time = POs with gross lead time ≤ ${targetDays} days.`}
       actions={actions}
       fadeKey={`${view}|${metric}|${unit}|${hidden.size}|${network?.poCount ?? 0}|${network?.gross ?? ""}`}

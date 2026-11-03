@@ -290,7 +290,7 @@ Both charts share a KPI selector — changing selection in one updates the other
 
 ### Lead Time page — sunburst + Lead Time Distribution (2026-10-14)
 
-- **Sunburst** (`components/leadtime/ProcessSunburst.tsx`): no values on the slices (user request 2026-11-02) — the time is in the hover tooltip and the list on the right; the centre shows the total (= the Lead Time card's gross or nett, label "gross lead time" / "nett lead time").
+- **Sunburst** (`components/leadtime/ProcessSunburst.tsx`): each slice shows its time + unit when it is wide enough for the text (back at the user's request 2026-11-03; also in the hover tooltip and the list on the right); the centre is empty — no total, it read as a second average next to the Lead Time card (user request 2026-11-03); zoomed into a group it shows the group name and "‹ back".
 - **Lead Time Distribution** (`components/leadtime/LeadTimeBoxPlot.tsx`, look matched to the user's reference):
   - Chart: box = IQR P25–P75, fill `#D9E0EA`, navy `#1E4076` 1.25px outline; median = short navy dash (2px); whisker Min → **P90** (1px `#A9B4C4`, cap at P90); log-like y axis (symlog, 1-2-5 ticks) with title "Lead time (days|hours)"; stage labels slanted −30°; hovered column = amber band `#FDF1DC`. Legend: Min to P90 · IQR (P25–P75) · Median (· Focus when not Median). Focus ≠ Median → dashed amber line on each box.
   - Controls: Focus ▾ (FilterField style; sorts Pareto, outlined in the tooltip) · Pareto / Process order toggle.

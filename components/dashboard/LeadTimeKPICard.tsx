@@ -4,7 +4,7 @@ import { useState } from "react";
 import { KpiOneLiner } from "@/components/ui/KpiOneLiner";
 import { Fade } from "@/components/ui/Fade";
 import { KpiLabel, KpiTargetLine, StatusPill, KpiPriorLine, KpiSparkline, KpiFooter } from "@/components/ui/KpiCardParts";
-import { LEAD_TIME_TARGET_DAYS } from "@/lib/leadTimeDefinition";
+import { LEAD_TIME_TARGET_DAYS, NETT_DEFINITION } from "@/lib/leadTimeDefinition";
 import { useT } from "@/lib/i18n";
 
 const TARGET = LEAD_TIME_TARGET_DAYS;
@@ -146,7 +146,7 @@ export function LeadTimeKPICard({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: z(12), minHeight: 24 }}>
             <KpiLabel
               label="Lead Time"
-              info={`${type === "gross" ? "Gross" : "Nett"} lead time per PO, ${basisOverride === "released" ? "PO Released" : "PO Created"} → Receive NDC. Target ≤ ${target} days is defined on gross.`}
+              info={`${type === "gross" ? `Gross lead time per PO, ${basisOverride === "released" ? "PO Released" : "PO Created"} → Receive NDC` : `Nett lead time per PO: ${NETT_DEFINITION}`}. Target ≤ ${target} days is defined on gross.`}
             />
             <div style={{ display: "flex", gap: z(6) }}>
               <SegToggle

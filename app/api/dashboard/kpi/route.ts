@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prodToday } from "@/lib/productionDay";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getKpiSnapshot } from "@/lib/kpiData";
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const plant     = searchParams.get("plant")     ?? "All Plant";
   const startDate = searchParams.get("startDate") ?? "2024-01-01";
-  const endDate   = searchParams.get("endDate")   ?? new Date().toISOString().split("T")[0];
+  const endDate   = searchParams.get("endDate")   ?? prodToday();
   const period    = searchParams.get("period")    ?? "";
 
   return NextResponse.json(await getKpiSnapshot(plant, period, startDate, endDate));

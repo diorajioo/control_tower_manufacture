@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prodToday, prodYearStart } from "@/lib/productionDay";
 import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
@@ -72,15 +73,15 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   };
 }
 
-const cached = unstable_cache(run, ["lead-time-analysis-v6"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["lead-time-analysis-v8"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const sp = new URL(req.url).searchParams;
   const plant     = sp.get("plant")     ?? "All Plant";
-  const startDate = sp.get("startDate") ?? `${new Date().getFullYear()}-01-01`;
-  const endDate   = sp.get("endDate")   ?? new Date().toISOString().split("T")[0];
+  const startDate = sp.get("startDate") ?? prodYearStart();
+  const endDate   = sp.get("endDate")   ?? prodToday();
   const period    = sp.get("period")    ?? undefined;
   const scope     = sp.get("scope") === "released" ? "released" : "created";
   try {

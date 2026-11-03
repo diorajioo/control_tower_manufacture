@@ -12,6 +12,7 @@ import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { LeadTimeGaugeBar } from "@/components/ui/LeadTimeGaugeBar";
 import { AiTag } from "@/components/ui/KpiOneLiner";
 import type { LtBasis, LtScope, LtUnit } from "@/components/leadtime/LeadTimeFilterCard";
+import { NETT_DEFINITION } from "@/lib/leadTimeDefinition";
 
 export interface LtStats {
   avg: number | null; median: number | null; p25: number | null; p75: number | null; p90: number | null; max: number | null;
@@ -106,7 +107,7 @@ export function LeadTimeSummaryCard({ stats, weekly, basis, scope, unit, targetD
               <InfoTooltip size={12} width={260}
                 text={gross
                   ? `Average gross lead time per PO: ${start} → Receive NDC, POs completed in the period. Status vs the ${targetDays}-day target (at risk up to +15%).`
-                  : "Average nett lead time per PO: time in active production activities. Nett has no target; status compares with the prior period."} />
+                  : `Average nett lead time per PO: ${NETT_DEFINITION}. Nett has no target; status compares with the prior period.`} />
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-[30px] font-bold leading-none tabular-nums" style={{ color: avg == null ? "#d0d5dd" : "#101828" }}>
@@ -156,7 +157,7 @@ export function LeadTimeSummaryCard({ stats, weekly, basis, scope, unit, targetD
         )}
       </div>
       <div className="border-t border-[#eceef2] px-4 py-1.5 text-[11px] text-slate-500 flex justify-between gap-3">
-        <span className="truncate">{gross ? `Gross · ${start} → Receive NDC` : "Nett · active production time"}</span>
+        <span className="truncate">{gross ? `Gross · ${start} → Receive NDC` : "Nett · Weighing → Receive NDC, no WIP"}</span>
         <span className="tabular-nums shrink-0">{stats ? `${stats.poCount.toLocaleString("en-US")} POs` : ""}</span>
       </div>
     </div>

@@ -6,7 +6,8 @@
 //   Reading      — inner ring = group process, outer ring = the processes of that group.
 //   Interaction  — click a group to zoom into its processes; click the centre or "All groups" to go back.
 //   Small slices — merged into "Others" in the ring; the list on the right lists every process when zoomed.
-//   Labels       — no values on the slices (user request 2026-11-02); the value is in the hover tooltip and the list.
+//   Labels       — each slice shows its time with the unit (days / hours) on a second line inside the ring when the slice is wide enough
+//                  for the text (back at the user's request 2026-11-03). The centre shows no total.
 //   Scope        — follows Scope, Basis and Unit above. The PO group is left out when Scope = PO Released.
 // Gross / Nett = the ltSplitSql split (lib/queries.ts), the same as the plant table and the PO table: the slices add up
 // to the Lead Time card's gross / nett per PO. Data: /api/lead-time/analysis.
@@ -39,6 +40,21 @@ function labelColor(fill: string) {
     ? [0, 8, 16].map((sh) => (parseInt(fill.slice(1), 16) >> (16 - sh)) & 255)
     : (fill.match(/\d+/g) ?? ["0", "0", "0"]).map(Number);
   return 0.299 * r + 0.587 * g + 0.114 * b > 165 ? "#16305C" : "#ffffff";
+}
+
+// Value labels inside the rings: only on slices wide enough to hold the text (arc length at mid-radius)
+const MIN_LABEL_ARC = 44;
+
+function SliceLabel({ s, r0, r1, unit }: { s: Slice; r0: number; r1: number; unit: LtUnit }) {
+  const mid = (s.a0 + s.a1) / 2, rm = (r0 + r1) / 2;
+  if ((s.a1 - s.a0) * rm < MIN_LABEL_ARC) return null;
+  const x = C + rm * Math.sin(mid), y = C - rm * Math.cos(mid), fill = labelColor(s.color);
+  return (
+    <text x={x} y={y} textAnchor="middle" style={{ fill, pointerEvents: "none", fontVariantNumeric: "tabular-nums" }}>
+      <tspan x={x} dy={-1} style={{ fontSize: 10, fontWeight: 700 }}>{fmtLt(s.value, unit)}</tspan>
+      <tspan x={x} dy={10} style={{ fontSize: 8, fontWeight: 400 }}>{unit}</tspan>
+    </text>
+  );
 }
 
 function arc(cx: number, cy: number, r0: number, r1: number, a0: number, a1: number): string {
@@ -134,7 +150,7 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
           { label: "Interaction", text: "Click a group to zoom into its processes; click the centre or \"All groups\" to go back." },
           { label: "Small slices", text: "Merged into \"Others\" in the ring; the list on the right shows every process when zoomed." },
           { label: "Scope", text: "Follows Scope, Basis and Unit above. The PO group is left out for PO Released." },
-          { label: "Gross / Nett", text: "Gross = the PO's lead time split over its processes: when processes run in parallel, the time goes to the one that started last. Nett = active time on a line. Either way the slices add up to the Lead Time card." },
+          { label: "Gross / Nett", text: "Gross = the PO's lead time split over its processes: when processes run in parallel, the time goes to the one that started last. Nett = the same split from the first Weighing to Receive NDC, without PO and WIP. Either way the slices add up to the Lead Time card." },
         ]} />
       </div>
 
@@ -158,12 +174,19 @@ export function ProcessSunburst({ activities, basis, scope, unit, onlyActivity, 
                   className={zoomed ? "" : "cursor-zoom-in"}
                   onClick={() => { if (!zoomed) setZoom(s.group); }} onMouseMove={(e) => onMove(e, s)} />
               ))}
-              {/* Centre: total (or the zoomed group); click to go back */}
+              {/* Value of each slice inside the ring (time in the chosen unit); hidden on slices too narrow for the text */}
+              {drawnInner.map((s) => <SliceLabel key={`l-${s.key}`} s={s} r0={R_IN0} r1={R_IN1} unit={unit} />)}
+              {drawnOuter.map((s) => <SliceLabel key={`l-${s.key}`} s={s} r0={R_OUT0} r1={R_OUT1} unit={unit} />)}
+              {/* Centre: no total (it read as a second average next to the Lead Time card, user 2026-11-03);
+                  zoomed = the group name, click to go back */}
               <g key={zoom ?? "all"} onClick={() => setZoom(null)} className={`ui-fade-in ${zoomed ? "cursor-pointer" : ""}`}>
                 <circle cx={C} cy={C} r={R_IN0 - 3} fill="white" />
-                <text x={C} y={C - 4} textAnchor="middle" style={{ fontSize: 26, fontWeight: 700, fill: "#101828" }}>{fmtLt(ringTotal, unit)}</text>
-                <text x={C} y={C + 14} textAnchor="middle" style={{ fontSize: 11, fill: "#475467", fontWeight: 700 }}>{unit}</text>
-                <text x={C} y={C + 28} textAnchor="middle" style={{ fontSize: 9.5, fill: "#98a2b3" }}>{zoomed ? `${zoomed.label} · back` : onlyActivity ? "total time" : `${basis} lead time`}</text>
+                {zoomed && (
+                  <>
+                    <text x={C} y={C - 2} textAnchor="middle" style={{ fontSize: 11, fill: "#475467", fontWeight: 700 }}>{zoomed.label}</text>
+                    <text x={C} y={C + 12} textAnchor="middle" style={{ fontSize: 9.5, fill: "#98a2b3" }}>‹ back</text>
+                  </>
+                )}
               </g>
             </svg>
             {hover && (

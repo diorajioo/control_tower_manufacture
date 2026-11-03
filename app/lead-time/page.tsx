@@ -9,6 +9,7 @@
 // Every figure is real data; the dimension filters select whole POs (lib/leadTimeFilters.ts).
 
 import { withBase } from "@/lib/basePath";
+import { prodToday, prodYearStart } from "@/lib/productionDay";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -41,8 +42,8 @@ type BaseFilters = { plant: string; startDate: string; endDate: string; period: 
 // Matches Header's initial state (All Plant · YTD) so the page always reflects what the filter row shows.
 const DEFAULT_FILTERS: BaseFilters = {
   plant:     "All Plant",
-  startDate: `${new Date().getFullYear()}-01-01`,
-  endDate:   new Date().toISOString().split("T")[0],
+  startDate: prodYearStart(),
+  endDate:   prodToday(),
   period:    "YTD",
 };
 
@@ -251,7 +252,7 @@ export default function LeadTimePage() {
                 refreshKey={refreshKey}
               />
               <LeadTimeBoxPlot data={a?.boxPlot ?? null} loading={analysis.loading} unit={unit} />
-              <LeadTimeHistogram filters={tacticalFilters} basis={scope} metric={basis} unit={unit} detailHref={null}
+              <LeadTimeHistogram filters={tacticalFilters} basis={scope} metric={basis} unit={unit} detailHref={null} refreshKey={refreshKey}
                 selectedBin={poBin} onBinClick={(b) => setPoBin((cur) => (cur === b ? null : b))} />
               <LeadTimePoTable data={poList.data} loading={poList.loading} unit={unit} metric={basis}
                 bin={poBin} onClearBin={() => setPoBin(null)} />
@@ -277,6 +278,7 @@ export default function LeadTimePage() {
                 filters={{ ...tacticalFilters, plant: selectedPlant ?? tacticalFilters.plant }}
                 unit={unit}
                 scope={scope}
+                metric={basis}
                 refreshKey={refreshKey}
               />
             </>

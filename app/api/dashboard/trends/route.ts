@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prodDay, prodToday, ymd } from "@/lib/productionDay";
 import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
@@ -6,14 +7,12 @@ import { getTrendKPIByPlant, type TrendGrain } from "@/lib/queries";
 import { parseOutputSel, type OutputSel } from "@/lib/outputSel";
 
 function daysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().split("T")[0];
+  return ymd(prodDay(-n));
 }
 
 function resolvePeriodDates(period: string): { startDate: string; endDate: string } {
-  const today = new Date().toISOString().split("T")[0];
-  const year  = new Date().getFullYear();
+  const today = prodToday();
+  const year  = prodDay().getUTCFullYear();
   switch (period) {
     case "Today": return { startDate: today, endDate: today };
     case "YTD":   return { startDate: `${year}-01-01`, endDate: today };
@@ -65,7 +64,7 @@ const fetchTrendByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runTrendQuery(plant, startDate, endDate, kpiType, period, grain, fdim ? { dim: fdim, value: fval } as OutputSel : null);
   },
-  ["trends-by-period-v7"],
+  ["trends-by-period-v10"],
   { revalidate: 3600, tags: ["trends"] }
 );
 
@@ -74,7 +73,7 @@ const fetchTrendByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string, kpiType: string, grain: TrendGrain, fdim = "", fval = "") => {
     return runTrendQuery(plant, startDate, endDate, kpiType, undefined, grain, fdim ? { dim: fdim, value: fval } as OutputSel : null);
   },
-  ["trends-by-dates-v7"],
+  ["trends-by-dates-v10"],
   { revalidate: 3600, tags: ["trends"] }
 );
 
@@ -87,7 +86,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const plant     = searchParams.get("plant")     ?? "All Plant";
   const startDate = searchParams.get("startDate") ?? "2024-01-01";
-  const endDate   = searchParams.get("endDate")   ?? new Date().toISOString().split("T")[0];
+  const endDate   = searchParams.get("endDate")   ?? prodToday();
   const kpiType   = searchParams.get("kpiType")   ?? "leadtime";
   const period    = searchParams.get("period")    ?? "";
   const grain: TrendGrain = searchParams.get("grain") === "month" ? "month" : "week";

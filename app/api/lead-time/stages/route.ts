@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prodToday, prodYearStart } from "@/lib/productionDay";
 import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
@@ -70,7 +71,7 @@ async function runStageQuery(plant: string, startDate: string, endDate: string, 
   };
 }
 
-const cached = unstable_cache(runStageQuery, ["lead-time-stages-v9"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(runStageQuery, ["lead-time-stages-v11"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -78,8 +79,8 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const plant     = searchParams.get("plant")     ?? "All Plant";
-  const startDate = searchParams.get("startDate") ?? `${new Date().getFullYear()}-01-01`;
-  const endDate   = searchParams.get("endDate")   ?? new Date().toISOString().split("T")[0];
+  const startDate = searchParams.get("startDate") ?? prodYearStart();
+  const endDate   = searchParams.get("endDate")   ?? prodToday();
   const period    = searchParams.get("period")    ?? undefined;
   const basis     = searchParams.get("basis") === "released" ? "released" : "created";
 

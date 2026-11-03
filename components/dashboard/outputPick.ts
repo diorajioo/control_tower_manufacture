@@ -3,7 +3,7 @@
 // (CLAUDE.md → Chart cross-filter). Header filters stay global; a pick never leaves the Output section.
 //   plant  → overrides the plant param          (Output by plant donut)
 //   bucket → overrides the date range (∩ header) (Output trend bar: one month / week)
-//   others → fdim / fval, PO-level filter in SQL (lib/queries.ts → outputSelWhere)
+//   others → fdim / fval, row filter on the datamart in SQL (lib/queries.ts → fgRows / bulkRows)
 
 export type OutputPickDim = "brand" | "variant" | "su_group" | "line" | "form" | "plant" | "bucket";
 

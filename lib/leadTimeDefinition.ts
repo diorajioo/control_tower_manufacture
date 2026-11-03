@@ -29,6 +29,21 @@ export const PO_CREATED_AT_SQL   = "MIN(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_
 export const PO_RELEASED_AT_SQL  = "MAX(CASE WHEN ACTIVITY = 'PO' THEN ACTIVITY_STOP END)";
 export const NDC_RECEIVED_AT_SQL = "MAX(CASE WHEN ACTIVITY = 'RECEIVE NDC' THEN ACTIVITY_STOP END)";
 
+// ── Nett lead time (user definition 2026-11-03) ──────────────────────────────
+// Nett = first Weighing start → last Receive NDC stop, minus the WIP time inside that window (WAITING counts).
+// A PO without Weighing starts at its first activity that is neither PO nor WIP. The WIP time and the split per
+// process come from ltSplitSql (lib/queries.ts): NETT_MIN of the rows that are not PO / WIP, summed per PO.
+
+/** Per-PO start of nett lead time. */
+export const NETT_START_AT_SQL =
+  "COALESCE(MIN(CASE WHEN POSITION = 'TIMBANG' THEN ACTIVITY_START END), MIN(CASE WHEN POSITION NOT IN ('PO', 'WIP') THEN ACTIVITY_START END))";
+
+/** One-line definition for UI info texts. */
+export const NETT_DEFINITION = "first Weighing → Receive NDC, minus WIP time";
+
+/** Row predicate (alias `r`): rows whose time counts in nett. */
+export const NETT_ROW_SQL = "r.POSITION NOT IN ('PO', 'WIP')";
+
 /** Start of gross lead time under the active basis. */
 export const LEAD_TIME_START_SQL = LEAD_TIME_BASIS === "released" ? PO_RELEASED_AT_SQL : PO_CREATED_AT_SQL;
 

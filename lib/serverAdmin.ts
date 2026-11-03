@@ -1,13 +1,5 @@
-// Server-side admin check — reads ADMIN_EMAILS env var (comma-separated email list).
-// If ADMIN_EMAILS is unset, all authenticated users are treated as admin (backwards-compat).
-// Set ADMIN_EMAILS in production to restrict sensitive routes.
+// Server-side admin check: ADMIN_EMAILS (env) ∪ admins added in Settings → Admin (lib/access.ts).
+// No admin configured anywhere → every authenticated user is admin (backwards-compat).
+// Async: always `await isServerAdmin(...)` — an un-awaited Promise is truthy.
 
-export function isServerAdmin(email: string | null | undefined): boolean {
-  if (!email) return false;
-  const raw = process.env.ADMIN_EMAILS ?? "";
-  if (!raw.trim()) return true; // no list configured → open to any authenticated user
-  return raw
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .includes(email.toLowerCase());
-}
+export { isAdmin as isServerAdmin } from "@/lib/access";

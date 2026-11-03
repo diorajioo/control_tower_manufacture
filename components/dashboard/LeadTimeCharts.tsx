@@ -1,6 +1,7 @@
 "use client";
 
 import { withBase } from "@/lib/basePath";
+import { prodToday, prodYearStart } from "@/lib/productionDay";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
 import { ResponsiveScatterPlotCanvas } from "@nivo/scatterplot";
@@ -108,8 +109,8 @@ function useScatterData(filters: ScatterFilters, dim: ScatterDim) {
     setLoading(true);
     const params = new URLSearchParams({
       plant:     filters.plant     ?? "All Plant",
-      startDate: filters.startDate ?? `${new Date().getFullYear()}-01-01`,
-      endDate:   filters.endDate   ?? new Date().toISOString().split("T")[0],
+      startDate: filters.startDate ?? prodYearStart(),
+      endDate:   filters.endDate   ?? prodToday(),
       dim,
     });
     if (filters.period) params.set("period", filters.period);

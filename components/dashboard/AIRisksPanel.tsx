@@ -50,7 +50,7 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
 
     // "v3": drops risks cached before the narrative (cause → effect) prompt; dates in the key so a new Custom range
     // never shows the previous range's risks
-    const cacheKey  = `ai_risks_v3_${filters.plant}_${filters.period}_${filters.startDate}_${filters.endDate}`;
+    const cacheKey  = `ai_risks_v4_${filters.plant}_${filters.period}_${filters.startDate}_${filters.endDate}`;
     const cacheTime = `${cacheKey}_time`;
     if (!force) {
       try {

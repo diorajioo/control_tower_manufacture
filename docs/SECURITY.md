@@ -26,6 +26,14 @@
 - Session check must be the **first** statement in the handler body.
 - Return `401 Unauthorized` (not 403) — do not confirm resource existence to unauthenticated callers.
 
+### Dashboard access list — **Implemented** (`lib/access.ts`, since 2026-11-03)
+
+- Settings → Admin → **Dashboard access**: *Everyone at Paracorp* (any account that signs in through the Entra app) or *Only people on the list*. Admins always have access.
+- **Admins** = `ADMIN_EMAILS` (server config, not removable in the page) ∪ admins added in Settings. No admin anywhere → every signed-in account is admin (old behaviour). The person saving always stays admin, so the last admin cannot lock themselves out; another admin can remove them.
+- Enforced in `lib/auth.ts`: the `signIn` callback refuses accounts without access (→ `/login?error=AccessDenied`, which explains it), and the `jwt` callback checks again on every session read, so a removed person is signed out within 30 s (per-pod cache) instead of at the end of the 7-day session.
+- Stored in the notification store (Vercel Blob or `NOTIF_STORE_DIR` file) under `access`. A failed read keeps the last state the pod loaded; a pod that never loaded it falls back to *Everyone* (the Entra tenant still applies).
+- API: `GET / PUT /api/settings/access` (admins only). Every admin check is async — `await isServerAdmin(...)` (`lib/serverAdmin.ts` → `isAdmin`).
+
 ### Plant-level isolation
 
 - The `plant` filter from the query string must be sanitized before hitting Snowflake:

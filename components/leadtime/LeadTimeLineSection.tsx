@@ -2,7 +2,8 @@
 
 // Lead Time page → Analysis tab, bottom: "Lead Time per Line" bubble chart + "Lead Time SKU per Line" table.
 // Agreed with the user (2026-10-14):
-//   y      = process time at the line: span of the activity rows of that process on that line per PO, averaged
+//   y      = average gross or nett lead time (Basis) of the POs that ran on the line; the SKU table keeps the
+//            process time at the line (span of the activity rows of that process on that line per PO)
 //            (Mixing = OLAH, Filling Packing = KEMAS 1 / KEMAS 2)
 //   x      = POs completed through the line; bubble size = volume (Σ RELEASE_QTY, pcs)
 //   quadrants split at the mean PO count and the mean lead time of the lines shown (dashed lines)
@@ -33,7 +34,7 @@ const HEIGHT = 300;
 
 interface Filters { plant: string; startDate: string; endDate: string; period?: string; lt?: LtDims }
 interface ApiResponse { skus: Record<string, string>; rows: [string, string | null, number, number | null, number | null, number | null][] }
-interface LinePoint { line: string; poCount: number; avgDays: number; avgGrossDays: number; qty: number }
+interface LinePoint { line: string; poCount: number; avgDays: number; avgLtDays: number; qty: number }
 interface SkuRow { key: string; line: string; sku: string | null; name: string; poCount: number; avgDays: number; qty: number }
 
 const NODE = "rgba(30,64,118,0.55)";
@@ -48,7 +49,7 @@ function compact(n: number) {
   return n.toLocaleString("en-US");
 }
 
-export function LeadTimeLineSection({ filters, unit, scope = "created", refreshKey = 0 }: { filters: Filters; unit: LtUnit; scope?: "created" | "released"; refreshKey?: number }) {
+export function LeadTimeLineSection({ filters, unit, scope = "created", metric = "gross", refreshKey = 0 }: { filters: Filters; unit: LtUnit; scope?: "created" | "released"; metric?: "gross" | "nett"; refreshKey?: number }) {
   const [activity, setActivity] = useState<Activity>("filpac");
   const [line, setLine] = useState<string | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -59,7 +60,7 @@ export function LeadTimeLineSection({ filters, unit, scope = "created", refreshK
 
   useEffect(() => {
     let cancelled = false;
-    const params = dimsToParams(filters.lt, new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, lineActivity: activity, scope }));
+    const params = dimsToParams(filters.lt, new URLSearchParams({ plant: filters.plant, startDate: filters.startDate, endDate: filters.endDate, lineActivity: activity, scope, metric }));
     if (filters.period) params.set("period", filters.period);
     setLoading(true);
     fetch(withBase(`/api/lead-time/lines?${params}`))
@@ -69,7 +70,7 @@ export function LeadTimeLineSection({ filters, unit, scope = "created", refreshK
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period, lt, activity, scope, refreshKey]);
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, lt, activity, scope, metric, refreshKey]);
 
   // New data or another activity → no line selected
   useEffect(() => { setLine(null); }, [data]);
@@ -80,17 +81,17 @@ export function LeadTimeLineSection({ filters, unit, scope = "created", refreshK
   })), [data]);
 
   const lines: LinePoint[] = useMemo(() => {
-    // Per-line: aggregate span/count from SKU rows; avgGrossDays comes directly (already per-PO avg from API).
-    const m = new Map<string, { n: number; span: number; grossSum: number; qty: number }>();
-    for (const [ln, , n, span, qty, avgGross] of data?.rows ?? []) {
-      const x = m.get(ln) ?? { n: 0, span: 0, grossSum: 0, qty: 0 };
-      x.n += n; x.span += span ?? 0; x.grossSum += (avgGross ?? 0) * n; x.qty += qty ?? 0;
+    // Per-line: aggregate span/count from SKU rows; avgLtDays comes directly (already per-PO avg from API).
+    const m = new Map<string, { n: number; span: number; ltSum: number; qty: number }>();
+    for (const [ln, , n, span, qty, avgLt] of data?.rows ?? []) {
+      const x = m.get(ln) ?? { n: 0, span: 0, ltSum: 0, qty: 0 };
+      x.n += n; x.span += span ?? 0; x.ltSum += (avgLt ?? 0) * n; x.qty += qty ?? 0;
       m.set(ln, x);
     }
     return Array.from(m, ([ln, x]) => ({
       line: ln, poCount: x.n,
       avgDays: x.n > 0 ? x.span / x.n : 0,
-      avgGrossDays: x.n > 0 ? x.grossSum / x.n : 0,
+      avgLtDays: x.n > 0 ? x.ltSum / x.n : 0,
       qty: x.qty,
     }));
   }, [data]);
@@ -100,7 +101,7 @@ export function LeadTimeLineSection({ filters, unit, scope = "created", refreshK
     <div className="grid grid-cols-2 gap-3.5">
       <LineBubbleCard
         points={shown} allLines={lines} totalLines={lines.length} loading={loading} f={f} unitLabel={unitLabel}
-        activity={activity} onActivity={setActivity} scope={scope}
+        activity={activity} onActivity={setActivity} scope={scope} metric={metric}
         selected={line} onSelect={(l) => setLine((cur) => (cur === l ? null : l))}
       />
       <SkuLineTable
@@ -115,15 +116,15 @@ export function LeadTimeLineSection({ filters, unit, scope = "created", refreshK
 
 interface Datum { x: number; y: number; line: string; qty: number }
 
-function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, activity, onActivity, selected, onSelect, scope }: {
+function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, activity, onActivity, selected, onSelect, scope, metric }: {
   points: LinePoint[]; allLines: LinePoint[]; totalLines: number; loading: boolean; f: number; unitLabel: string;
-  scope: "created" | "released";
+  scope: "created" | "released"; metric: "gross" | "nett";
   activity: Activity; onActivity: (a: Activity) => void;
   selected: string | null; onSelect: (line: string) => void;
 }) {
   const data = useMemo(() => [{
     id: "lines",
-    data: points.map((p): Datum => ({ x: p.poCount, y: p.avgGrossDays * f, line: p.line, qty: p.qty })),
+    data: points.map((p): Datum => ({ x: p.poCount, y: p.avgLtDays * f, line: p.line, qty: p.qty })),
   }], [points, f]);
   const threshX = allLines.length ? allLines.reduce((s, p) => s + p.poCount, 0) / allLines.length : 0;
   const threshY = LEAD_TIME_TARGET_DAYS * f;
@@ -157,7 +158,7 @@ function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, a
         <div className="flex items-center gap-2">
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead Time per Line</p>
           <InfoTooltip size={13} width={300} rows={[
-            { label: "Lead time", text: `Average gross lead time (${scope === "released" ? "PO Released" : "PO Created"} → NDC) per PO that ran on this line. Horizontal line = ${LEAD_TIME_TARGET_DAYS}-day target.` },
+            { label: "Lead time", text: `Average ${metric === "nett" ? "nett lead time" : `gross lead time (${scope === "released" ? "PO Released" : "PO Created"} → NDC)`} per PO that ran on this line. Horizontal line = ${LEAD_TIME_TARGET_DAYS}-day target.` },
             { label: "PO count", text: "POs completed in the period that ran on the line. Vertical line = avg across all lines." },
             { label: "Bubble size", text: "Volume = released quantity (pcs) of those POs." },
             { label: "Lines shown", text: `Lines with at least ${MIN_PO} POs (${points.length} of ${totalLines}). The table lists every line.` },
@@ -175,7 +176,7 @@ function LineBubbleCard({ points, allLines, totalLines, loading, f, unitLabel, a
       ) : points.length === 0 ? (
         <div className="flex items-center justify-center text-[11px] text-slate-400" style={{ height: HEIGHT }}>No line with {MIN_PO}+ POs for the selected filters</div>
       ) : (
-        <Fade depKey={`${activity}|${points.length}|${unitLabel}`}>
+        <Fade depKey={`${activity}|${points.length}|${unitLabel}|${scope}|${metric}`}>
           <div style={{ height: HEIGHT }}>
             <ResponsiveScatterPlot<Datum>
               data={data}

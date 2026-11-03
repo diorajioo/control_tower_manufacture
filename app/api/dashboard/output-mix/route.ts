@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prodToday } from "@/lib/productionDay";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getOutputMix, getBulkOutputMix, type OutputGroupDim } from "@/lib/queries";
@@ -12,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const plant     = sp.get("plant")     ?? "All Plant";
-  const startDate = sp.get("startDate") ?? new Date().toISOString().split("T")[0];
+  const startDate = sp.get("startDate") ?? prodToday();
   const endDate   = sp.get("endDate")   ?? startDate;
   const period    = sp.get("period")    ?? undefined;
   const dimParam  = sp.get("dim") as OutputGroupDim | null;

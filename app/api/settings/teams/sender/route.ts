@@ -16,7 +16,7 @@ import { senderMarker } from "@/lib/senderMarker";
 export async function POST() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isServerAdmin(session.user.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await isServerAdmin(session.user.email))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const sub = (session.user as { id?: string }).id;
   if (!sub) return NextResponse.json({ error: "Session has no account id — sign in again" }, { status: 400 });
@@ -30,7 +30,7 @@ export async function POST() {
 export async function DELETE() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isServerAdmin(session.user?.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await isServerAdmin(session.user?.email))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   await disconnectSender();
   return NextResponse.json({ ok: true });
 }

@@ -1592,7 +1592,7 @@ function OutputPieCard({ title, pickLabel, segments, noData, pickDim, pick, onPi
 interface OutputStats {
   total: number; prevTotal: number; trend: number | null; theoretical: number | null;
   skuCount: number; poCount: number;
-  byPlant: { name: string; qty: number }[]; byForm: { name: string; qty: number }[];
+  byPlant: { name: string; qty: number }[];
 }
 
 /** /api/dashboard/output-stats for one Output visual: header filters + FG / Bulk + the pick (unless `own` made it). */
@@ -1628,18 +1628,15 @@ function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps
     return () => document.removeEventListener("keydown", esc);
   }, [pick]);
 
-  // Mini cards + donuts follow the header filters, FG / Bulk and the pick (/api/dashboard/output-stats).
-  // A donut that owns the pick keeps all its slices (it highlights instead) — same rule as the other Output charts.
+  // Mini cards + donut follow the header filters, FG / Bulk and the pick (/api/dashboard/output-stats).
+  // The donut that owns the pick keeps all its slices (it highlights instead) — same rule as the other Output charts.
+  // Plant = the plant of the row's form (lib/queries.ts → OUTPUT_PLANT_SQL); no separate form donut (user 2026-11-02).
   const cards = useOutputStats(tacticalFilters, metric, pick, []);
   const plantStats = useOutputStats(tacticalFilters, metric, pick, "plant");
-  const formStats = useOutputStats(tacticalFilters, metric, pick, "form");
 
   const plantSegs = useMemo(() => (plantStats.data?.byPlant ?? [])
     .filter((d) => d.qty > 0)
     .map((d, i) => ({ label: d.name, qty: d.qty, color: PLANT_COLORS[i % PLANT_COLORS.length] as string })), [plantStats.data]);
-  const formSegs = useMemo(() => (formStats.data?.byForm ?? [])
-    .filter((f) => f.qty > 0)
-    .map((f, i) => ({ label: f.name, qty: f.qty, color: SERIES_COLORS[i % SERIES_COLORS.length] as string })), [formStats.data]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -1675,9 +1672,9 @@ function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps
         }
       />
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {loading || (cards.loading && !cards.data) ? (
-          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+          Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
           <>
             <OutputFGCard
@@ -1694,7 +1691,6 @@ function OutputSection({ kpi, loading, tacticalFilters }: Pick<TacticalViewProps
               noData={!cards.data}
             />
             <OutputPieCard title={t("output_pie_plant")} pickLabel={t("output_pick_plant")} segments={plantSegs} noData={!plantStats.data} unit={metric === "bulk" ? "kg" : "pcs"} pickDim="plant" pick={pick} onPick={onPick} />
-            <OutputPieCard title={t("output_pie_form")}  pickLabel={t("output_pick_form")}  segments={formSegs}  noData={!formStats.data}  unit={metric === "bulk" ? "kg" : "pcs"} pickDim="form"  pick={pick} onPick={onPick} />
           </>
         )}
       </div>

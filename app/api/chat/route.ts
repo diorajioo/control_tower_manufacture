@@ -10,7 +10,8 @@ import { AI_KPI_TYPES, AI_TREND_TYPES } from "@/lib/aiScope";
 import { stageLabel } from "@/lib/leadTimeStages";
 import type OpenAI from "openai";
 import { LEAD_TIME_START_SQL, NDC_RECEIVED_AT_SQL } from "@/lib/leadTimeDefinition";
-import { LT_TABLE } from "@/lib/queries"; // lead time rows with PLANT = the PO's last plant
+import { LT_TABLE, getLeadTimeAnalysisStats, getLeadTimeProcessBreakdown } from "@/lib/queries";
+import { prodDate, prodToday, prodYearStart } from "@/lib/productionDay"; // lead time rows with PLANT = the PO's last plant
 
 // Allow up to 60 s on Vercel — tool calls to Snowflake + a streamed answer can exceed the default limit.
 export const maxDuration = 60;
@@ -91,8 +92,8 @@ async function executeGetKpiData(args: {
   end_date?: string;
   plant?: string;
 }): Promise<string> {
-  const startDate = validateDate(args.start_date) ?? `${new Date().getFullYear()}-01-01`;
-  const endDate   = validateDate(args.end_date)   ?? new Date().toISOString().split("T")[0];
+  const startDate = validateDate(args.start_date) ?? prodYearStart();
+  const endDate   = validateDate(args.end_date)   ?? prodToday();
   const plant     = sanitizePlant(args.plant);
   const dateBinds = [startDate, endDate] as unknown[];
   const withPlant = plant ? [...dateBinds, plant] : dateBinds;
@@ -104,35 +105,22 @@ async function executeGetKpiData(args: {
 
     switch (args.kpi_type) {
       case "lead_time": {
-        rows = await executeQuery(`
-          SELECT AVG(gross_minutes)/1440.0 AS AVG_GROSS_DAYS, AVG(nett_minutes)/1440.0 AS AVG_NETT_DAYS, COUNT(*) AS TOTAL_PO
-          FROM (
-            SELECT PROCESS_ORDER_FG,
-              DATEDIFF('minute', ${LEAD_TIME_START_SQL},
-                ${NDC_RECEIVED_AT_SQL}) AS gross_minutes,
-              SUM(CASE WHEN ACTIVITY_TYPE='ACTUAL' AND LINE_CATEGORY IS NOT NULL THEN NET_LEADTIME ELSE 0 END) AS nett_minutes
-            FROM ${LT_TABLE}
-            WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
-            GROUP BY PROCESS_ORDER_FG
-            HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
-              AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
-          ) sub
-        `, withPlant);
+        // Same numbers as the Lead Time card (gross PO Created → NDC; nett = first Weighing → NDC minus WIP)
+        const st = await getLeadTimeAnalysisStats({ plant: plant || "All Plant", startDate, endDate });
+        rows = [{ AVG_GROSS_DAYS: st?.GROSS_AVG ?? null, AVG_NETT_DAYS: st?.NETT_AVG ?? null, TOTAL_PO: Number(st?.GROSS_N ?? 0) }];
         break;
       }
       case "lead_time_by_stage": {
-        // Days per PO spent in each stage (POSITION), same basis as the Lead Time Trend per stage
-        const stageRows = await executeQuery<{ POSITION: string; AVG_DAYS_PER_PO: number; PO_COUNT: number }>(`
-          SELECT POSITION, AVG(pos_minutes)/1440.0 AS AVG_DAYS_PER_PO, COUNT(*) AS PO_COUNT
-          FROM (
-            SELECT PROCESS_ORDER_FG, POSITION, SUM(NET_LEADTIME) AS pos_minutes
-            FROM ${LT_TABLE}
-            WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? AND POSITION IS NOT NULL ${pf}
-            GROUP BY PROCESS_ORDER_FG, POSITION
-          ) sub
-          GROUP BY POSITION ORDER BY AVG_DAYS_PER_PO DESC
-        `, withPlant);
-        rows = stageRows.map((r) => ({ STAGE: stageLabel(r.POSITION), ...r }));
+        // Days per PO in each stage (POSITION): the same split as the plant table, so the stages add up to gross / nett
+        const acts = await getLeadTimeProcessBreakdown({ plant: plant || "All Plant", startDate, endDate });
+        const byStage = new Map<string, { gross: number; nett: number }>();
+        for (const a of acts) {
+          const x = byStage.get(a.STAGE) ?? { gross: 0, nett: 0 };
+          x.gross += Number(a.GROSS_DAYS ?? 0); x.nett += Number(a.NETT_DAYS ?? 0);
+          byStage.set(a.STAGE, x);
+        }
+        rows = [...byStage].sort((a, b) => b[1].gross - a[1].gross)
+          .map(([pos, v]) => ({ STAGE: stageLabel(pos), POSITION: pos, GROSS_DAYS_PER_PO: Number(v.gross.toFixed(2)), NETT_DAYS_PER_PO: Number(v.nett.toFixed(2)) }));
         break;
       }
       case "bulk_loss": {
@@ -151,7 +139,7 @@ async function executeGetKpiData(args: {
             SUM(QTY_TOTAL) AS TOTAL_QTY,
             SUM(QTY_FG_RETUR)/NULLIF(SUM(QTY_TOTAL),0)*100 AS PACK_LOSS_PCT
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
+          WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ? ${pf}
         `, withPlant);
         break;
       }
@@ -160,7 +148,7 @@ async function executeGetKpiData(args: {
           SELECT COUNT(CASE WHEN ACTIVITY<>'ADJUST' THEN 1 END)*100.0/NULLIF(COUNT(*),0) AS RFT_PCT,
             COUNT(*) AS TOTAL_ROWS
           FROM ${LT_TABLE}
-          WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
+          WHERE ${prodDate("PO_FG_DONE_DATE")} BETWEEN ? AND ? ${pf}
         `, withPlant);
         break;
       }
@@ -186,7 +174,7 @@ async function executeGetKpiData(args: {
             AVG((CASE WHEN QTY_TOTAL>0 THEN QTY_FG_GOOD::FLOAT/QTY_TOTAL ELSE 0 END)*
               (CASE WHEN ACTIVITY_PRODUCTIVITY_STD>0 THEN LEAST(PRODUCTIVITY::FLOAT/ACTIVITY_PRODUCTIVITY_STD,1.0) ELSE 0 END))*100 AS OEE_PCT
           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
+          WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ? ${pf}
           GROUP BY PLANT ORDER BY OEE_PCT DESC
         `, withPlant);
         break;
@@ -194,7 +182,7 @@ async function executeGetKpiData(args: {
       case "productivity_e2e": {
         rows = await executeQuery(`
           SELECT AVG(E2E_PRODUCTIVITY) AS AVG_E2E_PROD FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-          WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
+          WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ? ${pf}
         `, withPlant);
         break;
       }
@@ -207,7 +195,7 @@ async function executeGetKpiData(args: {
               MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN LEADTIME_IN_MINUTE END) AS leadtime_per_act,
               MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN OPERATOR_COUNT END)     AS operator_per_act
             FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-            WHERE OLAH_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
+            WHERE ${prodDate("OLAH_COMPLETED_AT")} BETWEEN ? AND ? ${pf}
             GROUP BY PROCESS_ORDER_SFG, POSITION, ACTIVITY, ACTIVITY_ID
           ),
           position_lvl AS (
@@ -239,7 +227,7 @@ async function executeGetKpiData(args: {
             SELECT PROCESS_ORDER_FG,
               SUM(QTY_FG_GOOD)/NULLIF(SUM(LEADTIME_IN_MINUTE)/60.0,0)/NULLIF(MAX(OPERATOR_COUNT),0) AS PO_PROD
             FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-            WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ?
+            WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ?
               AND LEADTIME_IN_MINUTE>0 AND OPERATOR_COUNT>0 ${pf}
             GROUP BY PROCESS_ORDER_FG
           ) sub
@@ -263,8 +251,8 @@ async function executeGetWeeklyTrend(args: {
   end_date?: string;
   plant?: string;
 }): Promise<string> {
-  const startDate = validateDate(args.start_date) ?? `${new Date().getFullYear()}-01-01`;
-  const endDate   = validateDate(args.end_date)   ?? new Date().toISOString().split("T")[0];
+  const startDate = validateDate(args.start_date) ?? prodYearStart();
+  const endDate   = validateDate(args.end_date)   ?? prodToday();
   const plant     = sanitizePlant(args.plant);
   const pf        = plant ? "AND PLANT = ?" : "";
   const binds: unknown[] = [startDate, endDate, ...(plant ? [plant] : [])];
@@ -272,24 +260,24 @@ async function executeGetWeeklyTrend(args: {
   const queryMap: Record<string, string> = {
     leadtime: `
       SELECT WEEK, PLANT, AVG(po_days) AS KPI_VALUE FROM (
-        SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
+        SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', ${prodDate("PO_FG_DONE_DATE")}) AS WEEK, PLANT,
           DATEDIFF('minute', ${LEAD_TIME_START_SQL},
             ${NDC_RECEIVED_AT_SQL})/1440.0 AS po_days
         FROM ${LT_TABLE}
-        WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
+        WHERE ${prodDate("PO_FG_DONE_DATE")} BETWEEN ? AND ? ${pf}
         GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
         HAVING ${LEAD_TIME_START_SQL} IS NOT NULL
           AND ${NDC_RECEIVED_AT_SQL} IS NOT NULL
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     upstream: `
       WITH activity_lvl AS (
-        SELECT PROCESS_ORDER_SFG, PLANT, DATE_TRUNC('week', OLAH_COMPLETED_AT::DATE) AS WEEK,
+        SELECT PROCESS_ORDER_SFG, PLANT, DATE_TRUNC('week', ${prodDate("OLAH_COMPLETED_AT")}) AS WEEK,
           POSITION, ACTIVITY, ACTIVITY_ID,
           MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN RELEASE_BULK END)       AS release_bulk_sfg,
           MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN LEADTIME_IN_MINUTE END) AS leadtime_per_act,
           MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN OPERATOR_COUNT END)     AS operator_per_act
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-        WHERE OLAH_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
+        WHERE ${prodDate("OLAH_COMPLETED_AT")} BETWEEN ? AND ? ${pf}
         GROUP BY PROCESS_ORDER_SFG, PLANT, WEEK, POSITION, ACTIVITY, ACTIVITY_ID
       ),
       position_lvl AS (
@@ -314,48 +302,48 @@ async function executeGetWeeklyTrend(args: {
       GROUP BY WEEK, PLANT ORDER BY WEEK`,
     e2e: `
       SELECT WEEK, PLANT, AVG(po_prod) AS KPI_VALUE FROM (
-        SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK, PLANT, AVG(E2E_PRODUCTIVITY) AS po_prod
+        SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK, PLANT, AVG(E2E_PRODUCTIVITY) AS po_prod
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-        WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
+        WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ? ${pf}
         GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     output: `
       SELECT WEEK, PLANT, SUM(po_fg) AS KPI_VALUE FROM (
-        SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT, SUM(RELEASE_FG) AS po_fg
+        SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', ${prodDate("PO_FG_DONE_DATE")}) AS WEEK, PLANT, SUM(RELEASE_FG) AS po_fg
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_TRENDS
-        WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
+        WHERE ${prodDate("PO_FG_DONE_DATE")} BETWEEN ? AND ? ${pf}
         GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     batch: `
       SELECT WEEK, PLANT, SUM(nomo_batch) AS KPI_VALUE FROM (
-        SELECT NOMO, DATE_TRUNC('week', OLAH_COMPLETED_AT::DATE) AS WEEK, PLANT, MAX(BESAR_BATCH) AS nomo_batch
+        SELECT NOMO, DATE_TRUNC('week', ${prodDate("OLAH_COMPLETED_AT")}) AS WEEK, PLANT, MAX(BESAR_BATCH) AS nomo_batch
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-        WHERE OLAH_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
+        WHERE ${prodDate("OLAH_COMPLETED_AT")} BETWEEN ? AND ? ${pf}
         GROUP BY NOMO, WEEK, PLANT
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     downstream: `
       SELECT WEEK, PLANT, AVG(po_prod) AS KPI_VALUE FROM (
-        SELECT PROCESS_ORDER_FG, PLANT, DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK,
+        SELECT PROCESS_ORDER_FG, PLANT, DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
           SUM(QTY_FG_GOOD)/NULLIF(SUM(LEADTIME_IN_MINUTE)/60.0,0)/NULLIF(MAX(OPERATOR_COUNT),0) AS po_prod
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-        WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ?
+        WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ?
           AND LEADTIME_IN_MINUTE>0 AND OPERATOR_COUNT>0 ${pf}
         GROUP BY PROCESS_ORDER_FG, PLANT, WEEK
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     oee: `
-      SELECT DATE_TRUNC('week', KEMAS_COMPLETED_AT::DATE) AS WEEK, PLANT,
+      SELECT DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK, PLANT,
         AVG(
           (CASE WHEN QTY_TOTAL>0 THEN QTY_FG_GOOD::FLOAT/QTY_TOTAL ELSE 0 END) *
           (CASE WHEN ACTIVITY_PRODUCTIVITY_STD>0 THEN LEAST(PRODUCTIVITY::FLOAT/ACTIVITY_PRODUCTIVITY_STD,1.0) ELSE 0 END)
         )*100 AS KPI_VALUE
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-      WHERE KEMAS_COMPLETED_AT::DATE BETWEEN ? AND ? ${pf}
+      WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ? ${pf}
       GROUP BY WEEK, PLANT ORDER BY WEEK`,
     rft: `
-      SELECT DATE_TRUNC('week', PO_FG_DONE_DATE::DATE) AS WEEK, PLANT,
+      SELECT DATE_TRUNC('week', ${prodDate("PO_FG_DONE_DATE")}) AS WEEK, PLANT,
         COUNT(CASE WHEN ACTIVITY<>'ADJUST' THEN 1 END)*100.0/NULLIF(COUNT(*),0) AS KPI_VALUE
       FROM ${LT_TABLE}
-      WHERE PO_FG_DONE_DATE::DATE BETWEEN ? AND ? ${pf}
+      WHERE ${prodDate("PO_FG_DONE_DATE")} BETWEEN ? AND ? ${pf}
       GROUP BY WEEK, PLANT ORDER BY WEEK`,
   };
 

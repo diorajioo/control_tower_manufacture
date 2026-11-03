@@ -9,7 +9,7 @@ export async function POST() {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!isServerAdmin(session.user?.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await isServerAdmin(session.user?.email))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   revalidateTag("kpi", { expire: 0 });
   revalidateTag("trends", { expire: 0 });

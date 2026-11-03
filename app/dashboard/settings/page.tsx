@@ -713,32 +713,218 @@ function AdminOnly({ title }: { title: string }) {
 }
 
 // ── AdminSection ──────────────────────────────────────────────────────────────
+// Dashboard access + admins (lib/access.ts, /api/settings/access). Every change saves at once; a failed save
+// puts the last saved state back and says so.
+
+interface AccessEntryView { email: string; addedBy: string; addedAt: number }
+interface AccessView {
+  mode: "everyone" | "list";
+  users: AccessEntryView[];
+  admins: AccessEntryView[];
+  envAdmins: string[];
+  persistent: boolean;
+}
+
+const ACCESS_MODES: { key: AccessView["mode"]; label: string }[] = [
+  { key: "everyone", label: "Everyone at Paracorp" },
+  { key: "list",     label: "Only people on the list" },
+];
+
+/** "name", "name@x.com", several separated by comma / space / new line → lower-case emails (bare names get @TEAMS_DOMAIN). */
+function parseEmails(text: string): { emails: string[]; invalid: string[] } {
+  const emails: string[] = [], invalid: string[] = [];
+  for (const raw of text.split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean)) {
+    const e = raw.includes("@") ? raw : `${raw}@${TEAMS_DOMAIN}`;
+    (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? emails : invalid).push(e);
+  }
+  return { emails, invalid };
+}
 
 function AdminSection({ currentEmail }: { currentEmail: string }) {
+  const me = currentEmail.toLowerCase();
+  const [data, setData] = useState<AccessView | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    fetch(withBase("/api/settings/access"))
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: AccessView) => { setData(d); setState("ready"); })
+      .catch(() => { setState("error"); setMsg("Could not load the access list. Reload the page to try again."); });
+  }, []);
+
+  const save = async (next: Pick<AccessView, "mode" | "users" | "admins">) => {
+    if (!data) return;
+    const prev = data;
+    setData({ ...data, ...next });
+    setState("saving"); setMsg("");
+    try {
+      const r = await fetch(withBase("/api/settings/access"), {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: next.mode, users: next.users.map((u) => u.email), admins: next.admins.map((a) => a.email) }),
+      });
+      if (!r.ok) throw new Error();
+      setData(await r.json()); setState("ready");
+    } catch {
+      setData(prev); setState("error"); setMsg("Not saved — the server did not accept the change. Try again.");
+    }
+  };
+
+  if (state === "loading" || !data) {
+    return (
+      <div className="space-y-5">
+        <SectionTitle title="Admin" description="Who can open this dashboard and who can change its settings" />
+        {state === "error"
+          ? <p className="text-sm text-red-500">{msg}</p>
+          : <div className="h-48 rounded-xl bg-white border border-slate-200 animate-pulse" />}
+      </div>
+    );
+  }
+
+  const entry = (email: string): AccessEntryView => ({ email, addedBy: me, addedAt: Date.now() });
+  const addUsers = (emails: string[]) =>
+    save({ ...data, users: [...data.users, ...emails.filter((e) => !data.users.some((u) => u.email === e)).map(entry)] });
+  const addAdmins = (emails: string[]) =>
+    save({ ...data, admins: [...data.admins, ...emails.filter((e) => !data.admins.some((a) => a.email === e) && !data.envAdmins.includes(e)).map(entry)] });
+  const noAdmin = data.envAdmins.length === 0 && data.admins.length === 0;
+
   return (
     <div className="space-y-5">
-      <SectionTitle title="Admin" description="Admin access for this dashboard" />
+      <SectionTitle title="Admin" description="Who can open this dashboard and who can change its settings" />
 
-      <Card title="Your Access" icon={<Shield size={16} color="#1e4076" />} iconBg="#EEF4FB">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold text-brand-600">
-              {currentEmail[0]?.toUpperCase() ?? "?"}
-            </span>
+      {!data.persistent && (
+        <div className="flex items-start gap-2.5 rounded-xl px-4 py-3 border border-[#F5E3A3] bg-[#FFFBE4]">
+          <AlertCircle size={14} className="text-[#342900] shrink-0 mt-0.5" />
+          <p className="text-xs text-[#342900] leading-relaxed">
+            Changes are not stored on this deployment yet. Connect a Vercel Blob store to the project (adds BLOB_STORE_ID), redeploy, then save again.
+          </p>
+        </div>
+      )}
+
+      <Card title="Dashboard access" description="Everyone signs in with their Microsoft work account">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <SegmentedToggle<AccessView["mode"]> ariaLabel="Who can open the dashboard" options={ACCESS_MODES}
+              value={data.mode} onChange={(mode) => save({ ...data, mode })} />
+            <SaveState state={state} />
           </div>
-          <div>
-            <p className="text-sm font-medium text-gray-800">{currentEmail}</p>
-            <p className="text-xs text-brand-600 mt-0.5">Admin</p>
-          </div>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            {data.mode === "everyone"
+              ? "Anyone with a Paracorp Microsoft account can open the dashboard. The list below is kept for when you switch to Only people on the list."
+              : "Only admins and the people below can open the dashboard. Anyone else sees “no access” when they sign in, and people you remove are signed out within a minute."}
+          </p>
+          {data.mode === "list" && data.users.length === 0 && (
+            <p className="text-xs text-[#342900] bg-[#FFFBE4] rounded-md px-2.5 py-1.5">Only admins can open the dashboard until you add people.</p>
+          )}
+          <EmailAdder label="Add people" onAdd={addUsers} />
+          {state === "error" && <p className="text-xs text-red-500">{msg}</p>}
+          <AccessList
+            rows={data.users.map((u) => ({ ...u, removable: true }))}
+            empty="No one on the list yet."
+            onRemove={(email) => save({ ...data, users: data.users.filter((u) => u.email !== email) })}
+          />
         </div>
       </Card>
 
-      <div className="flex items-start gap-2.5 bg-[#EEF4FB] border border-[#C3CEE3] rounded-xl px-4 py-3">
-        <AlertCircle size={14} className="text-[#1E4076] shrink-0 mt-0.5" />
-        <p className="text-xs text-[#16305C] leading-relaxed">
-          Admin access is managed via the <span className="font-mono font-semibold">ADMIN_EMAILS</span> environment variable. Contact the platform team to add or remove admins.
-        </p>
+      <Card title="Admins" description="Admins open every setting, manage Teams notifications and edit this page. They always have access.">
+        <div className="space-y-4">
+          {noAdmin && (
+            <p className="text-xs text-[#342900] bg-[#FFFBE4] rounded-md px-2.5 py-1.5">
+              No admin is set, so everyone who signs in is admin. Add one to limit the settings to admins — you stay admin too.
+            </p>
+          )}
+          <EmailAdder label="Add admins" onAdd={addAdmins} />
+          <AccessList
+            rows={[
+              ...data.envAdmins.map((email) => ({ email, addedBy: "", addedAt: 0, removable: false, note: "Server config (ADMIN_EMAILS)" })),
+              ...data.admins.map((a) => a.email === me
+                ? { ...a, removable: false, note: "You — another admin can remove you" }
+                : { ...a, removable: true }),
+            ]}
+            empty="No admins yet."
+            onRemove={(email) => save({ ...data, admins: data.admins.filter((a) => a.email !== email) })}
+          />
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function SaveState({ state }: { state: "loading" | "ready" | "saving" | "error" }) {
+  if (state === "saving") return <span className="flex items-center gap-1 text-xs text-slate-400"><Loader2 size={12} className="animate-spin" />Saving…</span>;
+  return null;
+}
+
+function EmailAdder({ label, onAdd }: { label: string; onAdd: (emails: string[]) => void }) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const add = () => {
+    const { emails, invalid } = parseEmails(text);
+    if (invalid.length) { setError(`Not an email: ${invalid.join(", ")}`); return; }
+    if (!emails.length) return;
+    onAdd(emails); setText(""); setError("");
+  };
+  return (
+    <div className="space-y-1.5">
+      <div className="flex gap-2">
+        <input
+          type="text"
+          aria-label={label}
+          placeholder={`username or name@${TEAMS_DOMAIN} — several: separate with commas`}
+          autoCapitalize="none"
+          spellCheck={false}
+          value={text}
+          onChange={(e) => { setText(e.target.value); setError(""); }}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          className="flex-1 min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+        />
+        <button onClick={add}
+          className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2">
+          <Plus size={14} />
+          Add
+        </button>
       </div>
+      {error && <p className="text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
+
+function AccessList({ rows, empty, onRemove }: {
+  rows: (AccessEntryView & { removable: boolean; note?: string })[];
+  empty: string;
+  onRemove: (email: string) => void;
+}) {
+  const [q, setQ] = useState("");
+  const shown = q ? rows.filter((r) => r.email.includes(q.trim().toLowerCase())) : rows;
+  if (rows.length === 0) return <p className="text-xs text-slate-400">{empty}</p>;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold text-slate-500">{rows.length} {rows.length === 1 ? "person" : "people"}</span>
+        {rows.length > 8 && (
+          <input type="search" aria-label="Search the list" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)}
+            className="w-48 px-2.5 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400" />
+        )}
+      </div>
+      <ul className="divide-y divide-slate-100 border border-slate-100 rounded-lg max-h-80 overflow-y-auto">
+        {shown.map((r) => (
+          <li key={r.email} className="flex items-center gap-3 px-3 py-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-gray-800 truncate">{r.email}</p>
+              <p className="text-[11px] text-slate-400 truncate">
+                {r.note ?? (r.addedAt ? `Added by ${r.addedBy || "—"} · ${fmtWib(r.addedAt)}` : "")}
+              </p>
+            </div>
+            {r.removable && (
+              <button onClick={() => onRemove(r.email)} aria-label={`Remove ${r.email}`} title="Remove"
+                className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
+                <X size={13} />
+              </button>
+            )}
+          </li>
+        ))}
+        {shown.length === 0 && <li className="px-3 py-2 text-xs text-slate-400">No match for “{q}”.</li>}
+      </ul>
     </div>
   );
 }

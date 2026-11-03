@@ -7,8 +7,8 @@ import { LEAD_TIME_TARGET_DAYS, LEAD_TIME_BASIS_LABEL } from "@/lib/leadTimeDefi
 
 /** How the in-scope KPIs affect each other. Given to the model as domain knowledge, not as data. */
 export const KPI_RELATIONSHIPS = `How the KPIs connect (domain knowledge — apply only when the numbers point that way):
-1. Gross lead time = PO start → NDC receipt. Nett = time in actual production activities only. Gross − Nett = time outside active
-   processing (queues, WIP, approvals). High Gross with low Nett means POs mostly wait: more people or overtime will not fix it,
+1. Gross lead time = PO start → NDC receipt. Nett = first Weighing → NDC receipt minus WIP time (production incl. its short waits).
+   Gross − Nett = time outside production: PO administration / release and WIP. High Gross with low Nett means POs mostly wait: more people or overtime will not fix it,
    flow and scheduling will. The composition (Value-Added / Necessary Non-Value-Added such as PO administration and release /
    Waste such as WIP waiting) is a separate cut of the same time — never add VA + NNVA and call it Nett.
 2. Lead time ↔ Released FG output: with similar work-in-process, longer lead time means POs finish later, so fewer POs release FG in the period
@@ -48,7 +48,7 @@ export function buildKpiContext(kpi: any): string {
   const lines: string[] = [];
 
   lines.push(`Lead Time Gross: ${num(lt.grossDays, 2)} days (target ≤ ${LEAD_TIME_TARGET_DAYS}, ${LEAD_TIME_BASIS_LABEL})${pct(lt.grossTrend) ? `, ${pct(lt.grossTrend)} vs prior period` : ""}`);
-  lines.push(`Lead Time Nett (active processing): ${num(lt.nettDays, 2)} days${pct(lt.nettTrend) ? `, ${pct(lt.nettTrend)} vs prior period` : ""}`);
+  lines.push(`Lead Time Nett (Weighing → NDC without WIP): ${num(lt.nettDays, 2)} days${pct(lt.nettTrend) ? `, ${pct(lt.nettTrend)} vs prior period` : ""}`);
 
   const total = (c.vaDays ?? 0) + (c.nnvaDays ?? 0) + (c.unvaDays ?? 0);
   if (total > 0) {
@@ -173,9 +173,9 @@ function directionSignals(lt: any, o: any): string[] {
   const isNum = (v: unknown): v is number => typeof v === "number" && isFinite(v);
 
   if (isNum(g) && isNum(n)) {
-    if (g > 0 && n <= 0) out.push("Gross lead time rose while Nett fell → the increase is waiting time, not processing time.");
-    else if (g > 0 && n > 0) out.push("Gross and Nett lead time both rose → processing itself got slower, not only waiting.");
-    else if (g < 0 && n >= 0) out.push("Gross lead time fell while Nett did not → less waiting between stages.");
+    if (g > 0 && n <= 0) out.push("Gross lead time rose while Nett fell → the increase is PO / WIP waiting, not production time.");
+    else if (g > 0 && n > 0) out.push("Gross and Nett lead time both rose → production itself got slower, not only waiting.");
+    else if (g < 0 && n >= 0) out.push("Gross lead time fell while Nett did not → less PO / WIP waiting.");
   }
   if (isNum(g) && isNum(fg)) {
     if (g > 0 && fg > 0) out.push("Lead time and Released FG both rose → the longer lead time has NOT reduced output this period; do not blame lower output on it.");
@@ -188,7 +188,7 @@ function directionSignals(lt: any, o: any): string[] {
   }
   if (isNum(lt.grossDays) && isNum(lt.nettDays) && lt.grossDays > 0) {
     const waitShare = Math.round(((lt.grossDays - lt.nettDays) / lt.grossDays) * 100);
-    out.push(`${waitShare}% of gross lead time is outside active processing (Gross − Nett).`);
+    out.push(`${waitShare}% of gross lead time is outside production: PO and WIP (Gross − Nett).`);
   }
   return out;
 }

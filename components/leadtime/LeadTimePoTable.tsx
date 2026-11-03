@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { binLabel, binOf } from "@/components/leadtime/LeadTimeHistogram";
 import type { LtUnit } from "@/components/leadtime/LeadTimeFilterCard";
+import { NETT_DEFINITION } from "@/lib/leadTimeDefinition";
 
 /** API shape (app/api/lead-time/po-list): rows in `columns` order, SKU names in `skus`. */
 export interface PoListResponse {
@@ -111,15 +112,19 @@ export function LeadTimePoTable({ data, loading, unit, metric, bin, onClearBin }
   return (
     <div className="rounded-lg border border-[#EBEBEB] bg-white p-4">
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-            Lead Time per PO <span className="normal-case font-normal tracking-normal text-slate-400">({unitLabel})</span>
-          </p>
-          <InfoTooltip
-            size={13}
-            width={280}
-            text={`Every PO in the distribution above. Click a bar in the chart to list only its POs. Gross = start (PO Created or Released) → Receive NDC; Nett = active time. Process columns = ${metric} time per process group (sum over its activities), so they can add up to more than the lead time when activities run in parallel.`}
-          />
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+              Lead Time per PO <span className="normal-case font-normal tracking-normal text-slate-400">({unitLabel})</span>
+            </p>
+            <InfoTooltip
+              size={13}
+              width={280}
+              text={`Every PO in the distribution above. Click a bar in the chart to list only its POs. Gross = start (PO Created or Released) → Receive NDC; Nett = ${NETT_DEFINITION}. Process columns follow the Gross / Nett toggle and add up to that column: when processes run in parallel, the time goes to the one that started last.`}
+            />
+          </div>
+          {/* Same note as the plant table: the process columns belong to one of the two lead time columns */}
+          <p className="mt-0.5 text-[10.5px] text-slate-400">Process columns add up to {metric === "nett" ? "Nett" : "Gross"}</p>
         </div>
         <div className="flex items-center gap-2 text-[11px]">
           {bin != null && (

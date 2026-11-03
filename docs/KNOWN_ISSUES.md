@@ -8,7 +8,10 @@ All gaps from the 2026-11-02 audit are fixed (CLAUDE.md → Filter contract). By
 
 - **At-Risk POs** (Overview alert bar) is live status — POs released in the last 60 days and not yet at NDC — so it follows the plant only; the panel says "open today" and the ⓘ explains it.
 - **Bulk Loss** ignores the plant filter (no plant per batch in its calculation yet).
-- Data effect: nett can exceed gross for a PO (overlapping RECEIVE NDC rows each carry ~9 h of NET_LEADTIME), e.g. one J2 SKU averages 215 nett days in the Top SKU chart on Basis = Nett.
+- **Output plant comes from the form** (no PLANT column in the datamarts; user decision 2026-11-02): `OUTPUT_FORM_PLANT` maps LIQUID → J2, SEMISOLID → J4, POWDER → J1, J6 → J6. ~1% of SEMISOLID FG pcs are actually made outside J4; a new form shows as "(Not set)" until it is added to the map.
+- **Output ignores the 07:00 production-day cutoff**: `CORRECTION_DATE` is a DATE without time, so Output days are the datamart's own. Every other date filter uses the production day (`lib/productionDay.ts`).
+- POs without a Weighing row (~6% YTD) start nett at their first activity that is neither PO nor WIP (usually Mixing).
+- Data to check with the data team: PO 210000004965 has 83.89 d of overlapping RECEIVE NDC rows (its nett is 83 d); PO 210000074037 has a negative NET_LEADTIME (no longer used for nett).
 
 ## Critical
 

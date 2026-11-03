@@ -11,7 +11,7 @@ export const maxDuration = 30;
 // into a sentence; every number in its answer must be one of those variables, otherwise the page keeps the
 // code-written note. Cached per set of variables.
 
-const cached = unstable_cache(draftLeadTimeNote, ["lead-time-note-v1"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(draftLeadTimeNote, ["lead-time-note-v2"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);

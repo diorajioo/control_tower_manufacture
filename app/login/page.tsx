@@ -60,7 +60,10 @@ export default function LoginPage() {
   const [loading,    setLoading]    = useState(false);
   const [remember,   setRemember]   = useState(false);
   const [savedEmail, setSavedEmail] = useState<string | null>(null);
+  // ?error=AccessDenied: next-auth's signIn callback refused the account (access list, lib/access.ts)
+  const [denied, setDenied] = useState(false);
   const typedText = useTypewriter(PHRASES);
+
 
   useEffect(() => {
     if (session?.user?.email) {
@@ -75,6 +78,7 @@ export default function LoginPage() {
   useEffect(() => {
     const stored = localStorage.getItem(REMEMBER_KEY);
     if (stored) { setSavedEmail(stored); setRemember(true); }
+    if (new URLSearchParams(window.location.search).get("error") === "AccessDenied") setDenied(true);
   }, []);
 
   const handleSignIn = async () => {
@@ -177,6 +181,12 @@ export default function LoginPage() {
 
             <p className="font-semibold text-white text-center mb-0.5" style={{ fontSize:13 }}>Sign in</p>
             <p className="text-[11px] text-center mb-5" style={{ color:"rgba(165,180,252,0.5)" }}>Internal access only.</p>
+
+            {denied && (
+              <p role="alert" className="text-[11.5px] leading-relaxed rounded-xl px-3 py-2.5 mb-4 text-[#342900] bg-[#FFFBE4]">
+                This account doesn&apos;t have access to the dashboard. Ask a dashboard admin to add you, then sign in again.
+              </p>
+            )}
 
             {savedEmail && (
               <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 mb-4"

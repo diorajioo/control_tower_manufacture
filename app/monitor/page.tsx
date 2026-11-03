@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import { prodToday, prodYearStart } from "@/lib/productionDay";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { LayoutGrid, Clock, X } from "lucide-react";
@@ -42,8 +43,8 @@ function MonitorShell() {
   const filters = {
     plant:     params?.get("plant")     ?? "All Plant",
     period:    params?.get("period")    ?? "YTD",
-    startDate: params?.get("startDate") ?? `${new Date().getFullYear()}-01-01`,
-    endDate:   params?.get("endDate")   ?? new Date().toISOString().split("T")[0],
+    startDate: params?.get("startDate") ?? prodYearStart(),
+    endDate:   params?.get("endDate")   ?? prodToday(),
     dataLevel: params?.get("dataLevel") ?? "Daily",
   };
 

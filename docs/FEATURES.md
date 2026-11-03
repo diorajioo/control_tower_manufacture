@@ -18,9 +18,9 @@
    - **Planned:** Quarterly grain in the Weekly / Monthly dropdown (all trend charts).
 
 ### Tactical view — Output section
-FG / Bulk toggle · 4 KPI cards · Output trend + Top Line by Output table · **Output per Brand treemap + Top SKU by Output table** (`OutputMixRow`, `/api/dashboard/output-mix`, real data, FG only). Treemap: Group by ▾ Brand / Variant / SKU group; tile = FG released (Σ RELEASE_QTY per PO), shade = share (darker = larger, Paragon Blue tints — no health colors until targets exist); top 15 groups, caption "Top n of N · x% of FG released" when cut; tooltip = FG released · share · POs. Its height follows the SKU table (no fixed height). Top SKU table: top 10 by qty, sortable; Theoretical and Gap show "—" until planning data is connected.
+FG / Bulk toggle · 3 cards (Total & Achievement · SKU & PO · Output per Plant — plant of the row's form, since 2026-11-02) · Output trend + Top Line by Output table · **Output per Brand treemap + Top SKU by Output table** (`OutputMixRow`, `/api/dashboard/output-mix`, real data, FG only). Treemap: Group by ▾ Brand / Variant / SKU group; tile = FG released (Σ QUANTITY, FG datamart), shade = share (darker = larger, Paragon Blue tints — no health colors until targets exist); top 15 groups, caption "Top n of N · x% of FG released" when cut; tooltip = FG released · share · POs. Its height follows the SKU table (no fixed height). Top SKU table: top 10 by qty, sortable; Theoretical and Gap show "—" until planning data is connected.
 
-**Cross-filter (Output only, `components/dashboard/outputPick.ts`):** click a plant or form (donut slice or legend row), a trend bar (month / week), a Top Line row or a treemap tile → every other Output chart reloads for that pick; the source chart keeps all items and dims the rest to 35%. One pick at a time; cleared by the same click, the "Filtered by …" chip ✕ next to FG / Bulk, Esc, or a header / FG–Bulk change. Plant → `plant` param, month/week → date range ∩ header range, brand / variant / SKU group / line / form → `fdim` + `fval` (PO-level `IN` subquery, `outputSelWhere()` in `lib/queries.ts`; trends route applies it to `kpiType=output` only). The 4 KPI cards stay on the header filters.
+**Cross-filter (Output only, `components/dashboard/outputPick.ts`):** click a plant (donut slice or legend row), a trend bar (month / week), a Top Line row or a treemap tile → every other Output chart reloads for that pick; the source chart keeps all items and dims the rest to 35%. One pick at a time; cleared by the same click, the "Filtered by …" chip ✕ next to FG / Bulk, Esc, or a header / FG–Bulk change. Plant → `plant` param, month/week → date range ∩ header range, brand / variant / SKU group / line / form → `fdim` + `fval` (row filter on the datamart, `fgRows()` / `bulkRows()` in `lib/queries.ts`; trends route applies it to `kpiType=output` only). The 4 KPI cards stay on the header filters.
 
 ### User interactions
 - Header filter row: Period picker, Plant dropdown, Data Level selector. Changes trigger immediate re-fetch.
@@ -179,6 +179,7 @@ Only **critical** alerts are auto-sent to Teams via Graph API.
 - Teams notification recipients: add, remove, toggle.
 - Alert threshold display (read-only — thresholds are hardcoded in `lib/alerts.ts`, not editable via UI).
 - Settings persist server-side via `/api/settings/teams`.
+- **Admin** (admins only, since 2026-11-03): Dashboard access — *Everyone at Paracorp* / *Only people on the list*, add (username, email, or several separated by commas) and remove people, search when the list is long; Admins — add / remove admins, `ADMIN_EMAILS` shown as server config. Every change saves at once. Rules: `docs/SECURITY.md` → Dashboard access list.
 
 ---
 

@@ -137,10 +137,10 @@ interface AISummaryProps {
 }
 
 // "_v7": Output cites both Released FG (pcs) and Bulk (kg). "_v6": [[CARDS]] one-liners state a cause.
-const CACHE_TEXT = "ai_summary_text_v7";
-const CACHE_TIME = "ai_summary_time_v7";
+const CACHE_TEXT = "ai_summary_text_v8";
+const CACHE_TIME = "ai_summary_time_v8";
 // Filters the cached summary was generated for — a different plant/period regenerates it.
-const CACHE_KEY  = "ai_summary_key_v7";
+const CACHE_KEY  = "ai_summary_key_v8";
 const TTL_MS    = 5 * 60 * 60 * 1000; // 5 hours
 
 export function AISummary({ kpi, filters, ready }: AISummaryProps) {

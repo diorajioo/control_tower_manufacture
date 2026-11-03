@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prodToday, prodYearStart } from "@/lib/productionDay";
 import { getServerSession } from "next-auth";
 import { unstable_cache } from "next/cache";
 import { authOptions } from "@/lib/auth";
@@ -32,7 +33,7 @@ async function run(plant: string, startDate: string, endDate: string, period: st
   };
 }
 
-const cached = unstable_cache(run, ["lead-time-po-list-v2"], { revalidate: 3600, tags: ["kpi"] });
+const cached = unstable_cache(run, ["lead-time-po-list-v4"], { revalidate: 3600, tags: ["kpi"] });
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -40,8 +41,8 @@ export async function GET(req: NextRequest) {
 
   const sp = new URL(req.url).searchParams;
   const plant     = sp.get("plant")     ?? "All Plant";
-  const startDate = sp.get("startDate") ?? `${new Date().getFullYear()}-01-01`;
-  const endDate   = sp.get("endDate")   ?? new Date().toISOString().split("T")[0];
+  const startDate = sp.get("startDate") ?? prodYearStart();
+  const endDate   = sp.get("endDate")   ?? prodToday();
   const period    = sp.get("period")    ?? undefined;
   const basis     = sp.get("basis") === "released" ? "released" : "created";
   const metric    = sp.get("metric") === "nett" ? "nett" : "gross";

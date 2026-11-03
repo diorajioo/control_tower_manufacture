@@ -12,6 +12,7 @@ import { Fade } from "@/components/ui/Fade";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
 import { LineTooltip } from "@/components/charts/StandardLine";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
+import { NETT_DEFINITION } from "@/lib/leadTimeDefinition";
 
 type LtUnit = "days" | "hours";
 type LtMeasure = "gross" | "nett";
@@ -57,7 +58,7 @@ const BAR = "rgba(30,64,118,0.72)";
 const BAR_SELECTED = "#1E4076";
 const BAR_FADED = "rgba(30,64,118,0.25)";
 
-export function LeadTimeHistogram({ filters, basis, metric, unit, detailHref = "/lead-time", selectedBin = null, onBinClick }: {
+export function LeadTimeHistogram({ filters, basis, metric, unit, detailHref = "/lead-time", selectedBin = null, onBinClick, refreshKey = 0 }: {
   filters: HistogramFilters;
   basis: "created" | "released";
   metric: LtMeasure;
@@ -68,6 +69,8 @@ export function LeadTimeHistogram({ filters, basis, metric, unit, detailHref = "
   selectedBin?: number | null;
   /** Click on a bar → bin start in days (click the selected bar again to clear: the parent decides) */
   onBinClick?: (binStart: number) => void;
+  /** Lead Time page Refresh button */
+  refreshKey?: number;
 }) {
   const [data, setData] = useState<DistResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,7 +91,7 @@ export function LeadTimeHistogram({ filters, basis, metric, unit, detailHref = "
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.plant, filters.startDate, filters.endDate, filters.period, lt, basis, metric]);
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, lt, basis, metric, refreshKey]);
 
   const { rows, cumByBin, maxBin, maxBinCount } = useMemo(() => {
     if (!data || data.bins.length === 0) {
@@ -188,7 +191,7 @@ export function LeadTimeHistogram({ filters, basis, metric, unit, detailHref = "
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Lead Time Distribution per PO</p>
           <InfoTooltip
             text={(metric === "nett"
-              ? "Only POs completed within the selected period. Nett = time in active production activities per PO; it does not depend on PO Created / Released."
+              ? `Only POs completed within the selected period. Nett = ${NETT_DEFINITION}; it does not depend on PO Created / Released.`
               : "Only POs completed within the selected period (PO FG Done Date is not null). Gross = start (PO Created or Released) to RECEIVE NDC.")
               + (onBinClick ? " Click a bar to list its POs in the table below; click it again to show all POs." : "")}
             size={13}

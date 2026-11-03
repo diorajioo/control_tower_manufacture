@@ -1,4 +1,5 @@
 // Persistent notification state: Teams settings, per-recipient schedules, sent log and the sender connection.
+// Also holds the dashboard access list (lib/access.ts): one small state file, same backends.
 //
 // Backend is picked by env, like DATA_SOURCE for queries:
 //   BLOB_STORE_ID (Vercel OIDC — what connecting a store adds today) or BLOB_READ_WRITE_TOKEN set
@@ -42,6 +43,25 @@ export interface NotifState {
   lastSent: Record<string, number>;
   sender?: SenderConnection;
   lastRun?: number;
+  /** Who may open the dashboard and who is admin (Settings → Admin, lib/access.ts) */
+  access?: AccessState;
+}
+
+export interface AccessEntry { email: string; addedBy: string; addedAt: number }
+export interface AccessState {
+  /** everyone = any account that signs in with Microsoft; list = only `users` (admins always) */
+  mode: "everyone" | "list";
+  users: AccessEntry[];
+  admins: AccessEntry[];
+}
+
+function parseAccess(a: unknown): AccessState | undefined {
+  if (!a || typeof a !== "object") return undefined;
+  const x = a as any;
+  const entries = (v: unknown): AccessEntry[] => (Array.isArray(v) ? v : [])
+    .filter((e) => typeof e?.email === "string" && e.email.includes("@"))
+    .map((e) => ({ email: e.email.trim().toLowerCase(), addedBy: typeof e.addedBy === "string" ? e.addedBy : "", addedAt: Number(e.addedAt) || 0 }));
+  return { mode: x.mode === "list" ? "list" : "everyone", users: entries(x.users), admins: entries(x.admins) };
 }
 
 export const DEFAULT_TIME = "07:00";
@@ -103,6 +123,7 @@ function parse(text: string): NotifState {
     lastSent:   p.lastSent && typeof p.lastSent === "object" ? p.lastSent : {},
     sender:     p.sender && token ? { ...p.sender, refreshToken: token } : undefined,
     lastRun:    typeof p.lastRun === "number" ? p.lastRun : undefined,
+    access:     parseAccess(p.access),
   };
 }
 

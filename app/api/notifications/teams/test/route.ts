@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   // Sends from the connected sender to the recipients in the body: admins only, like saving them.
-  if (!isServerAdmin(session.user?.email)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await isServerAdmin(session.user?.email))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({})) as { kind?: "alert" | "summary" };
 
