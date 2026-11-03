@@ -764,13 +764,19 @@ function AdminSection({ currentEmail }: { currentEmail: string }) {
         body: JSON.stringify({ mode: next.mode, users: next.users.map((u) => u.email), admins: next.admins.map((a) => a.email) }),
       });
       if (!r.ok) {
-        const body = await r.json().catch(() => null) as { error?: string; detail?: string } | null;
-        throw new Error(`${r.status}${body?.detail ? `: ${body.detail}` : body?.error ? `: ${body.error}` : ""}`);
+        const body = await r.json().catch(() => null) as { error?: string } | null;
+        throw new Error(
+          r.status === 401 ? "Your sign-in has expired. Sign in again, then make your change."
+          : r.status === 403 ? "Only dashboard admins can change who has access."
+          : r.status === 429 ? "Too many changes in a short time. Wait a minute and try again."
+          : body?.error ?? "The change could not be stored right now. Wait a minute and try again.",
+        );
       }
       setData(await r.json()); setState("ready");
     } catch (err) {
       setData(prev); setState("error");
-      setMsg(`Not saved — the server did not accept the change (${err instanceof Error ? err.message : "network error"}). Try again.`);
+      // fetch itself failed (offline, VPN) → TypeError, not one of the messages above
+      setMsg(`Not saved. ${err instanceof Error && !(err instanceof TypeError) ? err.message : "Check your internet connection and try again."}`);
     }
   };
 
@@ -864,7 +870,7 @@ function EmailAdder({ label, onAdd }: { label: string; onAdd: (emails: string[])
   const [error, setError] = useState("");
   const add = () => {
     const { emails, invalid } = parseEmails(text);
-    if (invalid.length) { setError(`Not an email: ${invalid.join(", ")}`); return; }
+    if (invalid.length) { setError(`This doesn't look like an email address: ${invalid.join(", ")}. Use a username or name@${TEAMS_DOMAIN}.`); return; }
     if (!emails.length) return;
     onAdd(emails); setText(""); setError("");
   };

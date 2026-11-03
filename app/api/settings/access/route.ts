@@ -37,8 +37,12 @@ export async function PUT(req: Request) {
     return NextResponse.json(view(saved));
   } catch (err) {
     console.error("[settings/access] save failed:", err);
-    // Admin-only route: the store's own message tells the admin what to fix (e.g. the Blob store connection)
-    const detail = err instanceof Error ? err.message.slice(0, 300) : String(err);
-    return NextResponse.json({ error: "Access settings could not be saved on the server", detail }, { status: 500 });
+    // Plain words for the page; the technical cause stays in the server log above
+    const busy = err instanceof Error && /precondition failed/i.test(err.message);
+    return NextResponse.json({
+      error: busy
+        ? "Someone else changed the access list at the same moment. Reload the page and make your change again."
+        : "The change could not be stored right now. Wait a minute and try again. If it keeps failing, contact the dashboard team.",
+    }, { status: 500 });
   }
 }
