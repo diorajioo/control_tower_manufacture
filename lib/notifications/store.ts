@@ -137,12 +137,21 @@ const BLOB_PATH = "notifications/state.json";
 // On Vercel, BLOB_STORE_ID + the runtime OIDC token authenticate; @vercel/blob resolves both itself
 const useBlob = () => !!(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
 
-async function blobRead(): Promise<{ state: NotifState; etag?: string }> {
-  const { get } = await import("@vercel/blob");
+async function blobRead(withEtag = true): Promise<{ state: NotifState; etag?: string }> {
+  const { get, head, BlobNotFoundError } = await import("@vercel/blob");
+  // The ETag comes from the blob's metadata (head), the value put()'s ifMatch is checked against — the ETag
+  // header of the download response differs from it, so every conditional write failed with "ETag mismatch".
+  // head before get: if a write lands in between, the content is newer than the ETag and put() fails → retry.
+  let etag: string | undefined;
+  if (withEtag) try { etag = (await head(BLOB_PATH)).etag; } catch (err) { if (!(err instanceof BlobNotFoundError)) throw err; }
   const res = await get(BLOB_PATH, { access: "private", useCache: false });
-  if (!res || res.statusCode !== 200) return { state: empty() };
-  return { state: parse(await new Response(res.stream).text()), etag: res.blob.etag };
+  if (!res || res.statusCode !== 200) return { state: empty(), etag };
+  return { state: parse(await new Response(res.stream).text()), etag };
 }
+
+const isPreconditionFailed = async (err: unknown) =>
+  err instanceof (await import("@vercel/blob")).BlobPreconditionFailedError ||
+  (err instanceof Error && /precondition failed/i.test(err.message));
 
 async function blobWrite(state: NotifState, etag?: string): Promise<void> {
   const { put } = await import("@vercel/blob");
@@ -174,7 +183,7 @@ async function fileWrite(state: NotifState): Promise<void> {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function readNotifState(): Promise<NotifState> {
-  return useBlob() ? (await blobRead()).state : fileRead();
+  return useBlob() ? (await blobRead(false)).state : fileRead();
 }
 
 /** Read → change → write. On Blob a concurrent write makes the ETag stale; it then retries on fresh state. */
@@ -187,7 +196,7 @@ export async function updateNotifState(change: (s: NotifState) => void): Promise
       else await fileWrite(state);
       return state;
     } catch (err) {
-      const stale = useBlob() && err instanceof (await import("@vercel/blob")).BlobPreconditionFailedError;
+      const stale = useBlob() && (await isPreconditionFailed(err));
       if (!stale || attempt >= 3) throw err;
     }
   }

@@ -37,6 +37,8 @@ export async function PUT(req: Request) {
     return NextResponse.json(view(saved));
   } catch (err) {
     console.error("[settings/access] save failed:", err);
-    return NextResponse.json({ error: "Access settings could not be saved on the server" }, { status: 500 });
+    // Admin-only route: the store's own message tells the admin what to fix (e.g. the Blob store connection)
+    const detail = err instanceof Error ? err.message.slice(0, 300) : String(err);
+    return NextResponse.json({ error: "Access settings could not be saved on the server", detail }, { status: 500 });
   }
 }

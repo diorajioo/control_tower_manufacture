@@ -763,10 +763,14 @@ function AdminSection({ currentEmail }: { currentEmail: string }) {
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: next.mode, users: next.users.map((u) => u.email), admins: next.admins.map((a) => a.email) }),
       });
-      if (!r.ok) throw new Error();
+      if (!r.ok) {
+        const body = await r.json().catch(() => null) as { error?: string; detail?: string } | null;
+        throw new Error(`${r.status}${body?.detail ? `: ${body.detail}` : body?.error ? `: ${body.error}` : ""}`);
+      }
       setData(await r.json()); setState("ready");
-    } catch {
-      setData(prev); setState("error"); setMsg("Not saved — the server did not accept the change. Try again.");
+    } catch (err) {
+      setData(prev); setState("error");
+      setMsg(`Not saved — the server did not accept the change (${err instanceof Error ? err.message : "network error"}). Try again.`);
     }
   };
 
