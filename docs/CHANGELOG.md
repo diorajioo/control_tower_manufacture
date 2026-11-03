@@ -8,10 +8,12 @@ Derived from git log and conversation history. Most recent changes first.
 
 ### Added
 - **Dashboard access list** (Settings → Admin): admins choose *Everyone at Paracorp* or *Only people on the list*, add / remove people and other admins. Checked at sign-in and on every session read (removed people are signed out within 30 s); denied accounts see why on the login page. `ADMIN_EMAILS` still works and shows as server config. `lib/access.ts`, `/api/settings/access`.
+- **Top Line by Output: Line filter** (multi-select with search, table header). Narrows the rows only: Header filters, FG / Bulk and the Output click filter still reach the table, and % Contrib stays a share of the whole section. Resets on FG / Bulk.
 
 ### Fixed
 - **Lead Time per Line follows Gross / Nett** (filter contract audit): the bubble's lead time was always gross; `/api/lead-time/lines` now takes `metric` and the y axis shows the average gross or nett per PO of the line (SCI04 YTD: 16.48 d gross, 3.38 d nett). The SKU per Line table keeps the process time at the line.
 - **Distribution histogram refetches on Refresh** (Lead Time page).
+- **Blob store saves** (access list, Teams settings): every conditional write failed with "ETag mismatch" — the ETag now comes from `head()`, and a real conflict retries. Save errors in Settings → Admin are in plain words.
 
 ### Changed
 - **Nett lead time redefined** (user definition): first Weighing → last Receive NDC minus WIP time; WAITING counts, PO is outside. POs without Weighing start at their first non-PO / non-WIP activity. Network YTD 5.03 → 2.34 d (J2 2.48, J4 2.59, J6 1.96, J1 1.85). One rule everywhere (`ltSplitSql` NETT_MIN, `ltNettPerPoSql`): card, plant / PO tables (columns add up to Nett), histogram, sunburst, Pareto, box plot, composition, Top SKU, scatter, line bubble, AI context, chat, Teams. Cache keys bumped (lead-time routes, kpi v17, AI summary v8, AI risks v4).

@@ -103,7 +103,7 @@ export function SelectField({ label, value, options, onChange, allLabel, width =
   );
 }
 
-export function MultiSelectField({ label, value, options, onChange, allLabel, width = 140, loading = false }: {
+export function MultiSelectField({ label, value, options, onChange, allLabel, width = 140, loading = false, hideLabel = false }: {
   label: string;
   value: string[];
   options: FieldOption[];
@@ -111,6 +111,8 @@ export function MultiSelectField({ label, value, options, onChange, allLabel, wi
   allLabel?: string;
   width?: number;
   loading?: boolean;
+  /** Card headers: no label above the field (it still names the search box and the button) */
+  hideLabel?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -169,8 +171,8 @@ export function MultiSelectField({ label, value, options, onChange, allLabel, wi
 
   return (
     <div className="relative shrink-0" ref={ref} style={{ width }}>
-      <span className={FIELD_LABEL}>{label}</span>
-      <button onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}
+      {!hideLabel && <span className={FIELD_LABEL}>{label}</span>}
+      <button onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open} aria-label={hideLabel ? label : undefined}
         className={cn(FIELD, FIELD_ON, "w-full justify-between", hasValue && "border-[#C3CEE3] bg-[#EEF4FB] text-[#16305C]")}>
         <span className="truncate">{loading && options.length === 0 ? "Loading…" : buttonLabel}</span>
         <ChevronDown size={11} className={cn("text-slate-400 shrink-0 transition-transform duration-150", open && "rotate-180")} />

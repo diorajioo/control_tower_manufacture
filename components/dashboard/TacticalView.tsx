@@ -21,7 +21,7 @@ import { ResponsiveBar, type BarCustomLayerProps, type BarDatum } from "@nivo/ba
 import { STAGE_ORDER, stageLabel, PROCESS_GROUPS } from "@/lib/leadTimeStages";
 import { useT } from "@/lib/i18n";
 import { dimsKey, dimsToParams, type LtDims } from "@/lib/leadTimeFilters";
-import { FIELD, FIELD_ON, MENU, MENU_ITEM, MENU_ITEM_ON, MENU_ITEM_OFF } from "@/components/ui/FilterField";
+import { FIELD, FIELD_ON, MENU, MENU_ITEM, MENU_ITEM_ON, MENU_ITEM_OFF, MultiSelectField } from "@/components/ui/FilterField";
 import { LeadTimeHistogram } from "@/components/leadtime/LeadTimeHistogram";
 import { OutputMixRow } from "@/components/dashboard/OutputMixRow";
 
@@ -1319,6 +1319,10 @@ function TopLineByOutputTable({ filters, metric, pick, onPick }: {
   const [loading, setLoading] = useState(true);
   const [sortCol, setSortCol] = useState<keyof OutputLineRow>("qtyReal");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  // Table-only line filter: narrows the rows shown, never the fetch — Header filters, FG / Bulk and the
+  // section click filter keep flowing through outputParams(); % Contrib stays a share of the whole section.
+  const [lineSel, setLineSel] = useState<string[]>([]);
+  useEffect(() => { setLineSel([]); }, [metric]); // FG and Bulk have different lines
 
   useEffect(() => {
     setLoading(true);
@@ -1331,12 +1335,18 @@ function TopLineByOutputTable({ filters, metric, pick, onPick }: {
       .finally(() => setLoading(false));
   }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric, pick]);
 
+  const lineOptions = useMemo(
+    () => [...new Set(rows.map((r) => r.line))].sort().map((l) => ({ value: l, label: l })),
+    [rows],
+  );
+
   const sorted = useMemo(() => {
-    return [...rows].sort((a, b) => {
+    const shown = lineSel.length ? rows.filter((r) => lineSel.includes(r.line)) : rows;
+    return [...shown].sort((a, b) => {
       const av = a[sortCol] ?? -Infinity, bv = b[sortCol] ?? -Infinity;
       return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
-  }, [rows, sortCol, sortDir]);
+  }, [rows, lineSel, sortCol, sortDir]);
 
   const toggleSort = (col: keyof OutputLineRow) => {
     if (col === sortCol) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -1358,21 +1368,31 @@ function TopLineByOutputTable({ filters, metric, pick, onPick }: {
   );
 
   return (
-    <div className="rounded-lg border border-[#EBEBEB] bg-white overflow-hidden" style={{ fontFamily: "Lato, sans-serif" }}>
-      <div style={{ padding: "11px 13px 8px", display: "flex", alignItems: "center", gap: 6 }}>
+    // No overflow-hidden on the card: it would clip the Line dropdown; the scroll area clips the table instead
+    <div className="rounded-lg border border-[#EBEBEB] bg-white" style={{ fontFamily: "Lato, sans-serif" }}>
+      <div style={{ padding: "8px 13px 8px", display: "flex", alignItems: "center", gap: 8 }}>
         <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", flex: 1 }}>
           {t("output_line_title")}
         </p>
+        {/* menu opens to the left: the card sits at the right edge of the row */}
+        <div className="[&_[role=listbox]]:left-auto [&_[role=listbox]]:right-0">
+          <MultiSelectField label={t("th_line")} value={lineSel} options={lineOptions} onChange={setLineSel}
+            allLabel="All lines" width={130} loading={loading} hideLabel />
+        </div>
         <InfoTooltip text={t(metric === "bulk" ? "output_line_tooltip_bulk" : "output_line_tooltip")} size={13} width={220} />
       </div>
       {loading ? (
-        <div style={{ height: 260, background: "#f9fafb" }} className="animate-pulse" />
+        <div style={{ height: 260, background: "#f9fafb" }} className="animate-pulse rounded-b-lg" />
       ) : rows.length === 0 ? (
         <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a2b3", fontSize: 11 }}>
           {t("output_trend_no_data")}
         </div>
+      ) : sorted.length === 0 ? (
+        <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "#98a2b3", fontSize: 11 }}>
+          None of the selected lines has output in this period.
+        </div>
       ) : (
-        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: 320 }}>
+        <div className="rounded-b-lg" style={{ overflowX: "auto", overflowY: "auto", maxHeight: 320 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
             <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
               <tr>
