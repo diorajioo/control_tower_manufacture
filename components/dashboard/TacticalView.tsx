@@ -266,6 +266,13 @@ function TKpiCard({
             </div>
 
             <StatusDot color={tone.color} label={statusLabel} />
+
+            {/* PO count inline (no gauge): sits right under status dot, no gap */}
+            {!noData && gaugeCounts == null && gaugePoCount != null && (
+              <span style={{ fontSize: 10.5, color: "#667085", fontVariantNumeric: "tabular-nums", marginTop: 4 }}>
+                {gaugePoCount.toLocaleString()} PO completed in period
+              </span>
+            )}
           </div>
 
           {/* Sparkline + period label */}
@@ -288,8 +295,8 @@ function TKpiCard({
         </div>
       )}
 
-      {!noData && (gaugePoCount != null || gaugePoStageLabel) ? (
-        <div style={{ padding: gaugeCounts != null ? "4px 13px 10px" : "6px 13px 10px", display: "flex", flexDirection: "column", gap: 2 }}>
+      {!noData && gaugeCounts != null && (gaugePoCount != null || gaugePoStageLabel) ? (
+        <div style={{ padding: "4px 13px 10px", display: "flex", flexDirection: "column", gap: 2 }}>
           {gaugePoCount != null && (
             <span style={{ fontSize: 10.5, color: "#667085", fontVariantNumeric: "tabular-nums" }}>
               {gaugePoCount.toLocaleString()} PO completed in period
