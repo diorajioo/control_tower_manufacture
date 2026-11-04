@@ -283,26 +283,25 @@ function TKpiCard({
       </div>
 
       {gaugeCounts != null && !noData && (
-        <div style={{ padding: "4px 13px 10px" }}>
+        <div style={{ padding: "4px 13px 0" }}>
           <LeadTimeGaugeBar counts={gaugeCounts} />
-          {(gaugePoCount != null || gaugePoStageLabel) && (
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 2 }}>
-              {gaugePoCount != null && (
-                <span style={{ fontSize: 10.5, color: "#667085", fontVariantNumeric: "tabular-nums" }}>
-                  {gaugePoCount.toLocaleString()} PO completed in period
-                </span>
-              )}
-              {gaugePoStageLabel && (
-                <span style={{ fontSize: 10.5, color: "#667085", fontVariantNumeric: "tabular-nums" }}>
-                  {gaugePoStageLabel}
-                </span>
-              )}
-            </div>
-          )}
         </div>
       )}
 
-      {!(gaugeCounts != null && !noData) && (
+      {!noData && (gaugePoCount != null || gaugePoStageLabel) ? (
+        <div style={{ padding: gaugeCounts != null ? "4px 13px 10px" : "6px 13px 10px", display: "flex", flexDirection: "column", gap: 2 }}>
+          {gaugePoCount != null && (
+            <span style={{ fontSize: 10.5, color: "#667085", fontVariantNumeric: "tabular-nums" }}>
+              {gaugePoCount.toLocaleString()} PO completed in period
+            </span>
+          )}
+          {gaugePoStageLabel && (
+            <span style={{ fontSize: 10.5, color: "#667085", fontVariantNumeric: "tabular-nums" }}>
+              {gaugePoStageLabel}
+            </span>
+          )}
+        </div>
+      ) : (
         <div style={{ height: 10 }} />
       )}
 
@@ -886,8 +885,8 @@ const GROUP_PROCESS_PALETTE = [
 ];
 
 interface LtAnalysis {
-  gross: { avg: number | null; trend: number | null; poCount: number };
-  nett: { avg: number | null; trend: number | null; poCount: number };
+  gross: { avg: number | null; trend: number | null; poCount: number; prevAvg?: number | null };
+  nett: { avg: number | null; trend: number | null; poCount: number; prevAvg?: number | null };
   weekly: { week: string; gross: number | null; nett: number | null }[];
   composition: { va: number; nnva: number; unva: number; wip: number };
   activities: { stage: string; activity: string; gross: number; nett: number }[];
@@ -1040,10 +1039,15 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
                 label="Lead Time"
                 value={nett != null ? fmtLt(nett, unit) : null}
                 unit={unit}
-                trend={analysis ? analysis.nett.trend : kpi?.leadTime.nettTrend ?? null}
+                trend={analysis && analysis.nett.prevAvg == null ? analysis.nett.trend : null}
+                deltaAbsValue={analysis?.nett.avg != null && analysis.nett.prevAvg != null
+                  ? +((analysis.nett.avg - analysis.nett.prevAvg) * f).toFixed(2)
+                  : undefined}
+                deltaUnit={unit}
                 inverse
                 sparkline={analysis?.weekly.map((w) => w.nett).filter((v): v is number => v != null).map((v) => v * f)}
                 sparkUnit={unit}
+                gaugePoCount={analysis?.nett.poCount}
                 footerLeft="End-to-end nett · time in active production activities"
                 noData={!kpi}
               />
