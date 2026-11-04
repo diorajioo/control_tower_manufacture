@@ -31,10 +31,13 @@ export const KPI_OPTIONS = [
 ] as const;
 
 // Overview trend chart tabs — the metrics the Overview KPI cards cover. Energy is locked until it has data.
+// upstream / downstream are set automatically by the Productivity KPI card toggle (E2E / Mixing / Filpac).
 export const TREND_KPI_OPTIONS: { value: string; label: string; unit: string; locked?: boolean }[] = [
   { value: "leadtime",     label: "Lead Time",    unit: "days"  },
   { value: "output",       label: "Output",       unit: "pcs"   },
-  { value: "productivity", label: "Productivity", unit: "pcs/mh" },
+  { value: "productivity", label: "E2E",          unit: "pcs/mh" },
+  { value: "upstream",     label: "Mixing",       unit: "kg/mh"  },
+  { value: "downstream",   label: "Filpac",       unit: "pcs/mh" },
   { value: "oee",          label: "OEE",          unit: "%"     },
   { value: "bulkloss",     label: "Yield Loss",   unit: "%"     },
   { value: "energy",       label: "Energy",       unit: "",     locked: true },

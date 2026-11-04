@@ -282,6 +282,7 @@ export function FloatingChat({ filters, kpiSnapshot, kpi, alerts }: FloatingChat
                   <Sparkles size={13} className="text-blue-200" />
                 </div>
                 <span className="text-sm font-semibold">AI Analyst</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-200 border border-amber-400/30 leading-none">Beta</span>
               </div>
               <div className="flex items-center gap-2">
                 <button

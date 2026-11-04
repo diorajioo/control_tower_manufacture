@@ -1036,13 +1036,14 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
                   : undefined}
               />
             ) : (
-              // Nett has no target (13 days is defined on gross) and no weekly series → value vs prior period only
               <TKpiCard
                 label="Lead Time"
                 value={nett != null ? fmtLt(nett, unit) : null}
                 unit={unit}
                 trend={analysis ? analysis.nett.trend : kpi?.leadTime.nettTrend ?? null}
                 inverse
+                sparkline={analysis?.weekly.map((w) => w.nett).filter((v): v is number => v != null).map((v) => v * f)}
+                sparkUnit={unit}
                 footerLeft="End-to-end nett · time in active production activities"
                 noData={!kpi}
               />
