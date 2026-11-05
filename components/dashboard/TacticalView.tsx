@@ -1046,17 +1046,22 @@ function LeadTimeSection({ kpi, loading, plantLT, stageStd, stageLoading, ltBasi
                 label="Lead Time"
                 value={nett != null ? fmtLt(nett, unit) : null}
                 unit={unit}
-                trend={analysis && analysis.nett.prevAvg == null ? analysis.nett.trend : null}
+                ltUnit={unit}
+                trend={analysis ? analysis.nett.trend : kpi?.leadTime.nettTrend ?? null}
                 deltaAbsValue={analysis?.nett.avg != null && analysis.nett.prevAvg != null
                   ? +((analysis.nett.avg - analysis.nett.prevAvg) * f).toFixed(2)
                   : undefined}
                 deltaUnit={unit}
                 inverse
                 sparkline={analysis?.weekly.map((w) => w.nett).filter((v): v is number => v != null).map((v) => v * f)}
-                sparkUnit={unit}
-                gaugePoCount={analysis?.nett.poCount}
+                sparkUnit="weeks"
                 footerLeft="End-to-end nett · time in active production activities"
                 noData={!kpi}
+                gaugeCounts={networkRow?.gauge ?? (kpi && poCount > 0 ? { onTime: kpi.leadTime.onTimeCount ?? 0, atRisk: kpi.leadTime.atRiskCount ?? 0, late: kpi.leadTime.lateCount ?? 0 } : null)}
+                gaugePoCount={poCount}
+                gaugePoStageLabel={avgPoStage > 0
+                  ? `PO & approval ${fmtLt(avgPoStage, unit)} ${unit} · excl. from nett`
+                  : undefined}
               />
             )}
             <DonutCard
