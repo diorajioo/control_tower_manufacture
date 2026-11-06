@@ -35,6 +35,8 @@ interface TrendChartProps {
   onPlantHover?: (plant: string | null) => void;
   /** Output card FG / Bulk toggle: Output shows released FG (pcs) or bulk (kg) */
   outputMode?: "fg" | "bulk";
+  /** Productivity card E2E / Mixing / Filpac toggle: which productivity the "Productivity" metric shows */
+  productivityMode?: "e2e" | "mixing" | "filpac";
 }
 
 // Tooltip numbers: thousand separators, never abbreviated — counts (pcs, kg) whole, the rest 2 decimals
@@ -55,7 +57,7 @@ const KPI_TAB_LABELS: Record<string, string> = {
   output:   "chart_tab_output",
 };
 
-export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, fillHeight = false, hideSelector = false, hoveredPlant = null, onPlantHover, outputMode = "fg" }: TrendChartProps) {
+export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, fillHeight = false, hideSelector = false, hoveredPlant = null, onPlantHover, outputMode = "fg", productivityMode = "e2e" }: TrendChartProps) {
   const [data,    setData]    = useState<Record<string, unknown>[]>([]);
   const [plants,  setPlants]  = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -90,11 +92,12 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
   // Control chart per metric: Laney P′ for count proportions (Lead Time = % PO above target, RFT = % activities
   // without ADJUST — limits move with the count n), XmR for the rest (Output, OEE, OPE, Yield Loss).
   const isPChart = (displayedKpiType === "leadtime" && ltMode === "pct") || displayedKpiType === "rft";
-  const isPct = isPChart || (displayedKpiType !== "output" && displayedKpiType !== "productivity" && displayedKpiType !== "leadtime");
+  const isPct = isPChart || !["output", "productivity", "leadtime"].includes(displayedKpiType);
   const unitLabel = displayedKpiType === "leadtime"
     ? (ltMode === "pct" ? `% PO > ${LEAD_TIME_TARGET_DAYS} d` : "days")
     : displayedKpiType === "rft" ? "% RFT"
-    : displayedKpiType === "output" && outputMode === "bulk" ? "kg" : selectedKpi.unit;
+    : displayedKpiType === "output" && outputMode === "bulk" ? "kg"
+    : displayedKpiType === "productivity" && productivityMode === "mixing" ? "kg/mh" : selectedKpi.unit;
   const countLabel = displayedKpiType === "leadtime" ? "POs" : "activities";
   // Overall = the "All plants" series from the API (default); By plant = one line per plant.
   // Yield Loss has no PLANT column in its source, so By plant is locked. Output's plant = the plant of its form
@@ -114,8 +117,12 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
     // Ignore responses from a previous metric/filter: a slow Lead Time query must not overwrite the newly picked tab
     let stale = false;
     setLoading(true);
-    // OPE is derived from OEE × 0.8 — fetch OEE data and scale client-side. Output follows the card's FG / Bulk.
-    const fetchType = kpiType === "ope" ? "oee" : kpiType === "output" && outputMode === "bulk" ? "output_bulk" : kpiType;
+    // OPE is derived from OEE × 0.8 — fetch OEE data and scale client-side. Output follows the card's FG / Bulk,
+    // Productivity the card's E2E / Mixing / Filpac (upstream / downstream = the card's Mixing / Filpac rule).
+    const fetchType = kpiType === "ope" ? "oee"
+      : kpiType === "output" && outputMode === "bulk" ? "output_bulk"
+      : kpiType === "productivity" && productivityMode !== "e2e" ? (productivityMode === "mixing" ? "upstream" : "downstream")
+      : kpiType;
     const params = new URLSearchParams({
       plant:     filters.plant,
       startDate: filters.startDate,
@@ -149,7 +156,7 @@ export function TrendChart({ filters, kpiType, onKpiChange, chartHeight = 195, f
       .finally(() => { if (!stale) setLoading(false); });
     return () => { stale = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.plant, filters.startDate, filters.endDate, kpiType, grain, outputMode]);
+  }, [filters.plant, filters.startDate, filters.endDate, kpiType, grain, outputMode, productivityMode]);
 
   // Replays the line draw-in when the shown data changes (every fetch: metric, grain, filters) or the view — not on hover
   // eslint-disable-next-line react-hooks/exhaustive-deps

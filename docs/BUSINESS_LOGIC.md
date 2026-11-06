@@ -193,6 +193,10 @@ The dashboard card shows E2E productivity as the headline value, with Manhours a
 
 `CT_MANUF_KEMAS` has **one row per operator** (same qty, minutes and OPERATOR_COUNT on each), so Filpac must be deduplicated per `ACTIVITY_ID`; summing raw rows over-weights activities with many operators (Sep 2026: 172 vs 222 pcs/mh). Trend = % vs the prior period of equal length; sparkline = weekly.
 
+**Metric Trend (Overview)** follows the card toggle (since 2026-11-06): the same three formulas per week / month (`getTrendKPIByPlant()`, kpiType `productivity` / `upstream` / `downstream`). By plant = each unit's (SFG / activity) plant; "All plants" = all units pooled (Σ / Σ), so its last point equals the card.
+
+**Open — E2E formula (2026-11-06):** E2E is an unweighted average of a ratio pre-computed in the source, while Mixing and Filpac are volume-weighted (Σ qty / Σ manhour), so E2E is not computed the same way. The formula behind `E2E_PRODUCTIVITY` is not yet known. See `docs/KNOWN_ISSUES.md` → E2E Productivity formula not aligned.
+
 ---
 
 ## Alert Thresholds

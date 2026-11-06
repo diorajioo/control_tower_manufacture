@@ -130,6 +130,12 @@ Hobby allows one cron run per day, so the runner is called at 07:00 WIB (Vercel 
 
 Without `BLOB_STORE_ID` (or `BLOB_READ_WRITE_TOKEN`) the store is a JSON file, which Vercel does not keep. Settings shows a warning; dashboard alerts still work with the recipients cached in the browser, scheduled sends do not.
 
+### E2E Productivity formula not aligned with Mixing / Filpac
+
+**Status: Open (2026-11-06, agreed with the user) · Area: `getE2EProductivity()`, `getTrendKPIByPlant('productivity')`**
+
+E2E = `AVG(E2E_PRODUCTIVITY)` over `CT_MANUF_E2E` rows: an unweighted mean of a ratio the ETL pre-computes, so a small PO weighs as much as a large one. Mixing and Filpac are Σ qty / Σ manhour (volume-weighted). To do: find out how the ETL computes `E2E_PRODUCTIVITY`, compare with an E2E Σ pcs / Σ manhour version on live data, let the user choose, then change card + trend together (and `docs/BUSINESS_LOGIC.md` → Productivity).
+
 ### E2E Productivity Has No Prior-Period Trend for YTD
 
 **Status: Open (data limitation)**

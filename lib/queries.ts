@@ -1421,77 +1421,34 @@ export async function getTrendKPIByPlant(
       `, [startDate, endDate, ...plantBinds(plant), LEAD_TIME_TARGET_DAYS, LEAD_TIME_TARGET_DAYS]);
 
     case "upstream":
-      // Tableau LOD: {FIXED [Process Order Sfg]: MAX(Release_Bulk)/((SUM(Leadtime)/60)/SUM(Operators))} → AVG per week per plant
+    case "downstream": {
+      // Mixing (kg/manhour) / Filpac (pcs/manhour) — the same units and rule as the Productivity card's toggle
+      // (getStageProductivity): Σ qty / Σ manhour per week / month, so the trend's last point matches the card.
+      // Each unit (SFG for Mixing, activity for Filpac) counts in its own plant; "All plants" sums every unit
+      // (empty grouping-set PLANT, same detection as OEE — ClickHouse has no GROUPING()).
+      const mixing = kpiType === "upstream";
+      const doneCol = mixing ? "OLAH_COMPLETED_AT" : "KEMAS_COMPLETED_AT";
+      const unitSql = mixing
+        ? `SELECT PROCESS_ORDER_SFG, MAX(PLANT) AS UNIT_PLANT, MAX(RELEASE_BULK) AS QTY, SUM(MANHOUR) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
+           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
+           WHERE ACTIVITY = 'MIXING' AND ${prodDate(doneCol)} BETWEEN ${dateRange} ${pf}
+           GROUP BY PROCESS_ORDER_SFG`
+        : `SELECT ACTIVITY_ID, MAX(PLANT) AS UNIT_PLANT, MAX(QTY_FG_GOOD) AS QTY, MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT) AS MH, MAX(KEMAS_COMPLETED_AT) AS DONE_AT
+           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
+           WHERE ACTIVITY = 'FILPAC' AND ${prodDate(doneCol)} BETWEEN ${dateRange} ${pf}
+           GROUP BY ACTIVITY_ID`;
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        WITH activity_lvl AS (
-          SELECT
-            PROCESS_ORDER_SFG,
-            PLANT,
-            DATE_TRUNC('${unit}', ${prodDate("OLAH_COMPLETED_AT")}) AS WEEK,
-            POSITION,
-            ACTIVITY,
-            ACTIVITY_ID,
-            MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN RELEASE_BULK END)       AS release_bulk_sfg,
-            MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN LEADTIME_IN_MINUTE END) AS leadtime_per_act,
-            MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN OPERATOR_COUNT END)     AS operator_per_act
-          FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-          WHERE ${prodDate("OLAH_COMPLETED_AT")} BETWEEN ${dateRange}
-            ${pf}
-          GROUP BY PROCESS_ORDER_SFG, PLANT, WEEK, POSITION, ACTIVITY, ACTIVITY_ID
-        ),
-        position_lvl AS (
-          SELECT
-            PROCESS_ORDER_SFG, PLANT, WEEK,
-            MAX(release_bulk_sfg)      AS release_bulk_sfg,
-            SUM(leadtime_per_act)      AS leadtime_sum,
-            SUM(operator_per_act)      AS operator_per_position
-          FROM activity_lvl
-          GROUP BY PROCESS_ORDER_SFG, PLANT, WEEK, POSITION
-        ),
-        sfg_lvl AS (
-          SELECT
-            PROCESS_ORDER_SFG, PLANT, WEEK,
-            MAX(release_bulk_sfg)      AS max_release_bulk,
-            SUM(leadtime_sum)          AS total_leadtime_min,
-            SUM(operator_per_position) AS total_operators
-          FROM position_lvl
-          GROUP BY PROCESS_ORDER_SFG, PLANT, WEEK
-        )
-        SELECT
-          WEEK, PLANT,
-          AVG(
-            CASE WHEN total_leadtime_min > 0 AND total_operators > 0
-            THEN max_release_bulk / (total_leadtime_min / 60.0) / total_operators
-            END
-          ) AS KPI_VALUE
-        FROM sfg_lvl
-        WHERE max_release_bulk > 0
-        GROUP BY WEEK, PLANT
-        ORDER BY WEEK
-      `, [startDate, endDate, ...plantBinds(plant)]);
-
-    case "downstream":
-      // {FIXED [Process Order Fg]: SUM(QTY_FG_GOOD)/SUM(LT_HOURS)/MAX(OPERATORS)} → AVG per week
-      return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT WEEK, PLANT, AVG(po_prod) AS KPI_VALUE
+        SELECT WK AS WEEK, CASE WHEN COALESCE(UNIT_PLANT, '') = '' THEN 'All plants' ELSE UNIT_PLANT END AS PLANT,
+          SUM(QTY) / NULLIF(SUM(MH), 0) AS KPI_VALUE
         FROM (
-          SELECT
-            PROCESS_ORDER_FG,
-            DATE_TRUNC('${unit}', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
-            PLANT,
-            SUM(QTY_FG_GOOD)
-              / NULLIF(SUM(LEADTIME_IN_MINUTE) / 60.0, 0)
-              / NULLIF(MAX(OPERATOR_COUNT), 0) AS po_prod
-          FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-          WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ${dateRange}
-            AND LEADTIME_IN_MINUTE > 0
-            AND OPERATOR_COUNT > 0
-            ${pf}
-          GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
-        ) sub
-        GROUP BY WEEK, PLANT
-        ORDER BY WEEK
+          SELECT DATE_TRUNC('${unit}', ${prodDate("DONE_AT")}) AS WK, COALESCE(UNIT_PLANT, '(Not set)') AS UNIT_PLANT, QTY, MH
+          FROM (${unitSql}) u
+          WHERE QTY > 0 AND MH > 0
+        ) w
+        GROUP BY GROUPING SETS ((WK, UNIT_PLANT), (WK))
+        ORDER BY WK
       `, [startDate, endDate, ...plantBinds(plant)]);
+    }
 
     case "e2e":
       // {FIXED [Process Order Fg]: AVG([E2E Productivity])} → AVG per week per plant

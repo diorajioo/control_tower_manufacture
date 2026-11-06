@@ -4,6 +4,11 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-11-06
+
+### Fixed
+- **Metric Trend follows the Productivity card toggle with the card's numbers** (Overview Strategic): the dropdown has one **Productivity** entry; the card's E2E / Mixing / Filpac toggle picks which one it shows (`productivityMode`), and the unit chip follows (pcs/mh · kg/mh · pcs/mh). Mixing and Filpac now use the card's rule (`getStageProductivity`: Σ qty / Σ manhour, kg/mh and pcs/mh) per week / month, with an exact "All plants" line, so Overall is no longer empty and the last point equals the card (checked on Snowflake, weeks of 19 Oct – 2 Nov). The chart no longer treats them as percentages. Trend cache v11.
+
 ## 2026-11-03
 
 ### Added

@@ -92,10 +92,6 @@ const PROD_VIEWS: Record<ProdView, { label: string; unit: string; sparkUnit: str
   mixing: { label: "Productivity", unit: "kg/manhour",  sparkUnit: "kg/mh",  footer: "Released bulk per operator manhour in Mixing" },
   filpac: { label: "Productivity", unit: "pcs/manhour", sparkUnit: "pcs/mh", footer: "Good pcs per operator manhour in Filpac" },
 };
-// Two-way sync: Productivity KPI card toggle ↔ Metric Trend kpiType
-const PROD_TO_KPI: Record<ProdView, string> = { e2e: "productivity", mixing: "upstream", filpac: "downstream" };
-const KPI_TO_PROD: Record<string, ProdView> = { productivity: "e2e", upstream: "mixing", downstream: "filpac" };
-const PROD_KPI_SET = new Set(Object.values(PROD_TO_KPI));
 
 interface Filters {
   plant: string;
@@ -153,18 +149,12 @@ export default function DashboardPage() {
   const trendRef = useRef<HTMLDivElement>(null);
   const showTrend = useCallback((k: string) => {
     setKpiType(k);
-    if (k in KPI_TO_PROD) setProdView(KPI_TO_PROD[k]);
     trendRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
-  // Productivity card toggle → also switch the Metric Trend chart
+  // Productivity card toggle → Metric Trend shows Productivity in that variant (productivityMode)
   const handleProdView = useCallback((v: ProdView) => {
     setProdView(v);
-    setKpiType(PROD_TO_KPI[v]);
-  }, []);
-  // Trend dropdown → also sync the Productivity card when switching between productivity variants
-  const handleKpiChange = useCallback((k: string) => {
-    setKpiType(k);
-    if (k in KPI_TO_PROD) setProdView(KPI_TO_PROD[k]);
+    setKpiType("productivity");
   }, []);
   const teamsSettingsRef = useRef<{ enabled?: boolean; recipients?: Array<{ email: string; kpis: Record<string, boolean> }> } | null>(null);
 
@@ -447,7 +437,7 @@ export default function DashboardPage() {
                     info={v.footer}
                     targetText="Target not defined"
                     priorSuffix={prev ? `(${prev.toFixed(1)})` : undefined}
-                    onSparkClick={() => showTrend(PROD_TO_KPI[prodView])}
+                    onSparkClick={() => showTrend("productivity")}
                     sparkline={(prodView === "e2e" ? kpi?.productivity?.sparkline : stage?.sparkline) ?? []}
                     toggle={
                       <SegmentedToggle
@@ -536,7 +526,7 @@ export default function DashboardPage() {
             ) : (
               <>
                 <div ref={trendRef} className="h-full min-h-0 min-w-0">
-                  <TrendChart filters={filters} kpiType={kpiType} onKpiChange={handleKpiChange} outputMode={outputMode} fillHeight />
+                  <TrendChart filters={filters} kpiType={kpiType} onKpiChange={setKpiType} outputMode={outputMode} productivityMode={prodView} fillHeight />
                 </div>
                 <AIRisksPanel
                   kpi={kpi}
