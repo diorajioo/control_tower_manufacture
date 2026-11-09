@@ -1145,8 +1145,8 @@ export async function getDownstreamProductivity(filters: QueryFilters) {
 
 // Stage productivity → Overview Productivity card toggle (E2E · Mixing · Filpac).
 // Both tables have one row per operator per activity; MANHOUR/LEADTIME_IN_MINUTE and qty repeat on every operator row.
-// Mixing: one MIXING activity per SFG — MAX(MANHOUR) deduplicates the repeating value, MAX(RELEASE_BULK) takes qty once.
-//   Unit = PROCESS_ORDER_SFG; period aggregate = Σ qty / Σ manhour (volume-weighted).
+// Mixing: one MIXING activity per SFG — MAX(MANHOUR)/60×MAX(OPERATOR_COUNT) = man-hours, MAX(RELEASE_BULK) takes qty once.
+//   Unit = PROCESS_ORDER_SFG; period aggregate = Σ qty / Σ man-hours (volume-weighted, kg/mh).
 // Filpac: one row per ACTIVITY_ID — MAX(LEADTIME) × MAX(OPERATOR_COUNT) = man-hours for that slot.
 //   Unit = ACTIVITY_ID; period aggregate = Σ qty / Σ manhour (volume-weighted).
 // grain = 'week' adds a WEEK column for the sparkline; otherwise one row for the period.
@@ -1157,7 +1157,7 @@ export async function getStageProductivity(filters: QueryFilters, stage: StagePr
   const binds = [...dateBinds, ...plantBinds(filters.plant)];
   const week = grain === "week" ? `DATE_TRUNC('week', ${prodDate("DONE_AT")})` : "NULL";
   const unitSql = stage === "mixing"
-    ? `SELECT PROCESS_ORDER_SFG, MAX(RELEASE_BULK) AS QTY, MAX(MANHOUR) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
+    ? `SELECT PROCESS_ORDER_SFG, MAX(RELEASE_BULK) AS QTY, MAX(MANHOUR) / 60.0 * MAX(OPERATOR_COUNT) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
        WHERE ACTIVITY = 'MIXING' AND ${datePred} ${plantWhere(filters.plant)}
        GROUP BY PROCESS_ORDER_SFG`
@@ -1439,7 +1439,7 @@ export async function getTrendKPIByPlant(
       const mixing = kpiType === "upstream";
       const doneCol = mixing ? "OLAH_COMPLETED_AT" : "KEMAS_COMPLETED_AT";
       const unitSql = mixing
-        ? `SELECT PROCESS_ORDER_SFG, MAX(PLANT) AS UNIT_PLANT, MAX(RELEASE_BULK) AS QTY, MAX(MANHOUR) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
+        ? `SELECT PROCESS_ORDER_SFG, MAX(PLANT) AS UNIT_PLANT, MAX(RELEASE_BULK) AS QTY, MAX(MANHOUR) / 60.0 * MAX(OPERATOR_COUNT) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
            FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
            WHERE ACTIVITY = 'MIXING' AND ${prodDate(doneCol)} BETWEEN ${dateRange} ${pf}
            GROUP BY PROCESS_ORDER_SFG`
