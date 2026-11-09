@@ -1032,15 +1032,13 @@ export async function getOutputKPI(filters: QueryFilters) {
 export async function getE2EProductivity(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ AVG_E2E_PROD: number }>(`
-    SELECT AVG(
-      QTY_KEMAS / NULLIF(
-        (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
-      )
-    ) AS AVG_E2E_PROD
+    SELECT
+      SUM(QTY_KEMAS) / NULLIF(
+        SUM(UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + SUM(DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
+      ) AS AVG_E2E_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
     WHERE ${datePred} ${plantWhere(filters.plant)}
       AND QTY_KEMAS > 0
-      AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
   `, [...dateBinds, ...plantBinds(filters.plant)]);
   return { avgE2EProd: Number((rows[0]?.AVG_E2E_PROD ?? 0).toFixed(1)) };
 }
@@ -1239,15 +1237,12 @@ export async function getE2EWeekly(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ WEEK: string; AVG_PROD: number }>(`
     SELECT DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
-      AVG(
-        QTY_KEMAS / NULLIF(
-          (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
-        )
+      SUM(QTY_KEMAS) / NULLIF(
+        SUM(UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + SUM(DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
       ) AS AVG_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
     WHERE ${datePred} ${plantWhere(filters.plant)}
       AND QTY_KEMAS > 0
-      AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
     GROUP BY 1 ORDER BY 1
   `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
@@ -1463,15 +1458,12 @@ export async function getTrendKPIByPlant(
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
         SELECT DATE_TRUNC('${unit}', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
           CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
-          AVG(
-            QTY_KEMAS / NULLIF(
-              (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
-            )
+          SUM(QTY_KEMAS) / NULLIF(
+            SUM(UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + SUM(DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
           ) AS KPI_VALUE
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
         WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ${dateRange} ${pf}
           AND QTY_KEMAS > 0
-          AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
         GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
         ORDER BY WEEK
       `, [startDate, endDate, ...plantBinds(plant)]);
