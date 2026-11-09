@@ -1121,24 +1121,28 @@ export async function getUpstreamProductivity(filters: QueryFilters) {
   return { avgUpstreamProd: Number((rows[0]?.AVG_UPSTREAM_PROD ?? 0).toFixed(1)) };
 }
 
-// Downstream Productivity → CT_MANUF_KEMAS: QTY_FG_GOOD / (LEADTIME_IN_MINUTE/60) / OPERATOR_COUNT
-// Matches Tableau LOD: {FIXED [PROCESS_ORDER_FG]: SUM/SUM/MAX}
+// Downstream Productivity → CT_MANUF_KEMAS, aligned with getStageProductivity("filpac"):
+// dedup per ACTIVITY_ID (MAX qty, MAX(LT)/60×MAX(OPS) = manhours), then Σ/Σ per PO, then AVG at period.
 export async function getDownstreamProductivity(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ AVG_DOWNSTREAM_PROD: number }>(`
     SELECT AVG(PO_PROD) AS AVG_DOWNSTREAM_PROD
     FROM (
-      SELECT
-        PROCESS_ORDER_FG,
-        SUM(QTY_FG_GOOD)
-          / NULLIF(SUM(LEADTIME_IN_MINUTE) / 60.0, 0)
-          / NULLIF(MAX(OPERATOR_COUNT), 0) AS PO_PROD
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-      WHERE ${datePred}
-        AND LEADTIME_IN_MINUTE > 0 AND OPERATOR_COUNT > 0
-      ${plantWhere(filters.plant)}
+      SELECT PROCESS_ORDER_FG,
+        SUM(QTY) / NULLIF(SUM(MH), 0) AS PO_PROD
+      FROM (
+        SELECT PROCESS_ORDER_FG, ACTIVITY_ID,
+          MAX(QTY_FG_GOOD) AS QTY,
+          MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT) AS MH
+        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
+        WHERE ${datePred}
+          AND LEADTIME_IN_MINUTE > 0 AND OPERATOR_COUNT > 0
+        ${plantWhere(filters.plant)}
+        GROUP BY PROCESS_ORDER_FG, ACTIVITY_ID
+      ) act
+      WHERE QTY > 0 AND MH > 0
       GROUP BY PROCESS_ORDER_FG
-    ) sub
+    ) po
   `, [...dateBinds, ...plantBinds(filters.plant)]);
   return { avgDownstreamProd: Number((rows[0]?.AVG_DOWNSTREAM_PROD ?? 0).toFixed(1)) };
 }
