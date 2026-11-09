@@ -1072,8 +1072,10 @@ export async function getPlantDrivers(filters: QueryFilters) {
   };
 }
 
-// Upstream Productivity → CT_MANUF_OLAH
-// Tableau LOD: {FIXED [Process Order Sfg]: MAX(Release_Bulk_per_SFG) / (SUM(Leadtime_per_ActivityID)/60) / SUM(Operator_per_Position)}
+// Upstream Productivity → CT_MANUF_OLAH (kg/mh, sub-stat on the Productivity card).
+// Rows repeat per operator; dedup via three CTEs: activity → position → SFG.
+// Only rows where RELEASE_BULK IS NOT NULL carry qty/lt/ops data (CASE WHEN guards).
+// Period value = AVG(bulk / (total_lt_min/60) / total_ops) per SFG.
 export async function getUpstreamProductivity(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("OLAH_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ AVG_UPSTREAM_PROD: number }>(`
@@ -1081,7 +1083,6 @@ export async function getUpstreamProductivity(filters: QueryFilters) {
       SELECT
         PROCESS_ORDER_SFG,
         POSITION,
-        ACTIVITY,
         ACTIVITY_ID,
         MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN RELEASE_BULK END)       AS release_bulk_sfg,
         MAX(CASE WHEN RELEASE_BULK IS NOT NULL THEN LEADTIME_IN_MINUTE END) AS leadtime_per_act,
@@ -1094,9 +1095,9 @@ export async function getUpstreamProductivity(filters: QueryFilters) {
     position_lvl AS (
       SELECT
         PROCESS_ORDER_SFG,
-        MAX(release_bulk_sfg)      AS release_bulk_sfg,
-        SUM(leadtime_per_act)      AS leadtime_sum,
-        SUM(operator_per_act)      AS operator_per_position
+        MAX(release_bulk_sfg)  AS release_bulk_sfg,
+        SUM(leadtime_per_act)  AS leadtime_sum,
+        SUM(operator_per_act)  AS operator_per_position
       FROM activity_lvl
       GROUP BY PROCESS_ORDER_SFG, POSITION
     ),
@@ -1109,12 +1110,11 @@ export async function getUpstreamProductivity(filters: QueryFilters) {
       FROM position_lvl
       GROUP BY PROCESS_ORDER_SFG
     )
-    SELECT
-      AVG(
-        CASE WHEN total_leadtime_min > 0 AND total_operators > 0
+    SELECT AVG(
+      CASE WHEN total_leadtime_min > 0 AND total_operators > 0
         THEN max_release_bulk / (total_leadtime_min / 60.0) / total_operators
-        END
-      ) AS AVG_UPSTREAM_PROD
+      END
+    ) AS AVG_UPSTREAM_PROD
     FROM sfg_lvl
     WHERE max_release_bulk > 0
   `, [...dateBinds, ...plantBinds(filters.plant)]);
@@ -1147,12 +1147,9 @@ export async function getDownstreamProductivity(filters: QueryFilters) {
   return { avgDownstreamProd: Number((rows[0]?.AVG_DOWNSTREAM_PROD ?? 0).toFixed(1)) };
 }
 
-// Stage productivity → Overview Productivity card toggle (E2E · Mixing · Filpac).
-// Both tables have one row per operator per activity; MANHOUR/LEADTIME_IN_MINUTE and qty repeat on every operator row.
-// Mixing: one MIXING activity per SFG — MANHOUR is pre-computed man-hours, MAX deduplicates operator rows; MAX(RELEASE_BULK) takes qty once.
-//   Unit = PROCESS_ORDER_SFG; period aggregate = Σ qty / Σ man-hours (volume-weighted, kg/mh).
-// Filpac: one row per operator per ACTIVITY_ID — MAX(QTY) and MAX(LT)×MAX(OPS) deduplicate; period aggregate = Σ/Σ (volume-weighted, pcs/mh).
-// grain = 'week' adds a WEEK column for the sparkline; otherwise one row for the period.
+// Stage productivity → Overview Productivity card toggle (Mixing kg/mh · Filpac pcs/mh).
+// Both tables repeat per operator; dedup: Mixing per SFG (SUM(MANHOUR)), Filpac per ACTIVITY_ID (MAX(LT)/60×MAX(OPS)).
+// Period aggregate = Σ qty / Σ mh (volume-weighted). grain='week' adds WEEK for sparklines.
 export type StageProductivity = "mixing" | "filpac";
 export async function getStageProductivity(filters: QueryFilters, stage: StageProductivity, grain?: "week") {
   const dateCol = stage === "mixing" ? "OLAH_COMPLETED_AT" : "KEMAS_COMPLETED_AT";
