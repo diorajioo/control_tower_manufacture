@@ -1027,43 +1027,20 @@ export async function getOutputKPI(filters: QueryFilters) {
   };
 }
 
-// E2E Productivity: Output FG / (upstream manhours + downstream manhours) per PROCESS_ORDER_FG, then AVG.
-// Upstream = MIXING + WEIGHING from CT_MANUF_OLAH (linked via PROCESS_ORDER_FG).
-// Downstream = FILPAC from CT_MANUF_KEMAS (UNBOXING excluded by ACTIVITY = 'FILPAC' filter).
-// CT_MANUF_KEMAS has one row per operator per slot → deduplicate per ACTIVITY_ID first.
+// E2E Productivity: QTY_KEMAS / (upstream_mh + downstream_mh) per PO, then AVG.
+// CT_MANUF_E2E already has all columns; UNBOXING excluded in upstream/downstream by the table definition.
 export async function getE2EProductivity(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ AVG_E2E_PROD: number }>(`
-    WITH kemas_slot AS (
-      SELECT PROCESS_ORDER_FG, ACTIVITY_ID,
-        MAX(QTY_FG_GOOD)                                         AS slot_qty,
-        MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT)    AS slot_mh
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-      WHERE ACTIVITY = 'FILPAC' AND ${datePred} ${plantWhere(filters.plant)}
-      GROUP BY PROCESS_ORDER_FG, ACTIVITY_ID
-    ),
-    kemas_per_po AS (
-      SELECT PROCESS_ORDER_FG, SUM(slot_qty) AS qty_fg, SUM(slot_mh) AS downstream_mh
-      FROM kemas_slot GROUP BY PROCESS_ORDER_FG
-    ),
-    olah_per_po AS (
-      SELECT PROCESS_ORDER_FG, SUM(slot_mh) AS upstream_mh
-      FROM (
-        SELECT PROCESS_ORDER_FG, PROCESS_ORDER_SFG, ACTIVITY_ID,
-          MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT) AS slot_mh
-        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-        WHERE ACTIVITY IN ('MIXING', 'WEIGHING')
-          AND PROCESS_ORDER_FG IN (SELECT PROCESS_ORDER_FG FROM kemas_per_po)
-        GROUP BY PROCESS_ORDER_FG, PROCESS_ORDER_SFG, ACTIVITY_ID
-      ) o GROUP BY PROCESS_ORDER_FG
-    )
     SELECT AVG(
-      CASE WHEN k.downstream_mh + COALESCE(o.upstream_mh, 0) > 0
-      THEN k.qty_fg / (k.downstream_mh + COALESCE(o.upstream_mh, 0)) END
+      QTY_KEMAS / NULLIF(
+        (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
+      )
     ) AS AVG_E2E_PROD
-    FROM kemas_per_po k
-    LEFT JOIN olah_per_po o ON k.PROCESS_ORDER_FG = o.PROCESS_ORDER_FG
-    WHERE k.qty_fg > 0
+    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+    WHERE ${datePred} ${plantWhere(filters.plant)}
+      AND QTY_KEMAS > 0
+      AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
   `, [...dateBinds, ...plantBinds(filters.plant)]);
   return { avgE2EProd: Number((rows[0]?.AVG_E2E_PROD ?? 0).toFixed(1)) };
 }
@@ -1261,38 +1238,17 @@ export async function getOEEWeekly(filters: QueryFilters) {
 export async function getE2EWeekly(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ WEEK: string; AVG_PROD: number }>(`
-    WITH kemas_slot AS (
-      SELECT PROCESS_ORDER_FG, ACTIVITY_ID,
-        MAX(KEMAS_COMPLETED_AT)                                  AS done_at,
-        MAX(QTY_FG_GOOD)                                         AS slot_qty,
-        MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT)    AS slot_mh
-      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-      WHERE ACTIVITY = 'FILPAC' AND ${datePred} ${plantWhere(filters.plant)}
-      GROUP BY PROCESS_ORDER_FG, ACTIVITY_ID
-    ),
-    kemas_per_po AS (
-      SELECT PROCESS_ORDER_FG,
-        DATE_TRUNC('week', ${prodDate("MAX(done_at)")}) AS WEEK,
-        SUM(slot_qty) AS qty_fg, SUM(slot_mh) AS downstream_mh
-      FROM kemas_slot GROUP BY PROCESS_ORDER_FG
-    ),
-    olah_per_po AS (
-      SELECT PROCESS_ORDER_FG, SUM(slot_mh) AS upstream_mh
-      FROM (
-        SELECT PROCESS_ORDER_FG, PROCESS_ORDER_SFG, ACTIVITY_ID,
-          MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT) AS slot_mh
-        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-        WHERE ACTIVITY IN ('MIXING', 'WEIGHING')
-          AND PROCESS_ORDER_FG IN (SELECT PROCESS_ORDER_FG FROM kemas_per_po)
-        GROUP BY PROCESS_ORDER_FG, PROCESS_ORDER_SFG, ACTIVITY_ID
-      ) o GROUP BY PROCESS_ORDER_FG
-    )
-    SELECT k.WEEK,
-      AVG(k.qty_fg / NULLIF(k.downstream_mh + COALESCE(o.upstream_mh, 0), 0)) AS AVG_PROD
-    FROM kemas_per_po k
-    LEFT JOIN olah_per_po o ON k.PROCESS_ORDER_FG = o.PROCESS_ORDER_FG
-    WHERE k.qty_fg > 0 AND (k.downstream_mh + COALESCE(o.upstream_mh, 0)) > 0
-    GROUP BY k.WEEK ORDER BY k.WEEK
+    SELECT DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
+      AVG(
+        QTY_KEMAS / NULLIF(
+          (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
+        )
+      ) AS AVG_PROD
+    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+    WHERE ${datePred} ${plantWhere(filters.plant)}
+      AND QTY_KEMAS > 0
+      AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+    GROUP BY 1 ORDER BY 1
   `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
 
@@ -1504,50 +1460,20 @@ export async function getTrendKPIByPlant(
     }
 
     case "e2e":
-      // E2E = QTY_FG / (upstream_mh + downstream_mh) per PO, then AVG per week × plant.
-      // Upstream = MIXING + WEIGHING (CT_MANUF_OLAH); downstream = FILPAC (CT_MANUF_KEMAS, UNBOXING excluded).
-      // Plant = kemas plant (the plant that produced the FG). GROUPING SETS → "All plants" row.
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        WITH kemas_slot AS (
-          SELECT PROCESS_ORDER_FG, ACTIVITY_ID,
-            MAX(PLANT) AS po_plant,
-            DATE_TRUNC('${unit}', ${prodDate("MAX(KEMAS_COMPLETED_AT)")}) AS WK,
-            MAX(QTY_FG_GOOD)                                        AS slot_qty,
-            MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT)   AS slot_mh
-          FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-          WHERE ACTIVITY = 'FILPAC'
-            AND ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ${dateRange} ${pf}
-          GROUP BY PROCESS_ORDER_FG, ACTIVITY_ID
-        ),
-        kemas_per_po AS (
-          SELECT PROCESS_ORDER_FG, MAX(po_plant) AS po_plant, MAX(WK) AS WK,
-            SUM(slot_qty) AS qty_fg, SUM(slot_mh) AS downstream_mh
-          FROM kemas_slot GROUP BY PROCESS_ORDER_FG
-        ),
-        olah_per_po AS (
-          SELECT PROCESS_ORDER_FG, SUM(slot_mh) AS upstream_mh
-          FROM (
-            SELECT PROCESS_ORDER_FG, PROCESS_ORDER_SFG, ACTIVITY_ID,
-              MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT) AS slot_mh
-            FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-            WHERE ACTIVITY IN ('MIXING', 'WEIGHING')
-              AND PROCESS_ORDER_FG IN (SELECT PROCESS_ORDER_FG FROM kemas_per_po)
-            GROUP BY PROCESS_ORDER_FG, PROCESS_ORDER_SFG, ACTIVITY_ID
-          ) o GROUP BY PROCESS_ORDER_FG
-        ),
-        po_e2e AS (
-          SELECT k.WK, k.po_plant AS PLANT,
-            k.qty_fg / NULLIF(k.downstream_mh + COALESCE(o.upstream_mh, 0), 0) AS po_prod
-          FROM kemas_per_po k
-          LEFT JOIN olah_per_po o ON k.PROCESS_ORDER_FG = o.PROCESS_ORDER_FG
-          WHERE k.qty_fg > 0 AND (k.downstream_mh + COALESCE(o.upstream_mh, 0)) > 0
-        )
-        SELECT WK AS WEEK,
+        SELECT DATE_TRUNC('${unit}', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
           CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
-          AVG(po_prod) AS KPI_VALUE
-        FROM po_e2e
-        GROUP BY GROUPING SETS ((WK, PLANT), (WK))
-        ORDER BY WK
+          AVG(
+            QTY_KEMAS / NULLIF(
+              (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
+            )
+          ) AS KPI_VALUE
+        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+        WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ${dateRange} ${pf}
+          AND QTY_KEMAS > 0
+          AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+        GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
+        ORDER BY WEEK
       `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "output":
