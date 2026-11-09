@@ -1147,8 +1147,7 @@ export async function getDownstreamProductivity(filters: QueryFilters) {
 // Both tables have one row per operator per activity; MANHOUR/LEADTIME_IN_MINUTE and qty repeat on every operator row.
 // Mixing: one MIXING activity per SFG — MANHOUR is pre-computed man-hours, MAX deduplicates operator rows; MAX(RELEASE_BULK) takes qty once.
 //   Unit = PROCESS_ORDER_SFG; period aggregate = Σ qty / Σ man-hours (volume-weighted, kg/mh).
-// Filpac: one row per ACTIVITY_ID — MAX(LEADTIME) × MAX(OPERATOR_COUNT) = man-hours for that slot.
-//   Unit = ACTIVITY_ID; period aggregate = Σ qty / Σ manhour (volume-weighted).
+// Filpac: matches Tableau LOD — per ACTIVITY_ID: rate = MAX(QTY)/(MAX(LT)/60×MAX(OPS)); per PO: MAX(rate); period: AVG(po_rate).
 // grain = 'week' adds a WEEK column for the sparkline; otherwise one row for the period.
 export type StageProductivity = "mixing" | "filpac";
 export async function getStageProductivity(filters: QueryFilters, stage: StageProductivity, grain?: "week") {
@@ -1156,15 +1155,33 @@ export async function getStageProductivity(filters: QueryFilters, stage: StagePr
   const { sql: datePred, binds: dateBinds } = periodDateWhere(dateCol, filters.period, filters.startDate, filters.endDate);
   const binds = [...dateBinds, ...plantBinds(filters.plant)];
   const week = grain === "week" ? `DATE_TRUNC('week', ${prodDate("DONE_AT")})` : "NULL";
-  const unitSql = stage === "mixing"
-    ? `SELECT PROCESS_ORDER_SFG, MAX(RELEASE_BULK) AS QTY, MAX(MANHOUR) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
-       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-       WHERE ACTIVITY = 'MIXING' AND ${datePred} ${plantWhere(filters.plant)}
-       GROUP BY PROCESS_ORDER_SFG`
-    : `SELECT ACTIVITY_ID, MAX(QTY_FG_GOOD) AS QTY, MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT) AS MH, MAX(KEMAS_COMPLETED_AT) AS DONE_AT
-       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-       WHERE ACTIVITY = 'FILPAC' AND ${datePred} ${plantWhere(filters.plant)}
-       GROUP BY ACTIVITY_ID`;
+
+  if (stage === "filpac") {
+    return executeQuery<{ WEEK: string | null; PROD: number | null }>(`
+      SELECT ${week} AS WEEK, AVG(po_rate) AS PROD
+      FROM (
+        SELECT PROCESS_ORDER_FG, MAX(act_rate) AS po_rate, MAX(done_at) AS DONE_AT
+        FROM (
+          SELECT PROCESS_ORDER_FG, ACTIVITY_ID,
+            MAX(KEMAS_COMPLETED_AT) AS done_at,
+            MAX(QTY_FG_GOOD) / NULLIF(MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT), 0) AS act_rate
+          FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
+          WHERE ACTIVITY = 'FILPAC' AND ${datePred} ${plantWhere(filters.plant)}
+            AND QTY_FG_GOOD > 0 AND LEADTIME_IN_MINUTE > 0 AND OPERATOR_COUNT > 0
+          GROUP BY PROCESS_ORDER_FG, ACTIVITY_ID
+        ) act_lvl
+        GROUP BY PROCESS_ORDER_FG
+      ) po_lvl
+      WHERE po_rate > 0
+      GROUP BY 1
+      ORDER BY 1
+    `, binds);
+  }
+
+  const unitSql = `SELECT PROCESS_ORDER_SFG, MAX(RELEASE_BULK) AS QTY, MAX(MANHOUR) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
+     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
+     WHERE ACTIVITY = 'MIXING' AND ${datePred} ${plantWhere(filters.plant)}
+     GROUP BY PROCESS_ORDER_SFG`;
   return executeQuery<{ WEEK: string | null; PROD: number | null }>(`
     SELECT ${week} AS WEEK, SUM(QTY) / NULLIF(SUM(MH), 0) AS PROD
     FROM (${unitSql}) u
@@ -1438,15 +1455,37 @@ export async function getTrendKPIByPlant(
       // (empty grouping-set PLANT, same detection as OEE — ClickHouse has no GROUPING()).
       const mixing = kpiType === "upstream";
       const doneCol = mixing ? "OLAH_COMPLETED_AT" : "KEMAS_COMPLETED_AT";
-      const unitSql = mixing
-        ? `SELECT PROCESS_ORDER_SFG, MAX(PLANT) AS UNIT_PLANT, MAX(RELEASE_BULK) AS QTY, MAX(MANHOUR) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
+      if (!mixing) {
+        // Filpac downstream: matches Tableau LOD — per ACTIVITY_ID rate, per PO MAX, period AVG with GROUPING SETS for plant.
+        return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
+          SELECT WK AS WEEK, CASE WHEN COALESCE(UNIT_PLANT, '') = '' THEN 'All plants' ELSE UNIT_PLANT END AS PLANT,
+            AVG(po_rate) AS KPI_VALUE
+          FROM (
+            SELECT DATE_TRUNC('${unit}', ${prodDate("DONE_AT")}) AS WK, COALESCE(UNIT_PLANT, '(Not set)') AS UNIT_PLANT, po_rate
+            FROM (
+              SELECT PROCESS_ORDER_FG, MAX(PLANT) AS UNIT_PLANT, MAX(done_at) AS DONE_AT, MAX(act_rate) AS po_rate
+              FROM (
+                SELECT PROCESS_ORDER_FG, MAX(PLANT) AS PLANT, ACTIVITY_ID,
+                  MAX(KEMAS_COMPLETED_AT) AS done_at,
+                  MAX(QTY_FG_GOOD) / NULLIF(MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT), 0) AS act_rate
+                FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
+                WHERE ACTIVITY = 'FILPAC' AND ${prodDate(doneCol)} BETWEEN ${dateRange} ${pf}
+                  AND QTY_FG_GOOD > 0 AND LEADTIME_IN_MINUTE > 0 AND OPERATOR_COUNT > 0
+                GROUP BY PROCESS_ORDER_FG, ACTIVITY_ID
+              ) act_lvl
+              GROUP BY PROCESS_ORDER_FG
+            ) po_lvl
+            WHERE po_rate > 0
+          ) w
+          GROUP BY GROUPING SETS ((WK, UNIT_PLANT), (WK))
+          ORDER BY WK
+        `, [startDate, endDate, ...plantBinds(plant)]);
+      }
+
+      const unitSql = `SELECT PROCESS_ORDER_SFG, MAX(PLANT) AS UNIT_PLANT, MAX(RELEASE_BULK) AS QTY, MAX(MANHOUR) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
            FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
            WHERE ACTIVITY = 'MIXING' AND ${prodDate(doneCol)} BETWEEN ${dateRange} ${pf}
-           GROUP BY PROCESS_ORDER_SFG`
-        : `SELECT ACTIVITY_ID, MAX(PLANT) AS UNIT_PLANT, MAX(QTY_FG_GOOD) AS QTY, MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT) AS MH, MAX(KEMAS_COMPLETED_AT) AS DONE_AT
-           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
-           WHERE ACTIVITY = 'FILPAC' AND ${prodDate(doneCol)} BETWEEN ${dateRange} ${pf}
-           GROUP BY ACTIVITY_ID`;
+           GROUP BY PROCESS_ORDER_SFG`;
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
         SELECT WK AS WEEK, CASE WHEN COALESCE(UNIT_PLANT, '') = '' THEN 'All plants' ELSE UNIT_PLANT END AS PLANT,
           SUM(QTY) / NULLIF(SUM(MH), 0) AS KPI_VALUE
