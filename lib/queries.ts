@@ -1027,20 +1027,25 @@ export async function getOutputKPI(filters: QueryFilters) {
   };
 }
 
-// E2E Productivity: QTY_KEMAS / (upstream_mh + downstream_mh) per PO, then AVG.
+// E2E Productivity: SUM per PO first, then AVG across POs — QTY_KEMAS / (upstream_mh + downstream_mh).
 // CT_MANUF_E2E already has all columns; UNBOXING excluded in upstream/downstream by the table definition.
 export async function getE2EProductivity(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ AVG_E2E_PROD: number }>(`
-    SELECT AVG(
-      QTY_KEMAS / NULLIF(
-        (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
-      )
-    ) AS AVG_E2E_PROD
-    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-    WHERE ${datePred} ${plantWhere(filters.plant)}
-      AND QTY_KEMAS > 0
-      AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+    WITH po_level AS (
+      SELECT PROCESS_ORDER_FG,
+        SUM(QTY_KEMAS) AS qty,
+        SUM(UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) AS up_mh,
+        SUM(DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) AS dn_mh
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+      WHERE ${datePred} ${plantWhere(filters.plant)}
+        AND QTY_KEMAS > 0
+        AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+      GROUP BY PROCESS_ORDER_FG
+    )
+    SELECT AVG(qty / NULLIF(up_mh + dn_mh, 0)) AS AVG_E2E_PROD
+    FROM po_level
+    WHERE qty > 0 AND up_mh + dn_mh > 0
   `, [...dateBinds, ...plantBinds(filters.plant)]);
   return { avgE2EProd: Number((rows[0]?.AVG_E2E_PROD ?? 0).toFixed(1)) };
 }
@@ -1238,16 +1243,21 @@ export async function getOEEWeekly(filters: QueryFilters) {
 export async function getE2EWeekly(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ WEEK: string; AVG_PROD: number }>(`
-    SELECT DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
-      AVG(
-        QTY_KEMAS / NULLIF(
-          (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
-        )
-      ) AS AVG_PROD
-    FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-    WHERE ${datePred} ${plantWhere(filters.plant)}
-      AND QTY_KEMAS > 0
-      AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+    WITH po_level AS (
+      SELECT PROCESS_ORDER_FG,
+        DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
+        SUM(QTY_KEMAS) AS qty,
+        SUM(UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) AS up_mh,
+        SUM(DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) AS dn_mh
+      FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+      WHERE ${datePred} ${plantWhere(filters.plant)}
+        AND QTY_KEMAS > 0
+        AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+      GROUP BY PROCESS_ORDER_FG, DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")})
+    )
+    SELECT WEEK, AVG(qty / NULLIF(up_mh + dn_mh, 0)) AS AVG_PROD
+    FROM po_level
+    WHERE qty > 0 AND up_mh + dn_mh > 0
     GROUP BY 1 ORDER BY 1
   `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
@@ -1461,17 +1471,24 @@ export async function getTrendKPIByPlant(
 
     case "e2e":
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT DATE_TRUNC('${unit}', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
+        WITH po_level AS (
+          SELECT PROCESS_ORDER_FG,
+            DATE_TRUNC('${unit}', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
+            PLANT,
+            SUM(QTY_KEMAS) AS qty,
+            SUM(UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) AS up_mh,
+            SUM(DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) AS dn_mh
+          FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+          WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ${dateRange} ${pf}
+            AND QTY_KEMAS > 0
+            AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+          GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
+        )
+        SELECT WEEK,
           CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
-          AVG(
-            QTY_KEMAS / NULLIF(
-              (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
-            )
-          ) AS KPI_VALUE
-        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-        WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ${dateRange} ${pf}
-          AND QTY_KEMAS > 0
-          AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+          AVG(qty / NULLIF(up_mh + dn_mh, 0)) AS KPI_VALUE
+        FROM po_level
+        WHERE qty > 0 AND up_mh + dn_mh > 0
         GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
         ORDER BY WEEK
       `, [startDate, endDate, ...plantBinds(plant)]);
@@ -1512,13 +1529,27 @@ export async function getTrendKPIByPlant(
       `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "productivity":
-      // E2E productivity — same source and rule as the Overview card (getE2EProductivity): AVG(E2E_PRODUCTIVITY)
+      // E2E productivity — same formula as getE2EProductivity: SUM per PO, then AVG across POs.
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT DATE_TRUNC('${unit}', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK, CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
-          AVG(E2E_PRODUCTIVITY) AS KPI_VALUE
-        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-        WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ${dateRange}
-          ${pf}
+        WITH po_level AS (
+          SELECT PROCESS_ORDER_FG,
+            DATE_TRUNC('${unit}', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
+            PLANT,
+            SUM(QTY_KEMAS) AS qty,
+            SUM(UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) AS up_mh,
+            SUM(DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) AS dn_mh
+          FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+          WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ${dateRange}
+            ${pf}
+            AND QTY_KEMAS > 0
+            AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+          GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
+        )
+        SELECT WEEK,
+          CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
+          AVG(qty / NULLIF(up_mh + dn_mh, 0)) AS KPI_VALUE
+        FROM po_level
+        WHERE qty > 0 AND up_mh + dn_mh > 0
         GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
         ORDER BY WEEK
       `, [startDate, endDate, ...plantBinds(plant)]);
