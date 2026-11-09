@@ -1150,10 +1150,10 @@ export async function getDownstreamProductivity(filters: QueryFilters) {
 
 // Stage productivity → Overview Productivity card toggle (E2E · Mixing · Filpac).
 // Both tables have one row per operator per activity; MANHOUR/LEADTIME_IN_MINUTE and qty repeat on every operator row.
-// Shared dedup pattern: per ACTIVITY_ID → MAX(qty), MAX(duration) × MAX(OPERATOR_COUNT) = man-hours for that slot.
-// Mixing: then aggregate ACTIVITY_IDs → SFG level (SFGs can have multiple MIXING slots).
-// Filpac: ACTIVITY_ID is already the terminal unit; no SFG rollup.
-// Final period aggregate: Σ qty / Σ man-hours (volume-weighted).
+// Mixing: one MIXING activity per SFG — MAX(MANHOUR) deduplicates the repeating value, MAX(RELEASE_BULK) takes qty once.
+//   Unit = PROCESS_ORDER_SFG; period aggregate = Σ qty / Σ manhour (volume-weighted).
+// Filpac: one row per ACTIVITY_ID — MAX(LEADTIME) × MAX(OPERATOR_COUNT) = man-hours for that slot.
+//   Unit = ACTIVITY_ID; period aggregate = Σ qty / Σ manhour (volume-weighted).
 // grain = 'week' adds a WEEK column for the sparkline; otherwise one row for the period.
 export type StageProductivity = "mixing" | "filpac";
 export async function getStageProductivity(filters: QueryFilters, stage: StageProductivity, grain?: "week") {
@@ -1162,16 +1162,9 @@ export async function getStageProductivity(filters: QueryFilters, stage: StagePr
   const binds = [...dateBinds, ...plantBinds(filters.plant)];
   const week = grain === "week" ? `DATE_TRUNC('week', ${prodDate("DONE_AT")})` : "NULL";
   const unitSql = stage === "mixing"
-    ? `SELECT PROCESS_ORDER_SFG, MAX(release_bulk) AS QTY, SUM(mh) AS MH, MAX(done_at) AS DONE_AT
-       FROM (
-         SELECT PROCESS_ORDER_SFG, ACTIVITY_ID,
-           MAX(RELEASE_BULK) AS release_bulk,
-           MAX(MANHOUR) * MAX(OPERATOR_COUNT) AS mh,
-           MAX(OLAH_COMPLETED_AT) AS done_at
-         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-         WHERE ACTIVITY = 'MIXING' AND ${datePred} ${plantWhere(filters.plant)}
-         GROUP BY PROCESS_ORDER_SFG, ACTIVITY_ID
-       ) act_lvl
+    ? `SELECT PROCESS_ORDER_SFG, MAX(RELEASE_BULK) AS QTY, MAX(MANHOUR) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
+       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
+       WHERE ACTIVITY = 'MIXING' AND ${datePred} ${plantWhere(filters.plant)}
        GROUP BY PROCESS_ORDER_SFG`
     : `SELECT ACTIVITY_ID, MAX(QTY_FG_GOOD) AS QTY, MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT) AS MH, MAX(KEMAS_COMPLETED_AT) AS DONE_AT
        FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
@@ -1456,17 +1449,9 @@ export async function getTrendKPIByPlant(
       const mixing = kpiType === "upstream";
       const doneCol = mixing ? "OLAH_COMPLETED_AT" : "KEMAS_COMPLETED_AT";
       const unitSql = mixing
-        ? `SELECT PROCESS_ORDER_SFG, MAX(PLANT) AS UNIT_PLANT, MAX(release_bulk) AS QTY, SUM(mh) AS MH, MAX(done_at) AS DONE_AT
-           FROM (
-             SELECT PROCESS_ORDER_SFG, ACTIVITY_ID,
-               MAX(PLANT) AS PLANT,
-               MAX(RELEASE_BULK) AS release_bulk,
-               MAX(MANHOUR) * MAX(OPERATOR_COUNT) AS mh,
-               MAX(OLAH_COMPLETED_AT) AS done_at
-             FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
-             WHERE ACTIVITY = 'MIXING' AND ${prodDate(doneCol)} BETWEEN ${dateRange} ${pf}
-             GROUP BY PROCESS_ORDER_SFG, ACTIVITY_ID
-           ) act_lvl
+        ? `SELECT PROCESS_ORDER_SFG, MAX(PLANT) AS UNIT_PLANT, MAX(RELEASE_BULK) AS QTY, MAX(MANHOUR) AS MH, MAX(OLAH_COMPLETED_AT) AS DONE_AT
+           FROM MIGRATION.CONTROL_TOWER.CT_MANUF_OLAH
+           WHERE ACTIVITY = 'MIXING' AND ${prodDate(doneCol)} BETWEEN ${dateRange} ${pf}
            GROUP BY PROCESS_ORDER_SFG`
         : `SELECT ACTIVITY_ID, MAX(PLANT) AS UNIT_PLANT, MAX(QTY_FG_GOOD) AS QTY, MAX(LEADTIME_IN_MINUTE) / 60.0 * MAX(OPERATOR_COUNT) AS MH, MAX(KEMAS_COMPLETED_AT) AS DONE_AT
            FROM MIGRATION.CONTROL_TOWER.CT_MANUF_KEMAS
