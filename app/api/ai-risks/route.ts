@@ -32,36 +32,35 @@ ${KPI_RELATIONSHIPS}
 ${NARRATIVE_RULES}
 
 Rules:
-- RISK desc: one tight phrase, cause + one number. Hard limit: 10 words. Stop there.
-- ACTION desc: one verb phrase on the root cause. Hard limit: 10 words. Stop there.
+- RISK desc: exactly 2 sentences. Sentence 1 = the fact with a number. Sentence 2 = the implication or mechanism. Each sentence must add new information — never restate sentence 1.
+- ACTION desc: 1–2 sentences. Sentence 1 = the concrete action. Sentence 2 = why it addresses the root cause (optional, only if it adds something).
+- No clause-chaining within a sentence ("which", "and ... which", "that ... and"). One idea per sentence.
 - Only list a risk the data supports; never list one the Signals contradict.
 - TITLE = Title Case, max 4 words, no brackets.
-- Never use "which", "and", "because", "that" to chain clauses — one clause only.
 
-Good example:
-  WIP Stage Delay: WIP averaging 9.1d drives 58% of gross lead time.
-  Reduce WIP Backlog: Cap batch sizes at Mixing to cut WIP queue.
+Good RISK example:
+  Bulk Output Drop: Bulk output declined 3.1% despite an 11.7% rise in Released FG. The productivity gap (7.6 kg vs. 333.3 pcs/manhour) suggests inconsistent bulk release timing is disrupting packing flow.
 
-Bad example (too long — do not do this):
-  WIP Stage Delay: WIP waiting of 7.69 days is 41% of the 15.71-day gross lead time and the WIP stage averages 9.07 days which likely holds back output.
+Bad RISK example (one sentence, clause-chained, repetitive — do not do this):
+  WIP Stage Delay: WIP waiting of 7.69 days is 41% of the 15.71-day gross lead time and the WIP stage averages 9.07 days (58% of gross), which likely holds back Released FG by tying up work-in-process that Little's law says should be flowing to output.
 
 Respond in English, EXACTLY in this format (no other text):
 RISK:
-1. [TITLE]: [≤10-word cause + number]
-2. [TITLE]: [≤10-word cause + number]
-3. [TITLE]: [≤10-word cause + number]
+1. [TITLE]: [2-sentence risk]
+2. [TITLE]: [2-sentence risk]
+3. [TITLE]: [2-sentence risk]
 
 ACTION:
-1. [TITLE]: [≤10-word verb phrase]
-2. [TITLE]: [≤10-word verb phrase]
-3. [TITLE]: [≤10-word verb phrase]`;
+1. [TITLE]: [1–2-sentence action]
+2. [TITLE]: [1–2-sentence action]
+3. [TITLE]: [1–2-sentence action]`;
 
   try {
     const client = getDeepSeekClient();
     const stream = await client.chat.completions.create({
       model: "deepseek-chat",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 350,
+      max_tokens: 500,
       temperature: 0.3,
       stream: true,
     });

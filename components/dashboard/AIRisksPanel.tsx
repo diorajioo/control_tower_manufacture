@@ -16,11 +16,6 @@ interface AIRisksPanelProps {
   ready: boolean;
 }
 
-function brief(text: string, maxWords = 12): string {
-  const words = text.trim().split(/\s+/);
-  return words.length <= maxWords ? text.trim() : words.slice(0, maxWords).join(" ") + "…";
-}
-
 function parseRisksAndActions(text: string): { risks: Risk[]; actions: Action[] } {
   const risks: Risk[] = [];
   const actions: Action[] = [];
@@ -31,13 +26,13 @@ function parseRisksAndActions(text: string): { risks: Risk[]; actions: Action[] 
   if (riskMatch) {
     for (const line of riskMatch[1].trim().split("\n").filter(Boolean)) {
       const m = line.match(/^\d+\.\s*\[?([^\]:\n]+)\]?:\s*(.+)/);
-      if (m) risks.push({ title: m[1].trim(), desc: brief(m[2]), level: "warn" });
+      if (m) risks.push({ title: m[1].trim(), desc: m[2].trim(), level: "warn" });
     }
   }
   if (actionMatch) {
     for (const line of actionMatch[1].trim().split("\n").filter(Boolean).slice(0, 3)) {
       const m = line.match(/^(\d+)\.\s*\[?([^\]:\n]+)\]?:\s*(.+)/);
-      if (m) actions.push({ num: String(m[1]).padStart(2, "0"), title: m[2].trim(), desc: brief(m[3]) });
+      if (m) actions.push({ num: String(m[1]).padStart(2, "0"), title: m[2].trim(), desc: m[3].trim() });
     }
   }
   return { risks, actions };
@@ -55,7 +50,7 @@ export function AIRisksPanel({ kpi, alerts, filters, ready }: AIRisksPanelProps)
 
     // "v3": drops risks cached before the narrative (cause → effect) prompt; dates in the key so a new Custom range
     // never shows the previous range's risks
-    const cacheKey  = `ai_risks_v6_${filters.plant}_${filters.period}_${filters.startDate}_${filters.endDate}`;
+    const cacheKey  = `ai_risks_v7_${filters.plant}_${filters.period}_${filters.startDate}_${filters.endDate}`;
     const cacheTime = `${cacheKey}_time`;
     if (!force) {
       try {
