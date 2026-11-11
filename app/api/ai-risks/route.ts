@@ -31,29 +31,29 @@ ${KPI_RELATIONSHIPS}
 
 ${NARRATIVE_RULES}
 
-Each RISK description is one sentence that names the cause → effect chain with numbers from the data
-(e.g. "WIP waiting of X days is most of the gross lead time, which likely holds back Released FG").
-Each ACTION targets the cause in that chain, not the symptom.
-Only list a risk the data supports; never list one the Signals contradict (fewer, solid risks beat speculative ones).
-TITLE = short Title Case label, max 5 words, no brackets.
+Rules:
+- RISK desc: cause → effect with one number from the data. Max 10 words. No filler.
+- ACTION desc: one concrete verb phrase targeting the cause. Max 10 words.
+- Only list a risk the data supports; never list one the Signals contradict.
+- TITLE = Title Case, max 4 words, no brackets.
 
 Respond in English, EXACTLY in this format (no other text):
 RISK:
-1. [TITLE]: [cause → effect, one sentence]
-2. [TITLE]: [cause → effect, one sentence]
-3. [TITLE]: [cause → effect, one sentence]
+1. [TITLE]: [≤10-word cause → effect]
+2. [TITLE]: [≤10-word cause → effect]
+3. [TITLE]: [≤10-word cause → effect]
 
 ACTION:
-1. [TITLE]: [concrete action on the cause]
-2. [TITLE]: [concrete action on the cause]
-3. [TITLE]: [concrete action on the cause]`;
+1. [TITLE]: [≤10-word concrete action]
+2. [TITLE]: [≤10-word concrete action]
+3. [TITLE]: [≤10-word concrete action]`;
 
   try {
     const client = getDeepSeekClient();
     const stream = await client.chat.completions.create({
       model: "deepseek-chat",
       messages: [{ role: "user", content: prompt }],
-      max_tokens: 600,
+      max_tokens: 350,
       temperature: 0.3,
       stream: true,
     });
