@@ -32,21 +32,29 @@ ${KPI_RELATIONSHIPS}
 ${NARRATIVE_RULES}
 
 Rules:
-- RISK desc: cause → effect with one number from the data. Max 10 words. No filler.
-- ACTION desc: one concrete verb phrase targeting the cause. Max 10 words.
+- RISK desc: one tight phrase, cause + one number. Hard limit: 10 words. Stop there.
+- ACTION desc: one verb phrase on the root cause. Hard limit: 10 words. Stop there.
 - Only list a risk the data supports; never list one the Signals contradict.
 - TITLE = Title Case, max 4 words, no brackets.
+- Never use "which", "and", "because", "that" to chain clauses — one clause only.
+
+Good example:
+  WIP Stage Delay: WIP averaging 9.1d drives 58% of gross lead time.
+  Reduce WIP Backlog: Cap batch sizes at Mixing to cut WIP queue.
+
+Bad example (too long — do not do this):
+  WIP Stage Delay: WIP waiting of 7.69 days is 41% of the 15.71-day gross lead time and the WIP stage averages 9.07 days which likely holds back output.
 
 Respond in English, EXACTLY in this format (no other text):
 RISK:
-1. [TITLE]: [≤10-word cause → effect]
-2. [TITLE]: [≤10-word cause → effect]
-3. [TITLE]: [≤10-word cause → effect]
+1. [TITLE]: [≤10-word cause + number]
+2. [TITLE]: [≤10-word cause + number]
+3. [TITLE]: [≤10-word cause + number]
 
 ACTION:
-1. [TITLE]: [≤10-word concrete action]
-2. [TITLE]: [≤10-word concrete action]
-3. [TITLE]: [≤10-word concrete action]`;
+1. [TITLE]: [≤10-word verb phrase]
+2. [TITLE]: [≤10-word verb phrase]
+3. [TITLE]: [≤10-word verb phrase]`;
 
   try {
     const client = getDeepSeekClient();
