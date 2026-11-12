@@ -175,7 +175,7 @@ Three variants, all computed server-side:
 
 | Variant | Table | Formula | Unit |
 |---|---|---|---|
-| **E2E** | `CT_MANUF_E2E` | `AVG(E2E_PRODUCTIVITY)` — pre-computed in source | pcs/mh |
+| **E2E** | `CT_MANUF_E2E` | Per row `QTY_KEMAS / (UPSTREAM_LEADTIME_IN_HOUR × UPSTREAM_OPERATOR + DOWNSTREAM_LEADTIME_IN_HOUR × DOWNSTREAM_OPERATOR)`, then `AVG` over rows with qty > 0 and manhour > 0 (`E2E_ROW_SQL` / `E2E_VALID_SQL`; UNBOXING is outside the table's upstream / downstream) | pcs/mh |
 | **Downstream** | `CT_MANUF_KEMAS` | Per PO: `SUM(QTY_FG_GOOD) / (SUM(LEADTIME_IN_MINUTE)/60) / MAX(OPERATOR_COUNT)`, then `AVG` across POs | pcs/mh |
 | **Upstream** | `CT_MANUF_OLAH` | 3-level LOD aggregate (activity → position → SFG); see `lib/queries.ts` for full SQL | kg/mh |
 | **Manhours** | `CT_MANUF_KEMAS` | `SUM(LEADTIME_IN_MINUTE / 60 × OPERATOR_COUNT)` | hours |
@@ -195,7 +195,7 @@ The dashboard card shows E2E productivity as the headline value, with Manhours a
 
 **Metric Trend (Overview)** follows the card toggle (since 2026-11-06): the same three formulas per week / month (`getTrendKPIByPlant()`, kpiType `productivity` / `upstream` / `downstream`). By plant = each unit's (SFG / activity) plant; "All plants" = all units pooled (Σ / Σ), so its last point equals the card.
 
-**Open — E2E formula (2026-11-06):** E2E is an unweighted average of a ratio pre-computed in the source, while Mixing and Filpac are volume-weighted (Σ qty / Σ manhour), so E2E is not computed the same way. The formula behind `E2E_PRODUCTIVITY` is not yet known. See `docs/KNOWN_ISSUES.md` → E2E Productivity formula not aligned.
+**E2E formula (since 2026-11-09):** recomputed from the `CT_MANUF_E2E` columns (row above) instead of the source's `E2E_PRODUCTIVITY`. Card, sparkline, Metric Trend, AI plant drivers and chat share `E2E_ROW_SQL` / `E2E_VALID_SQL` (`lib/queries.ts`). It stays a per-row average (a Σ qty / Σ manhour version was tried and reverted on 2026-11-09), so E2E is not volume-weighted like Mixing and Filpac.
 
 ---
 

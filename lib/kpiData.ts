@@ -350,7 +350,7 @@ const fetchByPeriod = unstable_cache(
     const { startDate, endDate } = resolvePeriodDates(period);
     return runKPIQueries(plant, startDate, endDate, period);
   },
-  ["kpi-by-period-v21"],
+  ["kpi-by-period-v22"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 
@@ -358,7 +358,7 @@ const fetchByDates = unstable_cache(
   async (plant: string, startDate: string, endDate: string) => {
     return runKPIQueries(plant, startDate, endDate, undefined);
   },
-  ["kpi-by-dates-v21"],
+  ["kpi-by-dates-v22"],
   { revalidate: 3600, tags: ["kpi"] }
 );
 

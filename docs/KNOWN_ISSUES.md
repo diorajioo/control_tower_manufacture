@@ -132,9 +132,9 @@ Without `BLOB_STORE_ID` (or `BLOB_READ_WRITE_TOKEN`) the store is a JSON file, w
 
 ### E2E Productivity formula not aligned with Mixing / Filpac
 
-**Status: Open (2026-11-06, agreed with the user) · Area: `getE2EProductivity()`, `getTrendKPIByPlant('productivity')`**
+**Status: Resolved 2026-11-10 · Area: `E2E_ROW_SQL` in `lib/queries.ts`**
 
-E2E = `AVG(E2E_PRODUCTIVITY)` over `CT_MANUF_E2E` rows: an unweighted mean of a ratio the ETL pre-computes, so a small PO weighs as much as a large one. Mixing and Filpac are Σ qty / Σ manhour (volume-weighted). To do: find out how the ETL computes `E2E_PRODUCTIVITY`, compare with an E2E Σ pcs / Σ manhour version on live data, let the user choose, then change card + trend together (and `docs/BUSINESS_LOGIC.md` → Productivity).
+E2E is recomputed from the `CT_MANUF_E2E` columns (`QTY_KEMAS` ÷ upstream + downstream manhour, average per row) and every E2E figure — card, sparkline, Metric Trend, AI plant drivers, chat — uses the same SQL. By choice it stays a per-row average, not Σ / Σ like Mixing and Filpac (`docs/BUSINESS_LOGIC.md` → Productivity).
 
 ### E2E Productivity Has No Prior-Period Trend for YTD
 

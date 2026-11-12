@@ -4,6 +4,12 @@ Derived from git log and conversation history. Most recent changes first.
 
 ---
 
+## 2026-11-10
+
+### Fixed
+- Lead Time page blank on Kubernetes (ClickHouse Code 206 ALIAS_REQUIRED): the three queries that join Nett per PO onto `LT_TABLE` (`getLeadTimeByLineSku`, `getLeadTimeAnalysisStats`, `getLeadTimeAnalysisWeekly`) now alias it (`FROM ${LT_TABLE} lt`). `scripts/check-clickhouse-sql.ts` now fails on any joined subquery without an alias — the local ClickHouse accepted it, the cluster did not.
+- E2E Productivity uses one formula everywhere: `QTY_KEMAS` ÷ (upstream + downstream manhour) per row, then average (`E2E_ROW_SQL` / `E2E_VALID_SQL`). Metric Trend, the AI plant drivers and chat still read `AVG(E2E_PRODUCTIVITY)` after the 2026-11-09 card change; they now match the card (Oct 2026: card 123.1, trend All plants 123.09). Caches: KPI v22, trends v12.
+
 ## 2026-11-06
 
 ### Fixed

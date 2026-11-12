@@ -10,7 +10,7 @@ import { AI_KPI_TYPES, AI_TREND_TYPES } from "@/lib/aiScope";
 import { stageLabel } from "@/lib/leadTimeStages";
 import type OpenAI from "openai";
 import { LEAD_TIME_START_SQL, NDC_RECEIVED_AT_SQL } from "@/lib/leadTimeDefinition";
-import { LT_TABLE, getLeadTimeAnalysisStats, getLeadTimeProcessBreakdown } from "@/lib/queries";
+import { LT_TABLE, E2E_ROW_SQL, E2E_VALID_SQL, getLeadTimeAnalysisStats, getLeadTimeProcessBreakdown } from "@/lib/queries";
 import { prodDate, prodToday, prodYearStart } from "@/lib/productionDay"; // lead time rows with PLANT = the PO's last plant
 
 // Allow up to 60 s on Vercel — tool calls to Snowflake + a streamed answer can exceed the default limit.
@@ -181,8 +181,8 @@ async function executeGetKpiData(args: {
       }
       case "productivity_e2e": {
         rows = await executeQuery(`
-          SELECT AVG(E2E_PRODUCTIVITY) AS AVG_E2E_PROD FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-          WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ? ${pf}
+          SELECT AVG(${E2E_ROW_SQL}) AS AVG_E2E_PROD FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
+          WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ? ${pf} AND ${E2E_VALID_SQL}
         `, withPlant);
         break;
       }
@@ -302,9 +302,9 @@ async function executeGetWeeklyTrend(args: {
       GROUP BY WEEK, PLANT ORDER BY WEEK`,
     e2e: `
       SELECT WEEK, PLANT, AVG(po_prod) AS KPI_VALUE FROM (
-        SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK, PLANT, AVG(E2E_PRODUCTIVITY) AS po_prod
+        SELECT PROCESS_ORDER_FG, DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK, PLANT, AVG(${E2E_ROW_SQL}) AS po_prod
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-        WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ? ${pf}
+        WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ? AND ? ${pf} AND ${E2E_VALID_SQL}
         GROUP BY PROCESS_ORDER_FG, WEEK, PLANT
       ) sub GROUP BY WEEK, PLANT ORDER BY WEEK`,
     output: `

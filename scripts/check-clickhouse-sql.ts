@@ -45,6 +45,20 @@ globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
         catch (e) { failures.push(`getTrendKPIByPlant ${kpiType}/${grain} [${period}]: ${(e as Error).message}`); }
       }
   }
+  // A subquery on either side of a JOIN needs an alias in ClickHouse (Code 206 ALIAS_REQUIRED). Snowflake and
+  // some ClickHouse builds accept it without one, so a live run can pass while the cluster fails.
+  const NOT_ALIAS = /^(WHERE|LEFT|RIGHT|INNER|FULL|CROSS|JOIN|ON|USING|GROUP|ORDER|UNION|LIMIT|HAVING|QUALIFY|SETTINGS|FORMAT)$/i;
+  for (const sql of new Set(captured.map((c) => c.sql))) {
+    for (let i = 0; i < sql.length; i++) {
+      if (sql[i] !== "(" || !/\b(FROM|JOIN)\s*$/i.test(sql.slice(Math.max(0, i - 12), i)) || !/^\s*(SELECT|WITH)\b/i.test(sql.slice(i + 1, i + 12))) continue;
+      let depth = 0, j = i;
+      for (; j < sql.length; j++) { if (sql[j] === "(") depth++; else if (sql[j] === ")" && --depth === 0) break; }
+      const after = sql.slice(j + 1).match(/^\s*(?:AS\s+)?([A-Za-z_][A-Za-z0-9_]*)?/)?.[1] ?? "";
+      const joined = /\bJOIN\s*$/i.test(sql.slice(Math.max(0, i - 12), i)) || /^(LEFT|RIGHT|INNER|FULL|CROSS|JOIN)$/i.test(after);
+      if (joined && (!after || NOT_ALIAS.test(after)))
+        failures.push(`joined subquery without alias: …${sql.slice(Math.max(0, i - 40), i + 60).replace(/\s+/g, " ")}…`);
+    }
+  }
   const unique = new Set(captured.map((c) => c.sql)).size;
   console.log(`calls: ${calls} · queries translated: ${captured.length} (${unique} distinct) · failures: ${failures.length}`);
   failures.slice(0, 20).forEach((f) => console.log("  ✗ " + f));

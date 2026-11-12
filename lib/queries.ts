@@ -86,7 +86,8 @@ const ltNettPerPoSql = (src: string) =>
   `SELECT PROCESS_ORDER_FG AS NETT_PO_KEY, SUM(NETT_MIN) AS nett_minutes FROM (${ltSplitSql(src, PO_CREATED_AT_SQL)}) np GROUP BY PROCESS_ORDER_FG`;
 
 /** Join for a per-PO query on LT_TABLE (unqualified PROCESS_ORDER_FG): adds `n.nett_minutes`. Its binds
- *  (date + ltBinds, twice) come before the query's WHERE binds. */
+ *  (date + ltBinds, twice) come before the query's WHERE binds. Alias the table (`FROM ${LT_TABLE} lt`):
+ *  ClickHouse rejects a joined subquery without an alias (Code 206 ALIAS_REQUIRED). */
 const ltNettJoin = (datePred: string, filters: QueryFilters) =>
   `LEFT JOIN (${ltNettPerPoSql(`SELECT * FROM ${LT_TABLE} WHERE ${datePred} ${ltWhere(filters)}`)}) n ON n.NETT_PO_KEY = PROCESS_ORDER_FG`;
 
@@ -1027,20 +1028,20 @@ export async function getOutputKPI(filters: QueryFilters) {
   };
 }
 
+// E2E per CT_MANUF_E2E row (pcs/mh) and its row filter. Card, sparkline, Metric Trend, plant drivers and chat all use these.
+export const E2E_MH_SQL    = `(UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR)`;
+export const E2E_ROW_SQL   = `QTY_KEMAS / NULLIF(${E2E_MH_SQL}, 0)`;
+export const E2E_VALID_SQL = `QTY_KEMAS > 0 AND ${E2E_MH_SQL} > 0`;
+
 // E2E Productivity: AVG(QTY_KEMAS / (upstream_mh + downstream_mh)) per row.
 // CT_MANUF_E2E already has all columns; UNBOXING excluded in upstream/downstream by the table definition.
 export async function getE2EProductivity(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   const rows = await executeQuery<{ AVG_E2E_PROD: number }>(`
-    SELECT AVG(
-      QTY_KEMAS / NULLIF(
-        (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
-      )
-    ) AS AVG_E2E_PROD
+    SELECT AVG(${E2E_ROW_SQL}) AS AVG_E2E_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
     WHERE ${datePred} ${plantWhere(filters.plant)}
-      AND QTY_KEMAS > 0
-      AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+      AND ${E2E_VALID_SQL}
   `, [...dateBinds, ...plantBinds(filters.plant)]);
   return { avgE2EProd: Number((rows[0]?.AVG_E2E_PROD ?? 0).toFixed(1)) };
 }
@@ -1060,9 +1061,9 @@ export async function getPlantDrivers(filters: QueryFilters) {
       GROUP BY 1
     `, fgDate.binds),
     executeQuery<{ PLANT: string; E2E_SUM: number; E2E_N: number }>(`
-      SELECT PLANT, SUM(E2E_PRODUCTIVITY) AS E2E_SUM, COUNT(E2E_PRODUCTIVITY) AS E2E_N
+      SELECT PLANT, SUM(${E2E_ROW_SQL}) AS E2E_SUM, COUNT(*) AS E2E_N
       FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
-      WHERE ${e2eDate.sql}
+      WHERE ${e2eDate.sql} AND ${E2E_VALID_SQL}
       GROUP BY PLANT
     `, e2eDate.binds),
   ]);
@@ -1240,15 +1241,10 @@ export async function getE2EWeekly(filters: QueryFilters) {
   const { sql: datePred, binds: dateBinds } = periodDateWhere("KEMAS_COMPLETED_AT", filters.period, filters.startDate, filters.endDate);
   return executeQuery<{ WEEK: string; AVG_PROD: number }>(`
     SELECT DATE_TRUNC('week', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
-      AVG(
-        QTY_KEMAS / NULLIF(
-          (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
-        )
-      ) AS AVG_PROD
+      AVG(${E2E_ROW_SQL}) AS AVG_PROD
     FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
     WHERE ${datePred} ${plantWhere(filters.plant)}
-      AND QTY_KEMAS > 0
-      AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+      AND ${E2E_VALID_SQL}
     GROUP BY 1 ORDER BY 1
   `, [...dateBinds, ...plantBinds(filters.plant)]);
 }
@@ -1464,15 +1460,10 @@ export async function getTrendKPIByPlant(
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
         SELECT DATE_TRUNC('${unit}', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
           CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
-          AVG(
-            QTY_KEMAS / NULLIF(
-              (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
-            )
-          ) AS KPI_VALUE
+          AVG(${E2E_ROW_SQL}) AS KPI_VALUE
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
         WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ${dateRange} ${pf}
-          AND QTY_KEMAS > 0
-          AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+          AND ${E2E_VALID_SQL}
         GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
         ORDER BY WEEK
       `, [startDate, endDate, ...plantBinds(plant)]);
@@ -1513,20 +1504,13 @@ export async function getTrendKPIByPlant(
       `, [startDate, endDate, ...plantBinds(plant)]);
 
     case "productivity":
-      // E2E productivity — same formula as getE2EProductivity: AVG per row.
+      // E2E productivity — same rule as the Overview card (getE2EProductivity): AVG(E2E_ROW_SQL)
       return executeQuery<{ WEEK: string; PLANT: string; KPI_VALUE: number }>(`
-        SELECT DATE_TRUNC('${unit}', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK,
-          CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
-          AVG(
-            QTY_KEMAS / NULLIF(
-              (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR), 0
-            )
-          ) AS KPI_VALUE
+        SELECT DATE_TRUNC('${unit}', ${prodDate("KEMAS_COMPLETED_AT")}) AS WEEK, CASE WHEN COALESCE(PLANT, '') = '' THEN 'All plants' ELSE PLANT END AS PLANT,
+          AVG(${E2E_ROW_SQL}) AS KPI_VALUE
         FROM MIGRATION.CONTROL_TOWER.CT_MANUF_E2E
         WHERE ${prodDate("KEMAS_COMPLETED_AT")} BETWEEN ${dateRange}
-          ${pf}
-          AND QTY_KEMAS > 0
-          AND (UPSTREAM_LEADTIME_IN_HOUR * UPSTREAM_OPERATOR) + (DOWNSTREAM_LEADTIME_IN_HOUR * DOWNSTREAM_OPERATOR) > 0
+          ${pf} AND ${E2E_VALID_SQL}
         GROUP BY GROUPING SETS ((WEEK, PLANT), (WEEK))
         ORDER BY WEEK
       `, [startDate, endDate, ...plantBinds(plant)]);
@@ -1732,7 +1716,7 @@ export async function getLeadTimeByLineSku(filters: QueryFilters, activity: Line
         PROCESS_ORDER_FG,
         DATEDIFF('minute', ${startSql}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 AS gross_days,
         MAX(n.nett_minutes) / 1440.0 AS nett_days
-      FROM ${LT_TABLE}
+      FROM ${LT_TABLE} lt
       ${ltNettJoin(datePred, filters)}
       WHERE ${datePred}
         ${ltWhere(filters)}
@@ -1820,7 +1804,7 @@ export async function getLeadTimeAnalysisStats(filters: QueryFilters, scope: "cr
       SELECT PROCESS_ORDER_FG,
         DATEDIFF('minute', ${startSql}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 AS gross,
         MAX(n.nett_minutes) / 1440.0 AS nett
-      FROM ${LT_TABLE}
+      FROM ${LT_TABLE} lt
       ${ltNettJoin(datePred, filters)}
       WHERE ${datePred}
         ${ltWhere(filters)}
@@ -1857,7 +1841,7 @@ export async function getLeadTimeAnalysisWeekly(filters: QueryFilters, scope: "c
         DATE_TRUNC('week', ${prodDate("MAX(PO_FG_DONE_DATE)")}) AS WEEK,
         DATEDIFF('minute', ${startSql}, ${NDC_RECEIVED_AT_SQL}) / 1440.0 AS gross,
         MAX(n.nett_minutes) / 1440.0 AS nett
-      FROM ${LT_TABLE}
+      FROM ${LT_TABLE} lt
       ${ltNettJoin(datePred, filters)}
       WHERE ${datePred}
         ${ltWhere(filters)}
