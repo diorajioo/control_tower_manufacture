@@ -476,7 +476,7 @@ export default function OutputPage() {
           </div>
 
           {/* ── Brand / variant treemap · top SKU table ───────────────────────── */}
-          <OutputMixRow filters={tf} metric={metric} pick={pick} onPick={onPick} />
+          <OutputMixRow filters={tf} metric={metric} pick={pick} onPick={onPick} hideSku />
 
           {/* ── Output by line · Output by PO ─────────────────────────────────── */}
           <div className="grid grid-cols-2 gap-4 pb-4">
