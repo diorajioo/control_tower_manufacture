@@ -140,7 +140,7 @@ export function OutputMixRow({ filters, metric, pick, onPick, hideSku }: {
   return (
     <div className={hideSku ? undefined : "grid grid-cols-2 gap-4 items-stretch"} style={{ fontFamily: "Lato, sans-serif" }}>
       {/* Treemap — fills the row height set by the SKU table, or a fixed height when hideSku */}
-      <div className={CARD} style={hideSku ? { minHeight: 300 } : undefined}>
+      <div className={CARD} style={hideSku ? { minHeight: 440 } : undefined}>
         <div style={{ padding: "11px 13px 8px", display: "flex", alignItems: "center", gap: 6 }}>
           <p style={TITLE}>{t(DIM_TITLE[dim])}</p>
           <InfoTooltip text={t(metric === "bulk" ? "output_mix_tooltip_bulk" : "output_mix_tooltip")} size={13} width={240} />

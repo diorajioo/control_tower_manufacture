@@ -58,7 +58,7 @@ function OutputPlantBar({ data, loading, metric, pick, onPick }: {
     v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M`
     : v >= 1_000   ? `${(v / 1_000).toFixed(0)}K`
     : String(Math.round(v));
-  const chartHeight = Math.max(sorted.length * 44 + 48, 120);
+  const chartHeight = Math.max(sorted.length * 58 + 56, 150);
   const maxQty = sorted.reduce((m, d) => Math.max(m, d.qty), 1);
 
   return (
@@ -85,8 +85,8 @@ function OutputPlantBar({ data, loading, metric, pick, onPick }: {
               indexBy="plant"
               layout="horizontal"
               theme={LINE_THEME}
-              margin={{ top: 4, right: 70, bottom: 24, left: 60 }}
-              padding={0.3}
+              margin={{ top: 8, right: 76, bottom: 32, left: 64 }}
+              padding={0.42}
               colors={(bar) => hexToRgba(
                 colorMap.get(bar.indexValue as string) ?? "#1E4076",
                 pickOpacity(pick, "plant", bar.indexValue as string),
@@ -94,6 +94,7 @@ function OutputPlantBar({ data, loading, metric, pick, onPick }: {
               onClick={(bar) => onPick({ dim: "plant", value: bar.indexValue as string, label: `Plant: ${bar.indexValue}` })}
               borderRadius={2}
               enableLabel={false}
+              enableGridX={true}
               enableGridY={false}
               valueScale={{ type: "linear", min: 0, max: maxQty * 1.3 }}
               axisLeft={{
