@@ -1001,6 +1001,63 @@ export async function getOutputStats(filters: QueryFilters, metric: "fg" | "bulk
     byPlant: byPlant.map((r) => ({ name: r.GRP, qty: Number(r.QTY ?? 0) })) };
 }
 
+/** Per-PO output list for the Output page table. Groups FG by SNFG_NAME, Bulk by NOMO_NAME. Max 300 rows, newest first. */
+export async function getOutputPoList(filters: QueryFilters, metric: "fg" | "bulk", sel?: OutputSel | null) {
+  const bulk = metric === "bulk";
+  const src = bulk ? bulkRows(filters, sel) : fgRows(filters, sel);
+  if (bulk) {
+    const rows = await executeQuery<{ PO: string; SKU_CODE: string; SKU_NAME: string; PLANT: string; QTY: number; THEO_QTY: number; RELEASE_DATE: string; LINE_NAME: string }>(`
+      SELECT
+        NOMO_NAME        AS PO,
+        COITEM_BULK_CODE AS SKU_CODE,
+        MAX(BULK_NAME)   AS SKU_NAME,
+        PLANT,
+        SUM(REALIZATION_QUANTITY)  AS QTY,
+        SUM(THEORETICAL_QUANTITY)  AS THEO_QTY,
+        MAX(CORRECTION_DATE)       AS RELEASE_DATE,
+        MAX(LINE_NAME)             AS LINE_NAME
+      FROM (${src.sql}) b
+      GROUP BY NOMO_NAME, COITEM_BULK_CODE, PLANT
+      ORDER BY MAX(CORRECTION_DATE) DESC, SUM(REALIZATION_QUANTITY) DESC
+      LIMIT 300
+    `, src.binds);
+    return rows.map((r) => ({
+      po:       String(r.PO       ?? ""),
+      skuCode:  String(r.SKU_CODE ?? ""),
+      skuName:  String(r.SKU_NAME ?? ""),
+      plant:    String(r.PLANT    ?? ""),
+      qty:      Number(r.QTY      ?? 0),
+      theoQty:  r.THEO_QTY == null ? null : Number(r.THEO_QTY),
+      date:     r.RELEASE_DATE ? new Date(r.RELEASE_DATE).toISOString().slice(0, 10) : "",
+      line:     String(r.LINE_NAME ?? ""),
+    }));
+  }
+  const rows = await executeQuery<{ PO: string; SKU_CODE: string; SKU_NAME: string; PLANT: string; QTY: number; RELEASE_DATE: string; LINE_NAME: string }>(`
+    SELECT
+      SNFG_NAME              AS PO,
+      COITEM_CODE            AS SKU_CODE,
+      MAX(FINISHED_GOOD_NAME) AS SKU_NAME,
+      PLANT,
+      SUM(QUANTITY)          AS QTY,
+      MAX(CORRECTION_DATE)   AS RELEASE_DATE,
+      MAX(LINE_NAME)         AS LINE_NAME
+    FROM (${src.sql}) b
+    GROUP BY SNFG_NAME, COITEM_CODE, PLANT
+    ORDER BY MAX(CORRECTION_DATE) DESC, SUM(QUANTITY) DESC
+    LIMIT 300
+  `, src.binds);
+  return rows.map((r) => ({
+    po:       String(r.PO       ?? ""),
+    skuCode:  String(r.SKU_CODE ?? ""),
+    skuName:  String(r.SKU_NAME ?? ""),
+    plant:    String(r.PLANT    ?? ""),
+    qty:      Number(r.QTY      ?? 0),
+    theoQty:  null as null,
+    date:     r.RELEASE_DATE ? new Date(r.RELEASE_DATE).toISOString().slice(0, 10) : "",
+    line:     String(r.LINE_NAME ?? ""),
+  }));
+}
+
 // Output (Bulk) → DATAMART_PRODUCTION_OUTPUT_OLAH.REALIZATION_QUANTITY filtered on CORRECTION_DATE
 // Output (FG)   → DATAMART_PRODUCTION_OUTPUT_FG.QUANTITY filtered on CORRECTION_DATE
 // Plant filter through the row's form (outputPlantWhere).

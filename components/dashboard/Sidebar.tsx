@@ -48,7 +48,7 @@ const NAV_GROUPS: NavItem[][] = [
   ],
   [
     { icon: Timer,       label: "Lead Time",           href: "/lead-time" },
-    { icon: Package,     label: "Output" },
+    { icon: Package,     label: "Output",     href: "/output" },
     { icon: User,        label: "Productivity" },
     { icon: ShieldCheck, label: "Yield" },
     { icon: Zap,         label: "Energy" },

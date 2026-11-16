@@ -66,7 +66,7 @@ interface KPI {
   yield: { bulkLossPct: number; packLossPct: number; bulkLossTrend: number | null; packLossTrend: number | null };
 }
 
-interface TacticalFilters {
+export interface TacticalFilters {
   plant: string;
   startDate: string;
   endDate: string;
@@ -1208,7 +1208,7 @@ function bucketEnd(date: string, grain: "month" | "week"): string {
   return d.toISOString().slice(0, 10);
 }
 
-function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
+export function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
   filters: TacticalFilters; metric: "fg" | "bulk"; pick: OutputPick | null; onPick: (p: OutputPick) => void;
 }) {
   const { t } = useT();
@@ -1328,7 +1328,7 @@ function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
 
 interface OutputLineRow { line: string; qtyPo: number; qtyReal: number; theoretical: number | null; gap: number | null; pctContrib: number }
 
-function TopLineByOutputTable({ filters, metric, pick, onPick }: {
+export function TopLineByOutputTable({ filters, metric, pick, onPick }: {
   filters: TacticalFilters; metric: "fg" | "bulk"; pick: OutputPick | null; onPick: (p: OutputPick) => void;
 }) {
   const { t } = useT();
@@ -1461,7 +1461,7 @@ function TopLineByOutputTable({ filters, metric, pick, onPick }: {
 
 // ── Output KPI mini-cards ─────────────────────────────────────────────────────
 
-function OutputFGCard({ metric, qty, trend, theoretical, noData }: {
+export function OutputFGCard({ metric, qty, trend, theoretical, noData }: {
   metric: "fg" | "bulk"; qty: number; trend: number | null; theoretical?: number | null; noData?: boolean;
 }) {
   const { t } = useT();
@@ -1519,7 +1519,7 @@ function OutputFGCard({ metric, qty, trend, theoretical, noData }: {
   );
 }
 
-function OutputCountCard({ metric, skuCount, poCount, noData }: {
+export function OutputCountCard({ metric, skuCount, poCount, noData }: {
   metric: "fg" | "bulk"; skuCount?: number; poCount?: number; noData?: boolean;
 }) {
   const { t } = useT();
@@ -1561,7 +1561,7 @@ function OutputCountCard({ metric, skuCount, poCount, noData }: {
   );
 }
 
-function OutputPieCard({ title, pickLabel, segments, noData, pickDim, pick, onPick, unit = "pcs" }: {
+export function OutputPieCard({ title, pickLabel, segments, noData, pickDim, pick, onPick, unit = "pcs" }: {
   title: string;
   unit?: "pcs" | "kg";
   /** Short name for the filter chip, e.g. "Plant" */
@@ -1626,14 +1626,14 @@ function OutputPieCard({ title, pickLabel, segments, noData, pickDim, pick, onPi
   );
 }
 
-interface OutputStats {
+export interface OutputStats {
   total: number; prevTotal: number; trend: number | null; theoretical: number | null;
   skuCount: number; poCount: number;
   byPlant: { name: string; qty: number }[];
 }
 
 /** /api/dashboard/output-stats for one Output visual: header filters + FG / Bulk + the pick (unless `own` made it). */
-function useOutputStats(filters: TacticalFilters, metric: "fg" | "bulk", pick: OutputPick | null, own: OutputPickDim | OutputPickDim[]) {
+export function useOutputStats(filters: TacticalFilters, metric: "fg" | "bulk", pick: OutputPick | null, own: OutputPickDim | OutputPickDim[]) {
   const params = outputParams(filters, pick, own);
   params.set("metric", metric);
   const url = withBase(`/api/dashboard/output-stats?${params}`);
