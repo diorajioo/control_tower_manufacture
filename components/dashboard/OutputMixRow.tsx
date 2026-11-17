@@ -248,8 +248,6 @@ function TopSkuTable({ skus, loading, emptyText, metric }: { skus: SkuRow[]; loa
                 <TH col="name"       label={t("output_sku_th_sku")} />
                 <TH col="qtyPo"      label={t("output_line_th_qty_po")} right />
                 <TH col="qtyReal"    label={t(metric === "bulk" ? "output_line_th_qty_real_bulk" : "output_line_th_qty_real")} right />
-                <TH                  label={t(metric === "bulk" ? "output_line_th_theoretical_bulk" : "output_line_th_theoretical")} right />
-                <TH                  label={t("output_line_th_gap")} right />
                 <TH col="pctContrib" label={t("output_line_th_pct_contrib")} right />
               </tr>
             </thead>
@@ -261,8 +259,6 @@ function TopSkuTable({ skus, loading, emptyText, metric }: { skus: SkuRow[]; loa
                   </td>
                   <td style={num}>{s.qtyPo.toLocaleString()}</td>
                   <td style={num}>{fullQty(s.qtyReal)}</td>
-                  <td style={dash}>—</td>
-                  <td style={dash}>—</td>
                   <td style={{ ...num, fontWeight: 700 }}>{s.pctContrib.toFixed(1)}%</td>
                 </tr>
               ))}

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { withBase } from "@/lib/basePath";
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
@@ -1326,7 +1326,7 @@ export function TacticalOutputTrendChart({ filters, metric, pick, onPick }: {
 
 // ── Top Line by Output table ──────────────────────────────────────────────────
 
-interface OutputLineRow { line: string; qtyPo: number; qtyReal: number; theoretical: number | null; gap: number | null; pctContrib: number }
+interface OutputLineRow { line: string; qtyPo: number; qtyReal: number; pctContrib: number }
 
 export function TopLineByOutputTable({ filters, metric, pick, onPick }: {
   filters: TacticalFilters; metric: "fg" | "bulk"; pick: OutputPick | null; onPick: (p: OutputPick) => void;
@@ -1416,8 +1416,6 @@ export function TopLineByOutputTable({ filters, metric, pick, onPick }: {
                 <TH col="line"        label={t("th_line")} />
                 <TH col="qtyPo"       label={t("output_line_th_qty_po")}      right />
                 <TH col="qtyReal"     label={t(metric === "bulk" ? "output_line_th_qty_real_bulk" : "output_line_th_qty_real")}    right />
-                <TH col="theoretical" label={t(metric === "bulk" ? "output_line_th_theoretical_bulk" : "output_line_th_theoretical")} right />
-                <TH col="gap"         label={t("output_line_th_gap")}         right />
                 <TH col="pctContrib"  label={t("output_line_th_pct_contrib")} right />
               </tr>
             </thead>
@@ -1439,12 +1437,6 @@ export function TopLineByOutputTable({ filters, metric, pick, onPick }: {
                   </td>
                   <td style={{ padding: "6px 10px", textAlign: "right", color: "#344054", fontVariantNumeric: "tabular-nums" }}>
                     {Math.round(row.qtyReal).toLocaleString()}
-                  </td>
-                  <td style={{ padding: "6px 10px", textAlign: "right", color: row.theoretical == null ? "#98a2b3" : "#344054", fontVariantNumeric: "tabular-nums" }}>
-                    {row.theoretical == null ? "—" : Math.round(row.theoretical).toLocaleString()}
-                  </td>
-                  <td style={{ padding: "6px 10px", textAlign: "right", color: row.gap == null ? "#98a2b3" : row.gap < 0 ? "#d92d20" : "#344054", fontVariantNumeric: "tabular-nums" }}>
-                    {row.gap == null ? "—" : `${row.gap >= 0 ? "+" : "−"}${Math.round(Math.abs(row.gap)).toLocaleString()}`}
                   </td>
                   <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 700, color: "#344054", fontVariantNumeric: "tabular-nums" }}>
                     {row.pctContrib.toFixed(1)}%
@@ -1875,3 +1867,4 @@ export function TacticalView(props: TacticalViewProps) {
     </div>
   );
 }
+

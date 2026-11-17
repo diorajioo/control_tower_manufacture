@@ -373,7 +373,7 @@ export async function getLeadTimeByStageCategory(filters: QueryFilters, scope: L
     CROSS JOIN po
     WHERE b.ACTIVITY_CATEGORY IN ('VA', 'NNVA', 'UNVA')
       AND b.POSITION IS NOT NULL
-    GROUP BY b.POSITION, b.ACTIVITY, ATTACHED_STAGE, b.ACTIVITY_CATEGORY
+    GROUP BY b.POSITION, b.ACTIVITY, CASE WHEN b.POSITION = 'WIP' THEN COALESCE(ap.PARENT_STAGE, 'WIP') ELSE b.POSITION END, b.ACTIVITY_CATEGORY
   `, [...binds, ...binds]);
 }
 
