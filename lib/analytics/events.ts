@@ -24,6 +24,7 @@ export const REPORTS = [
   'dashboard_strategic',
   'dashboard_tactical',
   'lead_time',
+  'output',
   'monitor',
   'settings',
 ] as const;

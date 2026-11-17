@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { withBase } from "@/lib/basePath";
 import { prodToday, prodYearStart } from "@/lib/productionDay";
@@ -34,7 +34,7 @@ const DEFAULT_FILTERS: BaseFilters = {
   period:    "YTD",
 };
 
-// ── OutputPlantBar ────────────────────────────────────────────────────────────
+// â”€â”€ OutputPlantBar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Horizontal bar: output qty per plant, follows the FG/Bulk toggle and cross-filter.
 // Clicking a bar picks that plant; every other Output chart on the page filters to it.
 
@@ -143,7 +143,7 @@ function OutputPlantBar({ data, loading, metric, pick, onPick }: {
   );
 }
 
-// ── OutputPoTable ─────────────────────────────────────────────────────────────
+// â”€â”€ OutputPoTable â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Per-PO output table: sortable columns, plant multi-select filter, follows
 // header filters + FG/Bulk toggle. Max 300 rows, newest first.
 
@@ -215,7 +215,7 @@ function OutputPoTable({ filters, metric, pick }: {
     >
       {label}{" "}
       <span style={{ opacity: sortCol === col ? 1 : 0.4 }}>
-        {sortCol === col ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+        {sortCol === col ? (sortDir === "asc" ? "â†‘" : "â†“") : "â†•"}
       </span>
     </th>
   );
@@ -223,7 +223,7 @@ function OutputPoTable({ filters, metric, pick }: {
   const unit = metric === "bulk" ? "kg" : "pcs";
 
   return (
-    // No overflow-hidden on the card: the Plant dropdown must not be clipped (CLAUDE.md → Tooltips)
+    // No overflow-hidden on the card: the Plant dropdown must not be clipped (CLAUDE.md â†’ Tooltips)
     <div className="rounded-lg border border-[#EBEBEB] bg-white" style={{ fontFamily: "Lato, sans-serif" }}>
       <div style={{ padding: "8px 13px", display: "flex", alignItems: "center", gap: 8 }}>
         <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "#64748b", flex: 1 }}>
@@ -271,7 +271,7 @@ function OutputPoTable({ filters, metric, pick }: {
                 <tr key={`${row.po}-${i}`} style={{ background: i % 2 === 0 ? "white" : "#fafafa", borderBottom: "1px solid #f0f1f3" }}>
                   <td style={{ padding: "6px 10px", fontWeight: 700, color: "#1E4076", whiteSpace: "nowrap" }}>{row.po}</td>
                   <td style={{ padding: "6px 10px", color: "#344054", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                      title={`${row.skuCode} · ${row.skuName}`}>
+                      title={`${row.skuCode} Â· ${row.skuName}`}>
                     {row.skuName || row.skuCode}
                   </td>
                   <td style={{ padding: "6px 10px", color: "#344054" }}>{row.plant}</td>
@@ -280,15 +280,15 @@ function OutputPoTable({ filters, metric, pick }: {
                   </td>
                   {metric === "bulk" && (
                     <td style={{ padding: "6px 10px", textAlign: "right", color: row.theoQty == null ? "#98a2b3" : "#344054", fontVariantNumeric: "tabular-nums" }}>
-                      {row.theoQty == null ? "—" : Math.round(row.theoQty).toLocaleString("en-US")}
+                      {row.theoQty == null ? "â€”" : Math.round(row.theoQty).toLocaleString("en-US")}
                     </td>
                   )}
                   {metric === "bulk" && (
                     <td style={{ padding: "6px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums",
                       color: row.gap == null ? "#98a2b3" : row.gap < 0 ? "#d92d20" : "#344054" }}>
-                      {row.gap == null ? "—"
+                      {row.gap == null ? "â€”"
                         : row.gap >= 0 ? `+${Math.round(row.gap).toLocaleString("en-US")}`
-                        : `−${Math.round(Math.abs(row.gap)).toLocaleString("en-US")}`}
+                        : `âˆ’${Math.round(Math.abs(row.gap)).toLocaleString("en-US")}`}
                     </td>
                   )}
                   <td style={{ padding: "6px 10px", color: "#344054", whiteSpace: "nowrap" }}>{row.date}</td>
@@ -303,7 +303,7 @@ function OutputPoTable({ filters, metric, pick }: {
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function OutputPage() {
   const { status } = useSession();
@@ -346,7 +346,7 @@ export default function OutputPage() {
       .catch(() => {});
   }, [status]);
   useEffect(() => {
-    if (status === "authenticated") trackReportViewed({ report: "output" });
+    if (status === "authenticated") trackReportViewed("output");
   }, [status]);
 
   // KPI summary cards: always fetch both FG and Bulk totals (not filtered by pick)
@@ -398,7 +398,7 @@ export default function OutputPage() {
 
         <main className="flex-1 overflow-y-auto min-h-0 px-5 py-4 flex flex-col gap-4">
 
-          {/* ── 4 KPI summary cards (always both FG and Bulk, no pick influence) ── */}
+          {/* â”€â”€ 4 KPI summary cards (always both FG and Bulk, no pick influence) â”€â”€ */}
           <div className="grid grid-cols-4 gap-3">
             {cardsLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
@@ -436,7 +436,7 @@ export default function OutputPage() {
             )}
           </div>
 
-          {/* ── FG / Bulk toggle + active pick chip ───────────────────────────── */}
+          {/* â”€â”€ FG / Bulk toggle + active pick chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="flex items-center gap-3 flex-wrap">
             <SegmentedToggle<"fg" | "bulk">
               ariaLabel="Output metric"
@@ -458,13 +458,13 @@ export default function OutputPage() {
                   title="Clear filter"
                   className="rounded-full w-4 h-4 inline-flex items-center justify-center hover:bg-[#C3CEE3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1E4076]"
                 >
-                  ×
+                  Ã—
                 </button>
               </span>
             )}
           </div>
 
-          {/* ── Trend chart · per-plant horizontal bar ────────────────────────── */}
+          {/* â”€â”€ Trend chart Â· per-plant horizontal bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="grid grid-cols-[3fr_2fr] gap-4">
             <TacticalOutputTrendChart filters={tf} metric={metric} pick={pick} onPick={onPick} />
             <OutputPlantBar
@@ -476,10 +476,10 @@ export default function OutputPage() {
             />
           </div>
 
-          {/* ── Brand / variant treemap · top SKU table ───────────────────────── */}
+          {/* â”€â”€ Brand / variant treemap Â· top SKU table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <OutputMixRow filters={tf} metric={metric} pick={pick} onPick={onPick} hideSku />
 
-          {/* ── Output by line · Output by PO ─────────────────────────────────── */}
+          {/* â”€â”€ Output by line Â· Output by PO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="grid grid-cols-2 gap-4 pb-4">
             <TopLineByOutputTable filters={tf} metric={metric} pick={pick} onPick={onPick} />
             <OutputPoTable filters={tf} metric={metric} pick={pick} />
@@ -492,3 +492,4 @@ export default function OutputPage() {
     </div>
   );
 }
+
