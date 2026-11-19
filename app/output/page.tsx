@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { withBase } from "@/lib/basePath";
 import { prodToday, prodYearStart } from "@/lib/productionDay";
@@ -23,7 +23,7 @@ import {
 } from "@/components/dashboard/TacticalView";
 import { OutputMixRow } from "@/components/dashboard/OutputMixRow";
 import { outputParams, togglePick, pickOpacity, type OutputPick } from "@/components/dashboard/outputPick";
-import { ResponsiveBar } from "@nivo/bar";
+import { ResponsiveBar, type BarCustomLayerProps } from "@nivo/bar";
 
 type BaseFilters = { plant: string; startDate: string; endDate: string; period: string };
 
@@ -150,6 +150,193 @@ function OutputPlantBar({ data, loading, metric, pick, onPick }: {
 interface PoRow {
   po: string; skuCode: string; skuName: string; plant: string;
   qty: number; theoQty: number | null; gap: number | null; date: string; line: string;
+}
+
+// -- OutputParetoChart -----------------------------------------------------------
+// Output Pareto by Line (filling/packing for FG, mixing for Bulk) or by SKU.
+// By Line cross-filters all other Output charts via dim "line"; By SKU is read-only.
+// Max 20 bars; cumulative % line in dark navy overlaid on the bars.
+
+type ParetoDim = "line" | "sku" | "man";
+const MAX_PARETO = 20;
+const PARETO_BAR_COLOR = "#1E4076";
+const PARETO_LINE_COLOR = "#16305C";
+const PARETO_MARGIN = { top: 10, right: 48, bottom: 72, left: 60 };
+
+interface ParetoItem { id: string; label: string; qty: number; qtyPo: number; cumPct: number }
+
+function OutputParetoChart({ filters, metric, pick, onPick }: {
+  filters: TacticalFilters; metric: "fg" | "bulk"; pick: OutputPick | null; onPick: (p: OutputPick) => void;
+}) {
+  const [dim, setDim]         = useState<ParetoDim>("line");
+  const [items, setItems]     = useState<ParetoItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(false);
+  const unit = metric === "bulk" ? "kg" : "pcs";
+
+  useEffect(() => {
+    if (dim === "man") return;
+    setLoading(true); setError(false);
+    let url: string;
+    if (dim === "line") {
+      const p = outputParams(filters, pick, "line"); p.set("metric", metric);
+      url = withBase(`/api/dashboard/output-line?${p}`);
+    } else {
+      const p = outputParams(filters, pick, []); p.set("part", "skus"); p.set("metric", metric);
+      url = withBase(`/api/dashboard/output-mix?${p}`);
+    }
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => {
+        type LineRow = { line: string; qtyPo: number; qtyReal: number };
+        type SkuRow  = { code: string; name: string; qtyPo: number; qtyReal: number };
+        const src: Array<{ id: string; label: string; qtyPo: number; qtyReal: number }> =
+          dim === "line"
+            ? (d.lines ?? [] as LineRow[]).map((r: LineRow) => ({ id: r.line, label: r.line, qtyPo: r.qtyPo, qtyReal: r.qtyReal }))
+            : (d.skus  ?? [] as SkuRow[]) .map((r: SkuRow)  => ({ id: r.code, label: r.name ?? r.code, qtyPo: r.qtyPo, qtyReal: r.qtyReal }));
+        const sorted = src.filter((r) => r.qtyReal > 0).sort((a, b) => b.qtyReal - a.qtyReal).slice(0, MAX_PARETO);
+        const total  = sorted.reduce((s, r) => s + r.qtyReal, 0);
+        let run = 0;
+        setItems(sorted.map((r) => {
+          run += r.qtyReal;
+          return { id: r.id, label: r.label, qty: r.qtyReal, qtyPo: r.qtyPo, cumPct: total > 0 ? (run / total) * 100 : 0 };
+        }));
+      })
+      .catch(() => { setError(true); setItems([]); })
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.plant, filters.startDate, filters.endDate, filters.period, metric, dim, pick]);
+
+  const cumMap  = useMemo(() => new Map(items.map((r) => [r.label, r.cumPct])), [items]);
+  const opacMap = useMemo(
+    () => new Map(items.map((r) => [r.label, dim === "line" ? pickOpacity(pick, "line", r.id) : 1])),
+    [items, pick, dim],
+  );
+  const fmtVal   = (v: number) => v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(Math.round(v));
+  const fullQtyF = (v: number) => Math.round(v).toLocaleString("en-US");
+
+  const CumulativeLayer = useCallback(
+    ({ bars, innerWidth, innerHeight }: BarCustomLayerProps<{ label: string; qty: number }>) => {
+      const pts = bars.map((b) => ({
+        label: String(b.data.indexValue),
+        x: b.x + b.width / 2,
+        y: innerHeight * (1 - (cumMap.get(String(b.data.indexValue)) ?? 0) / 100),
+      }));
+      return (
+        <g style={{ pointerEvents: "none" }}>
+          {[0, 25, 50, 75, 100].map((t) => (
+            <text key={t} x={innerWidth + 8} y={innerHeight * (1 - t / 100)} dominantBaseline="middle"
+              style={{ fontSize: 10, fill: "#a0a6b1", fontFamily: "inherit" }}>{t}%</text>
+          ))}
+          {pts.length > 1 && (
+            <polyline points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill="none" stroke={PARETO_LINE_COLOR} strokeWidth={1.75} strokeLinejoin="round" />
+          )}
+          {pts.map((p, i) => (
+            <circle key={i} cx={p.x} cy={p.y} r={3.5} fill="white" stroke={PARETO_LINE_COLOR} strokeWidth={1.75} />
+          ))}
+        </g>
+      );
+    },
+    [cumMap],
+  );
+
+  const dimOptions: { key: ParetoDim; label: string; locked?: boolean }[] = [
+    { key: "line", label: "By Line" },
+    { key: "sku",  label: "By SKU"  },
+    { key: "man",  label: "By Man",  locked: true },
+  ];
+
+  const infoText = dim === "line"
+    ? `${metric === "bulk" ? "Bulk accepted (kg)" : "FG released (pcs)"} per ${metric === "bulk" ? "mixing" : "filling / packing"} line, sorted descending. The curve shows cumulative share. Click a bar to filter all Output charts to that line.`
+    : `Top ${metric === "bulk" ? "bulk" : "FG"} SKUs by ${metric === "bulk" ? "bulk accepted (kg)" : "released (pcs)"}, sorted descending with cumulative %.`;
+
+  const emptyText = error ? "Failed to load data" : "No output data for the selected period";
+
+  return (
+    <div className="rounded-lg border border-[#EBEBEB] bg-white p-4" style={{ fontFamily: "Lato, sans-serif" }}>
+      <div className="flex items-center gap-2 mb-3">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 flex-1">Output Pareto</p>
+        <InfoTooltip text={infoText} size={13} width={260} />
+        <SegmentedToggle<ParetoDim>
+          ariaLabel="Pareto dimension"
+          options={dimOptions}
+          value={dim}
+          onChange={setDim}
+        />
+      </div>
+      {loading ? (
+        <div className="h-[300px] rounded bg-[#f9fafb] animate-pulse" />
+      ) : items.length === 0 ? (
+        <div className="h-[300px] flex items-center justify-center text-[11px] text-[#98a2b3]">{emptyText}</div>
+      ) : (
+        <Fade depKey={`${dim}|${metric}|${filters.plant}|${filters.startDate}|${filters.endDate}|${filters.period}|${pick?.dim}:${pick?.value}`}>
+          <div style={{ height: 300 }}>
+            <ResponsiveBar<{ label: string; qty: number }>
+              data={items.map((r) => ({ label: r.label, qty: r.qty }))}
+              keys={["qty"]}
+              indexBy="label"
+              theme={LINE_THEME}
+              margin={PARETO_MARGIN}
+              padding={items.length > 12 ? 0.28 : 0.38}
+              colors={(bar) => hexToRgba(PARETO_BAR_COLOR, opacMap.get(String(bar.indexValue)) ?? 1)}
+              borderRadius={2}
+              enableLabel={false}
+              enableGridX={false}
+              valueScale={{ type: "linear" }}
+              axisLeft={{ tickSize: 0, tickPadding: 8, format: (v) => fmtVal(Number(v)) }}
+              axisBottom={{
+                tickSize: 0,
+                renderTick: (tick) => {
+                  const s = String(tick.value);
+                  return (
+                    <g transform={`translate(${tick.x},${tick.y + 8})`}>
+                      <text textAnchor="end" dominantBaseline="middle" transform="rotate(-35)"
+                        style={{ fontSize: 9.5, fill: "#667085", fontFamily: "inherit" }}>
+                        {s.length > 15 ? s.slice(0, 14) + "…" : s}
+                      </text>
+                    </g>
+                  );
+                },
+              }}
+              layers={["grid", "axes", "bars", CumulativeLayer]}
+              onClick={dim === "line"
+                ? (bar) => onPick({ dim: "line", value: bar.indexValue as string, label: `Line: ${bar.indexValue}` })
+                : undefined}
+              tooltip={({ indexValue, data: d }) => {
+                const item = items.find((r) => r.label === indexValue);
+                return (
+                  <LineTooltip
+                    title={String(indexValue)}
+                    rows={[
+                      { label: metric === "bulk" ? "Bulk accepted" : "FG released", value: fullQtyF((d as { qty: number }).qty), unit, strong: true },
+                      { label: "PO qty", value: fullQtyF(item?.qtyPo ?? 0), unit },
+                      { label: "Cumulative", value: `${Math.round(item?.cumPct ?? 0)}%` },
+                    ]}
+                  />
+                );
+              }}
+              animate={false}
+              role="img"
+              ariaLabel={`Output Pareto by ${dim}`}
+            />
+          </div>
+        </Fade>
+      )}
+      {items.length > 0 && !loading && (
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
+          <span className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
+            <span className="w-2.5 h-2.5 rounded-full border-[1.75px] bg-white" style={{ borderColor: PARETO_LINE_COLOR }} />
+            Cumulative %
+          </span>
+          <span className="flex items-center gap-1.5 text-[9.5px] text-slate-500">
+            <span className="inline-block w-2 h-2 rounded-sm" style={{ background: PARETO_BAR_COLOR }} />
+            {metric === "bulk" ? "kg" : "pcs"}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function OutputPoTable({ filters, metric, pick }: {
@@ -477,6 +664,9 @@ export default function OutputPage() {
           </div>
 
           {/* â”€â”€ Brand / variant treemap Â· top SKU table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* -- Output Pareto by Line / SKU -- */}
+          <OutputParetoChart filters={tf} metric={metric} pick={pick} onPick={onPick} />
+
           <OutputMixRow filters={tf} metric={metric} pick={pick} onPick={onPick} hideSku />
 
           {/* â”€â”€ Output by line Â· Output by PO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
